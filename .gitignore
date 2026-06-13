@@ -1,0 +1,41 @@
+# Build output
+/target
+
+# Generated index files (EdgeStore, SQLite, TurboVec)
+*.db
+*.db-shm
+*.db-wal
+*.vec
+*.sqlite
+*.turbovec
+
+# ESCI / bulk import data — download via examples/webstore/setup.sh
+*.parquet
+*.ndjson
+*.csv
+/data/
+.fastembed_cache/
+
+# Local server config (contains auto-generated API key)
+vectoria.toml
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# Editor scratch files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.code-workspace
+
+# Environment / secrets
+.env
+.env.*
+
+# Benchmark and eval output
+*.bench.json
+judges.ndjson
+eval-results/

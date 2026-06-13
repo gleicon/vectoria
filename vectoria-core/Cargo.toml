@@ -1,0 +1,29 @@
+[package]
+name = "vectoria-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+async-trait = { workspace = true }
+reqwest = { workspace = true }
+fastembed = { workspace = true }
+edgestore = { workspace = true }
+bm25 = { workspace = true }
+symspell = { workspace = true }
+foyer = { workspace = true }
+parquet = { workspace = true }
+arrow = { workspace = true }
+rusqlite = { workspace = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "rt-multi-thread", "macros"] }
+tempfile = "3"

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vectoria Demo Store</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8f8f8; color: #1a1a1a; }
+    header { background: #1a1a2e; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 16px; }
+    header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.5px; }
+    header span { color: #a0a0c8; font-size: 0.85rem; }
+    .search-bar { background: white; padding: 20px 24px; border-bottom: 1px solid #e0e0e0; display: flex; gap: 12px; align-items: center; }
+    .search-bar input { flex: 1; padding: 10px 16px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 1rem; outline: none; }
+    .search-bar input:focus { border-color: #4f46e5; }
+    .mode-toggle { display: flex; gap: 4px; background: #f0f0f0; padding: 4px; border-radius: 8px; }
+    .mode-btn { padding: 6px 14px; border: none; background: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; color: #666; font-weight: 500; }
+    .mode-btn.active { background: white; color: #4f46e5; box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
+    .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; padding: 24px; }
+    .product-card { background: white; border-radius: 12px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); transition: box-shadow 0.15s; cursor: pointer; }
+    .product-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+    .product-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 6px; }
+    .product-brand { color: #666; font-size: 0.8rem; margin-bottom: 8px; }
+    .product-price { color: #4f46e5; font-weight: 700; font-size: 1.1rem; }
+    .product-score { float: right; background: #f0f0f0; color: #666; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
+    .meta { padding: 8px 24px; font-size: 0.82rem; color: #888; border-bottom: 1px solid #e8e8e8; background: white; display: flex; gap: 16px; }
+    .meta strong { color: #333; }
+    .empty { padding: 60px 24px; text-align: center; color: #999; }
+    .spinner { display: none; width: 20px; height: 20px; border: 2px solid #e0e0e0; border-top-color: #4f46e5; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner.active { display: inline-block; }
+    .tag { display: inline-block; background: #eef2ff; color: #4f46e5; border-radius: 4px; padding: 1px 6px; font-size: 0.7rem; margin-right: 4px; margin-top: 4px; }
+    .explain-row { font-size: 0.72rem; color: #aaa; margin-top: 8px; border-top: 1px solid #f0f0f0; padding-top: 6px; }
+    .explain-row span { color: #666; margin-right: 8px; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>⚡ Vectoria Demo Store</h1>
+  <span>AI-native embedded search · no external services</span>
+</header>
+
+<div class="search-bar">
+  <input id="q" type="search" placeholder="Search products... (e.g. running shoes, wireless headphones)" autofocus>
+  <div class="mode-toggle">
+    <button class="mode-btn active" data-mode="hybrid">Hybrid</button>
+    <button class="mode-btn" data-mode="semantic">Semantic</button>
+    <button class="mode-btn" data-mode="bm25">BM25</button>
+  </div>
+  <div class="spinner" id="spinner"></div>
+</div>
+
+<div class="meta" id="meta" style="display:none">
+  <span>Found <strong id="total">0</strong> results</span>
+  <span>Mode: <strong id="mode-label">hybrid</strong></span>
+  <span>Latency: <strong id="latency">—</strong></span>
+</div>
+
+<div class="results-grid" id="results">
+  <div class="empty" id="empty">
+    <p style="font-size:2rem; margin-bottom:8px">🔍</p>
+    <p>Type to search the catalog</p>
+    <p style="margin-top:8px; font-size:0.85rem">First, run <code>examples/webstore/setup.sh</code> to download and import the Amazon ESCI catalog</p>
+  </div>
+</div>
+
+<script>
+  const SERVER = window.location.hostname === 'localhost' ? 'http://localhost:7700' : '';
+  let apiKey = localStorage.getItem('vectoria_api_key') || '';
+
+  if (!apiKey) {
+    apiKey = prompt('Vectoria API key (from server startup log or vectoria.toml):') || '';
+    if (apiKey) localStorage.setItem('vectoria_api_key', apiKey);
+  }
+
+  let currentMode = 'hybrid';
+  let debounceTimer = null;
+
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentMode = btn.dataset.mode;
+      document.getElementById('mode-label').textContent = currentMode;
+      doSearch();
+    });
+  });
+
+  document.getElementById('q').addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(doSearch, 200);
+  });
+
+  async function doSearch() {
+    const q = document.getElementById('q').value.trim();
+    if (!q) {
+      document.getElementById('results').innerHTML = EMPTY_SEARCH;
+      document.getElementById('meta').style.display = 'none';
+      return;
+    }
+
+    document.getElementById('spinner').classList.add('active');
+    const t0 = performance.now();
+
+    try {
+      const resp = await fetch(`${SERVER}/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ q, limit: 24, offset: 0, mode: currentMode, explain: true }),
+      });
+
+      const data = await resp.json();
+      const elapsed = Math.round(performance.now() - t0);
+
+      document.getElementById('total').textContent = data.total ?? 0;
+      document.getElementById('latency').textContent = `${data.processing_time_ms ?? elapsed}ms`;
+      document.getElementById('mode-label').textContent = currentMode;
+      document.getElementById('meta').style.display = 'flex';
+
+      renderResults(data.hits ?? []);
+    } catch (e) {
+      const errDiv = document.createElement('div');
+      errDiv.className = 'empty';
+      const p1 = document.createElement('p');
+      p1.textContent = `⚠️ Search failed: ${e.message}`;
+      const p2 = document.createElement('p');
+      p2.style.cssText = 'margin-top:8px;font-size:0.85rem';
+      p2.textContent = `Is the server running at ${SERVER}?`;
+      errDiv.append(p1, p2);
+      const grid = document.getElementById('results');
+      grid.innerHTML = '';
+      grid.appendChild(errDiv);
+    } finally {
+      document.getElementById('spinner').classList.remove('active');
+    }
+  }
+
+  const EMPTY_SEARCH = '<div class="empty"><p style="font-size:2rem; margin-bottom:8px">🔍</p><p>Type to search the catalog</p><p style="margin-top:8px; font-size:0.85rem">First, import products via <code>vectoria import products.ndjson</code></p></div>';
+  const EMPTY_RESULTS = '<div class="empty"><p style="font-size:2rem;margin-bottom:8px">🪹</p><p>No results found</p><p style="margin-top:8px;font-size:0.85rem">Try a different query or check the catalog</p></div>';
+
+  function renderResults(hits) {
+    const grid = document.getElementById('results');
+    if (!hits.length) {
+      grid.innerHTML = EMPTY_RESULTS;
+      return;
+    }
+
+    grid.innerHTML = hits.map(hit => {
+      const m = hit.metadata ?? {};
+      const title = m.title ?? m.name ?? hit.id;
+      const brand = m.brand ?? '';
+      const price = m.price ? `$${Number(m.price).toFixed(2)}` : '';
+      const category = m.category ?? '';
+      const inStock = m.in_stock !== false;
+      const scoreStr = hit.score ? hit.score.toFixed(3) : '';
+
+      let explainHtml = '';
+      if (hit.explain?.factors?.length) {
+        explainHtml = `<div class="explain-row">${
+          hit.explain.factors
+            .filter(f => f.score > 0.001)
+            .map(f => `<span>${esc(f.factor)}: ${Number(f.score).toFixed(3)}</span>`)
+            .join('')
+        }</div>`;
+      }
+
+      return `<div class="product-card">
+        <div class="product-score">${scoreStr}</div>
+        <div class="product-title">${esc(title)}</div>
+        ${brand ? `<div class="product-brand">${esc(brand)}</div>` : ''}
+        ${price ? `<div class="product-price">${esc(price)}</div>` : ''}
+        ${category ? `<span class="tag">${esc(category)}</span>` : ''}
+        ${!inStock ? `<span class="tag" style="background:#fff0f0;color:#c00">out of stock</span>` : ''}
+        ${explainHtml}
+      </div>`;
+    }).join('');
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+</script>
+</body>
+</html>

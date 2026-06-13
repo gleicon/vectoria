@@ -1,0 +1,103 @@
+[workspace]
+members = [
+    "vectoria-core",
+    "vectoria-server",
+    "vectoria-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+authors = ["Gleicon Moraes <gleicon@gmail.com>"]
+repository = "https://github.com/gleicon/vectoria"
+homepage = "https://github.com/gleicon/vectoria"
+description = "AI-native embedded ecommerce search engine"
+
+# cargo-dist release configuration
+[workspace.metadata.dist]
+cargo-dist-version = "0.22.1"
+ci = ["github"]
+installers = ["shell", "homebrew"]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+]
+pr-run-mode = "plan"
+publish-jobs = ["homebrew"]
+tap = "gleicon/homebrew-tap"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP server
+axum = { version = "0.8", features = ["macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Storage — EdgeStore: local-first embedded KV + vector + BM25
+edgestore = "1.0"
+
+# Embeddings (fastembed 4.x for stable ONNX; 5.x API differs)
+fastembed = "4"
+
+# BM25 text search
+bm25 = "2"
+
+# Caching
+foyer = "0.22"
+
+# Spell correction
+symspell = "0.5"
+
+# Parquet / bulk import
+parquet = "54"
+arrow = "54"
+
+# CSV
+csv = "1"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Config
+config = "0.14"
+dotenvy = "0.15"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Async traits
+async-trait = "0.1"
+
+# HTTP client (for openai-compatible embedding provider)
+reqwest = { version = "0.12", features = ["json"] }
+
+# Metrics
+prometheus = "0.13"
+
+# UUID
+uuid = { version = "1", features = ["v4"] }
+
+# Platform dirs (model cache detection)
+dirs-next = "2"
+
+# SQLite StorageEngine fallback
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
