@@ -4,11 +4,7 @@ use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
 /// TTL-bounded in-memory cache for search results.
-/// Protects head queries (top 5-10% of traffic generating 50%+ of load) from hitting
-/// the full search pipeline on every call.
-///
-/// Eviction: LRU approximated by evicting all expired entries when inserting
-/// while over capacity. No background sweep needed — amortized on writes.
+/// Eviction: expired entries purged on insert when at capacity; half cleared if still over.
 pub struct QueryResultCache {
     store: RwLock<HashMap<String, CacheEntry>>,
     ttl: Duration,
@@ -43,11 +39,8 @@ impl QueryResultCache {
     pub fn put(&self, key: String, response: SearchResponse) {
         let mut store = self.store.write().unwrap();
         let now = Instant::now();
-        // Evict expired entries if at capacity.
         if store.len() >= self.max_entries {
             store.retain(|_, e| e.expires_at > now);
-            // Still over capacity: remove oldest (approximated by re-checking size).
-            // Simple strategy: clear half the cache rather than sorting by access time.
             if store.len() >= self.max_entries {
                 let remove_count = store.len() / 2;
                 let keys: Vec<String> = store.keys().take(remove_count).cloned().collect();
@@ -60,11 +53,4 @@ impl QueryResultCache {
         });
     }
 
-    pub fn invalidate(&self, key: &str) {
-        self.store.write().unwrap().remove(key);
-    }
-
-    pub fn clear(&self) {
-        self.store.write().unwrap().clear();
-    }
 }

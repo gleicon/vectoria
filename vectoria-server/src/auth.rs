@@ -6,7 +6,6 @@ use axum::{
 };
 use crate::state::AppState;
 
-/// Middleware: require `Authorization: Bearer <key>` on every request.
 pub async fn require_api_key(
     State(state): State<AppState>,
     request: Request,

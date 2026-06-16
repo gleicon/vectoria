@@ -1,6 +1,3 @@
-/// Benchmark command: load Amazon ESCI or custom judged dataset, run queries
-/// against the server in each mode (bm25, semantic, hybrid), and report
-/// Recall@K, NDCG@K, MRR, Coverage, and latency percentiles.
 use anyhow::{Context, Result};
 use clap::Args;
 use serde::Deserialize;
@@ -107,7 +104,6 @@ pub async fn run(args: BenchArgs, server: &str, api_key: Option<String>) -> Resu
                 Err(_) => { errors += 1; continue; }
             };
 
-            // Skip warmup queries for latency measurement.
             if i >= args.warmup {
                 latencies_ms.push(elapsed);
             }
@@ -136,7 +132,7 @@ pub async fn run(args: BenchArgs, server: &str, api_key: Option<String>) -> Resu
         }
 
         let n = queries.len() as f64;
-        latencies_ms.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        latencies_ms.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         let p50 = percentile(&latencies_ms, 50.0);
         let p95 = percentile(&latencies_ms, 95.0);
         let p99 = percentile(&latencies_ms, 99.0);

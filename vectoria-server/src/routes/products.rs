@@ -4,9 +4,8 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use chrono::Utc;
 use serde::Deserialize;
-use vectoria_core::model::{Product, ProductStatus, SimilarRequest};
+use vectoria_core::model::{Product, SimilarRequest};
 use crate::state::AppState;
 
 #[derive(Deserialize)]
@@ -17,23 +16,18 @@ pub struct IndexProductRequest {
     pub metadata: serde_json::Value,
 }
 
+fn product_from_request(id: String, req: IndexProductRequest) -> Product {
+    let mut p = Product::new(id, req.metadata);
+    p.text = req.text;
+    p.vector = req.vector;
+    p
+}
 
 pub async fn index_product(
     State(state): State<AppState>,
     Json(req): Json<IndexProductRequest>,
 ) -> impl IntoResponse {
-    let now = Utc::now();
-    let product = Product {
-        id: req.id,
-        text: req.text,
-        vector: req.vector,
-        metadata: req.metadata,
-        model_id: None,
-        dims: None,
-        status: ProductStatus::PendingVector,
-        created_at: now,
-        updated_at: now,
-    };
+    let product = product_from_request(req.id.clone(), req);
     match state.engine.index(product).await {
         Ok(_) => (StatusCode::CREATED, Json(serde_json::json!({"status": "indexed"}))).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
@@ -43,21 +37,9 @@ pub async fn index_product(
 pub async fn update_product(
     State(state): State<AppState>,
     Path(id): Path<String>,
-    Json(mut req): Json<IndexProductRequest>,
+    Json(req): Json<IndexProductRequest>,
 ) -> impl IntoResponse {
-    req.id = id;
-    let now = Utc::now();
-    let product = Product {
-        id: req.id,
-        text: req.text,
-        vector: req.vector,
-        metadata: req.metadata,
-        model_id: None,
-        dims: None,
-        status: ProductStatus::PendingVector,
-        created_at: now,
-        updated_at: now,
-    };
+    let product = product_from_request(id, req);
     match state.engine.index(product).await {
         Ok(_) => Json(serde_json::json!({"status": "updated"})).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),

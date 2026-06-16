@@ -1,8 +1,10 @@
 # Vectoria
 
-Embedded semantic search engine for ecommerce. Single binary, no external services required.
+Embedded hybrid search engine for ecommerce. Single binary, no external services required.
 
-Vectoria runs inside your application or as a standalone HTTP server. It combines BM25 full-text search with vector similarity (HNSW or flat index) and re-ranks results using behavioral signals — clicks, purchases, views. The embedding model runs locally via ONNX; no API calls to external services unless you configure an OpenAI-compatible provider.
+Vectoria combines BM25 full-text search with vector similarity and behavioral signals (clicks, purchases, views). Its main advantage over BM25-only search (SQLite FTS5, Meilisearch basic tier) is **zero-result elimination**: semantic mode returns results for long-tail queries that share no keywords with any product. Hybrid mode keeps BM25 precision while removing zero results entirely.
+
+The embedding model runs locally via ONNX; no external API calls required unless you configure an OpenAI-compatible provider.
 
 Designed for catalogs up to ~500K products on a single node.
 
@@ -80,9 +82,8 @@ margin      = 0.1
 
 **vector_backend options:**
 
-- `edgestore-hnsw` — persistent HNSW index, recommended for production
-- `sqlite` — SQLite metadata + TurboVec flat vector file
-- `turbovec` — in-memory metadata + TurboVec flat vector file
+- `edgestore-hnsw` — persistent HNSW index (activated after `POST /admin/reindex`), recommended for production
+- `sqlite` — SQLite metadata + EdgeStore flat vector index
 - `memory` — everything in-memory, lost on restart (development only)
 
 **Environment variable overrides** (take precedence over `vectoria.toml`):
@@ -108,30 +109,67 @@ The `vectoria` CLI handles bulk operations against a running server.
 # Bulk import from NDJSON, CSV, or Parquet
 vectoria import products.ndjson --server http://localhost:7700 --api-key <key>
 
-# Load Amazon ESCI dataset and import
-vectoria esci products.parquet examples.parquet --import --locale us --max-products 5000
-
 # Re-embed all products after a model change
 vectoria reindex --server http://localhost:7700 --api-key <key>
 
-# Run evaluation against judged queries
-vectoria eval judges.ndjson --server http://localhost:7700
+# Benchmark search quality (Recall@K, NDCG@K, MRR) across all modes
+vectoria bench judges.ndjson --mode all --server http://localhost:7700 --api-key <key>
 ```
 
 ## Demo webstore
 
-To run the demo against the Amazon ESCI product catalog:
+The fastest way to try Vectoria with real data is the Make-based demo. It uses the
+Amazon ESCI product catalog — **a separate license agreement is required**:
+<https://github.com/amazon-science/esci-data>
 
 ```sh
-# Start the server first, then:
-examples/webstore/setup.sh --api-key <key>
-
-# Serve the frontend
-python3 -m http.server 8080 --directory examples/webstore
+make server-bg      # start server in background (waits until healthy)
+make esci-import    # download ESCI data and import 5000 products (~5 min first run)
+make webstore       # serve demo store at http://localhost:8080
 ```
 
-Open `http://localhost:8080`. The setup script downloads ~1.2 GB of ESCI data to
-`~/.local/share/vectoria/esci/` on first run and imports 5000 US-locale products.
+To benchmark after importing:
+
+```sh
+make esci-judges    # build judged query dataset
+make bench          # Recall@K / NDCG@K / MRR across bm25 / semantic / hybrid
+```
+
+Run `make help` for all targets and overridable variables. See
+[docs/quickstart.md](docs/quickstart.md) for a full walkthrough.
+
+## Benchmark
+
+Amazon ESCI dataset, 5000 US products, `multilingual-e5-small` embedding. Results by label hardness:
+
+| Label set | Queries | BM25 MRR | Hybrid MRR | Semantic MRR | Coverage (all modes) |
+|-----------|---------|----------|------------|--------------|----------------------|
+| E (exact) | 107     | 0.5842   | 0.5882     | 0.4922       | **100%**             |
+| E+S       | 117     | 0.6595   | 0.6576     | 0.5690       | **100%**             |
+| E+S+C     | 119     | 0.6835   | 0.6803     | 0.5797       | **100%**             |
+
+ESCI label meanings: E = exact product name match (BM25-optimal), S = substitute/concept (keyword overlap low), C = complement (e.g. query "camera" → relevant product "camera bag").
+
+Key takeaways:
+- **100% coverage across all modes and label sets** — zero-result queries handled by spell-correction fallback (compound split + typo correction applied only when BM25 returns no results)
+- **Hybrid ≈ BM25 on exact queries**, with coverage maintained by semantic fallback
+- **Semantic covers zero-keyword queries** that BM25 would miss entirely (S and C labels)
+- Semantic p50 latency: **2ms** (cached embeddings); BM25/hybrid: sub-ms to ~3ms
+
+Reproduce with custom label sets:
+```sh
+make esci-import                                  # import 5000 US products
+make esci-judges                                  # default: E+S labels
+# Or choose label set:
+cargo run --example esci_import -p vectoria-cli -- \
+  data/esci/shopping_queries_dataset_products.parquet \
+  data/esci/shopping_queries_dataset_examples.parquet \
+  --judges data/esci/judges.ndjson --labels E,S,C --locale us \
+  --max-products 5000 --server http://localhost:7700 --api-key <key>
+make bench
+```
+
+**Next benchmark target**: [WANDS (Wayfair)](https://github.com/wayfair/WANDS) — 42K furniture/home goods products, complex descriptive concept queries ("mid century modern floor lamp"). Expected to show larger hybrid advantage since Wayfair queries are more concept-driven than ESCI exact matches.
 
 ## API reference
 
@@ -139,15 +177,42 @@ See [docs/api.md](docs/api.md).
 
 ## Docker
 
+**Quickest start** — Docker Compose (builds image, mounts volumes, sets API key):
+
 ```sh
-# Full image (includes ONNX model, ~400 MB)
-docker build --target vectoria-full -t vectoria:full .
-
-# Slim image (OpenAI-compatible embedding only, ~50 MB)
-docker build --target vectoria-slim -t vectoria:slim .
-
-docker run -p 7700:7700 -v $(pwd)/data:/data vectoria:full
+VECTORIA_API_KEY=my-secret-key docker compose up
 ```
+
+Or build and run manually:
+
+```sh
+# Full image — ONNX model downloaded on first start (~400 MB image, ~40 MB model cache)
+docker build --target vectoria-full -t vectoria:full .
+docker run -p 7700:7700 \
+  -v vectoria-data:/data \
+  -v fastembed-cache:/root/.cache/fastembed \
+  -e VECTORIA_API_KEY=my-secret-key \
+  vectoria:full
+
+# Slim image — requires OpenAI-compatible embedding provider (~50 MB)
+docker build --target vectoria-slim -t vectoria:slim .
+docker run -p 7700:7700 \
+  -v vectoria-data:/data \
+  -e VECTORIA_API_KEY=my-secret-key \
+  -e VECTORIA_EMBEDDING_BASE_URL=https://api.openai.com/v1 \
+  -e VECTORIA_EMBEDDING_MODEL=text-embedding-3-small \
+  vectoria:slim
+```
+
+Both images include the `vectoria` CLI. Run it against the container:
+
+```sh
+docker exec vectoria-vectoria-1 vectoria --server http://localhost:7700 --api-key my-secret-key stats
+```
+
+Volumes:
+- `/data` — persistent index and SQLite storage
+- `/root/.cache/fastembed` — ONNX model cache (full image only; mount to avoid re-downloading)
 
 ## Building from source
 

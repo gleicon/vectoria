@@ -3,18 +3,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-/// A product in the index. Either `text` or `vector` must be present.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Product {
     pub id: String,
-    /// Raw text used to generate the embedding (title + brand + category + attrs).
     pub text: Option<String>,
-    /// Pre-computed embedding vector. If absent, `text` is embedded at index time.
     pub vector: Option<Vec<f32>>,
     pub metadata: serde_json::Value,
-    /// Model ID used to generate the stored vector.
     pub model_id: Option<String>,
-    /// Embedding dimensions.
     pub dims: Option<usize>,
     pub status: ProductStatus,
     pub created_at: DateTime<Utc>,
@@ -43,10 +38,8 @@ impl Product {
 pub enum ProductStatus {
     PendingVector,
     Indexed,
-    Deleting,
 }
 
-/// Behavioral event (click, purchase, view, etc.).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Event {
     pub id: String,
@@ -82,7 +75,6 @@ pub enum EventType {
     Purchase,
 }
 
-/// A single search result hit.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Hit {
     pub id: String,
@@ -91,7 +83,6 @@ pub struct Hit {
     pub explain: Option<ScoreBreakdown>,
 }
 
-/// Per-hit score breakdown for explainability.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScoreBreakdown {
     pub factors: Vec<ScoreFactor>,
@@ -104,7 +95,6 @@ pub struct ScoreFactor {
     pub weight: f32,
 }
 
-/// Search request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchRequest {
     pub q: String,
@@ -123,7 +113,8 @@ pub struct SearchRequest {
     pub rerank: bool,
 }
 
-fn default_limit() -> usize { 20 }
+pub const DEFAULT_LIMIT: usize = 20;
+fn default_limit() -> usize { DEFAULT_LIMIT }
 fn default_mode() -> SearchMode { SearchMode::Hybrid }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -135,7 +126,6 @@ pub enum SearchMode {
     Bm25,
 }
 
-/// Search response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResponse {
     pub hits: Vec<Hit>,
@@ -147,11 +137,12 @@ pub struct SearchResponse {
     pub aggregations: Option<HashMap<String, HashMap<String, usize>>>,
 }
 
-/// Configurable ranking weights.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RankingWeights {
     #[serde(default = "w_semantic")]
     pub semantic: f32,
+    #[serde(default = "w_bm25")]
+    pub bm25: f32,
     #[serde(default = "w_popularity")]
     pub popularity: f32,
     #[serde(default = "w_availability")]
@@ -164,6 +155,7 @@ impl Default for RankingWeights {
     fn default() -> Self {
         Self {
             semantic: w_semantic(),
+            bm25: w_bm25(),
             popularity: w_popularity(),
             availability: w_availability(),
             margin: w_margin(),
@@ -171,12 +163,12 @@ impl Default for RankingWeights {
     }
 }
 
-fn w_semantic() -> f32 { 0.6 }
+fn w_semantic() -> f32 { 0.7 }
+fn w_bm25() -> f32 { 0.3 }
 fn w_popularity() -> f32 { 0.2 }
-fn w_availability() -> f32 { 0.1 }
-fn w_margin() -> f32 { 0.1 }
+fn w_availability() -> f32 { 0.05 }
+fn w_margin() -> f32 { 0.05 }
 
-/// Similar products request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimilarRequest {
     pub text: Option<String>,

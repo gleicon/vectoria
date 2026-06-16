@@ -18,7 +18,6 @@ pub struct EventRequest {
     pub session_id: Option<String>,
 }
 
-/// Fire-and-forget event ingestion. Returns 202 immediately.
 pub async fn record_event(
     State(state): State<AppState>,
     Json(req): Json<EventRequest>,
@@ -28,7 +27,6 @@ pub async fn record_event(
     event.query = req.query;
     event.session_id = req.session_id;
 
-    // Spawn async to keep response fast.
     let engine = state.engine.clone();
     tokio::spawn(async move {
         if let Err(e) = engine.record_event(event).await {

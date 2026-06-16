@@ -1,0 +1,28 @@
+services:
+  vectoria:
+    build:
+      context: .
+      target: vectoria-full
+    image: vectoria:full
+    ports:
+      - "7700:7700"
+    volumes:
+      - vectoria-data:/data
+      - fastembed-cache:/root/.cache/fastembed
+    environment:
+      VECTORIA_API_KEY: ${VECTORIA_API_KEY:-change-me}
+      VECTORIA_STORAGE_PATH: /data/vectoria.db
+      VECTORIA_EMBEDDING_PROVIDER: local
+      VECTORIA_EMBEDDING_MODEL: multilingual-e5-small
+      VECTORIA_SKIP_CONSENT: "1"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 3s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  vectoria-data:
+  fastembed-cache:

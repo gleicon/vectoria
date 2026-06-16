@@ -30,14 +30,10 @@ pub struct AutocompleteQuery {
 
 fn default_limit() -> usize { 10 }
 
-/// Fast BM25 prefix-based autocomplete. Target: <10ms.
-/// Full semantic search is POST /search.
 pub async fn autocomplete(
     State(state): State<AppState>,
     Query(params): Query<AutocompleteQuery>,
 ) -> impl IntoResponse {
-    // For now: run a fast BM25-style search with small limit.
-    // TODO: wire EdgeStore FTS prefix search directly (bypass embedding).
     let req = SearchRequest {
         q: params.q.clone(),
         limit: params.limit,

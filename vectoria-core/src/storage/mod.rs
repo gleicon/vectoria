@@ -2,8 +2,6 @@ use crate::model::{Event, Product};
 use anyhow::Result;
 use async_trait::async_trait;
 
-/// Abstraction over the metadata + KV storage layer.
-/// Default implementation: EdgeStore. Fallback: SQLite.
 #[async_trait]
 pub trait StorageEngine: Send + Sync {
     async fn put_product(&self, product: &Product) -> Result<()>;
@@ -11,9 +9,10 @@ pub trait StorageEngine: Send + Sync {
     async fn delete_product(&self, id: &str) -> Result<()>;
     async fn list_products(&self, offset: usize, limit: usize) -> Result<Vec<Product>>;
     async fn put_event(&self, event: &Event) -> Result<()>;
-    /// Returns cached pre-aggregated signals, or computes from events if not cached.
     async fn get_product_signals(&self, product_id: &str) -> Result<ProductSignals>;
-    /// Persist pre-computed signals (called by background aggregation job).
+    async fn recompute_product_signals(&self, product_id: &str) -> Result<ProductSignals> {
+        self.get_product_signals(product_id).await
+    }
     async fn put_product_signals(&self, product_id: &str, signals: &ProductSignals) -> Result<()>;
     async fn stats(&self) -> Result<StorageStats>;
 }
@@ -40,3 +39,23 @@ pub struct StorageStats {
 pub mod edgestore;
 pub mod memory;
 pub mod sqlite;
+
+pub(super) fn compute_signals_from_events<'a>(
+    events: impl Iterator<Item = &'a crate::model::Event>,
+) -> ProductSignals {
+    use crate::model::EventType;
+    let mut signals = ProductSignals::default();
+    for event in events {
+        match &event.event_type {
+            EventType::Click => signals.click_count += 1,
+            EventType::Purchase => signals.purchase_count += 1,
+            EventType::View => signals.view_count += 1,
+            EventType::AddToCart => signals.cart_count += 1,
+            EventType::Wishlist => {}
+        }
+    }
+    let total = signals.view_count.max(1);
+    signals.popularity = (signals.click_count as f32 / total as f32).min(1.0);
+    signals.conversion_rate = (signals.purchase_count as f32 / total as f32).min(1.0);
+    signals
+}

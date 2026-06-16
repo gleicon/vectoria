@@ -1,5 +1,5 @@
 use super::{ProductSignals, StorageEngine, StorageStats};
-use crate::model::{Event, EventType, Product};
+use crate::model::{Event, Product};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use edgestore::{EdgestoreConfig, Engine};
@@ -97,7 +97,6 @@ impl StorageEngine for EdgeStoreStorage {
     }
 
     async fn get_product_signals(&self, product_id: &str) -> Result<ProductSignals> {
-        // Check cached signals first.
         let key = product_id.as_bytes().to_vec();
         let engine = Arc::clone(&self.engine);
         let cached = tokio::task::spawn_blocking(move || {
@@ -109,30 +108,21 @@ impl StorageEngine for EdgeStoreStorage {
                 return Ok(s);
             }
         }
+        self.recompute_product_signals(product_id).await
+    }
 
-        // Compute from raw events.
+    async fn recompute_product_signals(&self, product_id: &str) -> Result<ProductSignals> {
         let prefix = format!("{}/", product_id).into_bytes();
         let engine = Arc::clone(&self.engine);
         let pairs = tokio::task::spawn_blocking(move || {
             engine.lock().unwrap().prefix(NS_EVENTS, &prefix)
         })
         .await??;
-
-        let mut signals = ProductSignals::default();
-        for (_, v) in &pairs {
-            let Ok(event) = serde_json::from_slice::<Event>(v) else { continue };
-            match event.event_type {
-                EventType::Click => signals.click_count += 1,
-                EventType::Purchase => signals.purchase_count += 1,
-                EventType::View => signals.view_count += 1,
-                EventType::AddToCart => signals.cart_count += 1,
-                EventType::Wishlist => {}
-            }
-        }
-        let total = signals.view_count.max(1);
-        signals.popularity = (signals.click_count as f32 / total as f32).min(1.0);
-        signals.conversion_rate = (signals.purchase_count as f32 / total as f32).min(1.0);
-        Ok(signals)
+        let events: Vec<crate::model::Event> = pairs
+            .iter()
+            .filter_map(|(_, v)| serde_json::from_slice(v).ok())
+            .collect();
+        Ok(super::compute_signals_from_events(events.iter()))
     }
 
     async fn put_product_signals(&self, product_id: &str, signals: &ProductSignals) -> Result<()> {
@@ -149,14 +139,13 @@ impl StorageEngine for EdgeStoreStorage {
 
     async fn stats(&self) -> Result<StorageStats> {
         let engine = Arc::clone(&self.engine);
-        let pairs = tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().prefix(NS_PRODUCTS, b"")
+        let result = tokio::task::spawn_blocking(move || -> Result<StorageStats> {
+            let eng = engine.lock().unwrap();
+            let product_count = eng.prefix(NS_PRODUCTS, b"").context("stats: prefix products")?.len() as u64;
+            let event_count   = eng.prefix(NS_EVENTS,   b"").context("stats: prefix events")?.len() as u64;
+            Ok(StorageStats { product_count, event_count, storage_bytes: crate::dir_bytes(eng.db_path()) })
         })
         .await??;
-        Ok(StorageStats {
-            product_count: pairs.len() as u64,
-            event_count: 0,
-            storage_bytes: 0,
-        })
+        Ok(result)
     }
 }

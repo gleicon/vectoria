@@ -4,16 +4,15 @@ use async_trait::async_trait;
 use edgestore::{Dtype, EdgestoreConfig, Engine, Metric, VectorEngine, VectorRecord};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 const NS_VECTORS: &[u8] = b"vectors";
 
-/// EdgeStore-backed VectorIndex.
-/// Uses flat SIMD search by default (always up-to-date after inserts).
-/// Build HNSW via POST /admin/reindex for faster ANN at large scale.
 pub struct EdgeStoreVectorIndex {
     engine: Arc<Mutex<Engine>>,
     model_id: Option<String>,
     dims: Option<usize>,
+    count: AtomicU64,
 }
 
 impl EdgeStoreVectorIndex {
@@ -24,16 +23,8 @@ impl EdgeStoreVectorIndex {
             engine: Arc::new(Mutex::new(engine)),
             model_id,
             dims,
+            count: AtomicU64::new(0),
         })
-    }
-
-    /// Build HNSW index for faster ANN search. Triggered by POST /admin/reindex.
-    pub fn build_hnsw(&self) -> Result<()> {
-        self.engine
-            .lock()
-            .unwrap()
-            .build_vector_index(NS_VECTORS)
-            .context("HNSW build failed")
     }
 }
 
@@ -53,6 +44,7 @@ impl VectorIndex for EdgeStoreVectorIndex {
         })
         .await?
         .context("vector_put failed")?;
+        self.count.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 
@@ -64,6 +56,7 @@ impl VectorIndex for EdgeStoreVectorIndex {
         })
         .await?
         .context("vector_delete failed")?;
+        self.count.fetch_sub(1, Ordering::Relaxed);
         Ok(())
     }
 
@@ -82,7 +75,6 @@ impl VectorIndex for EdgeStoreVectorIndex {
             .into_iter()
             .map(|r| {
                 let id = String::from_utf8_lossy(&r.key).to_string();
-                // Cosine metric: distance 0 = identical (score 1.0).
                 let score = 1.0 - r.distance.clamp(0.0, 2.0) / 2.0;
                 (id, score)
             })
@@ -91,9 +83,13 @@ impl VectorIndex for EdgeStoreVectorIndex {
 
     async fn flush(&self) -> Result<()> {
         let engine = Arc::clone(&self.engine);
-        tokio::task::spawn_blocking(move || engine.lock().unwrap().flush())
-            .await?
-            .context("flush failed")
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            let mut eng = engine.lock().unwrap();
+            eng.flush().context("flush failed")?;
+            eng.build_vector_index(NS_VECTORS).context("build_vector_index failed")
+        })
+        .await??;
+        Ok(())
     }
 
     fn model_id(&self) -> Option<&str> {
@@ -105,6 +101,13 @@ impl VectorIndex for EdgeStoreVectorIndex {
     }
 
     async fn stats(&self) -> Result<VectorIndexStats> {
-        Ok(VectorIndexStats { vector_count: 0, index_bytes: 0 })
+        let path = {
+            let eng = self.engine.lock().unwrap();
+            eng.db_path().to_path_buf()
+        };
+        Ok(VectorIndexStats {
+            vector_count: self.count.load(Ordering::Relaxed),
+            index_bytes: crate::dir_bytes(&path),
+        })
     }
 }

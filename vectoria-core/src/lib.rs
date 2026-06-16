@@ -6,3 +6,13 @@ pub mod storage;
 pub mod vector;
 
 pub use search::SearchEngine;
+
+pub(crate) fn dir_bytes(path: &std::path::Path) -> u64 {
+    std::fs::read_dir(path)
+        .into_iter()
+        .flatten()
+        .filter_map(|e| e.ok())
+        .filter_map(|e| e.metadata().ok())
+        .map(|m| m.len())
+        .sum()
+}

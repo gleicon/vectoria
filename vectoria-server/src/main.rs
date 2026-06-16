@@ -1,6 +1,5 @@
 mod auth;
 mod config;
-mod index_registry;
 mod routes;
 mod state;
 
@@ -17,15 +16,13 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vectoria_core::{
     aggregation::run_aggregation_loop,
     embedding::{cache::CachedEmbedding, EmbeddingProvider},
-    model::RankingWeights,
     search::reranker::CrossEncoderReranker,
     storage::{edgestore::EdgeStoreStorage, memory::MemoryStorage, sqlite::SqliteStorage},
-    vector::{edgestore::EdgeStoreVectorIndex, memory::MemoryVectorIndex, turbovec::TurboVecIndex},
+    vector::{edgestore::EdgeStoreVectorIndex, memory::MemoryVectorIndex},
     SearchEngine,
 };
 
 use config::VectoriaConfig;
-use index_registry::IndexRegistry;
 use state::AppState;
 
 #[derive(Parser)]
@@ -54,9 +51,8 @@ async fn main() -> Result<()> {
     let api_key = cfg.ensure_api_key();
 
     tracing::info!("vectoria v{}", env!("CARGO_PKG_VERSION"));
-    tracing::info!("api_key: {}", api_key);
+    eprintln!("api_key: {}", api_key);
 
-    // First-run consent: if local embedding model is absent, ask before downloading.
     if cfg.embedding.provider == "local" {
         let skip = args.skip_consent
             || std::env::var("VECTORIA_SKIP_CONSENT").as_deref() == Ok("1");
@@ -65,10 +61,9 @@ async fn main() -> Result<()> {
         }
     }
 
-    let raw_embedding = build_embedding_provider(&cfg, args.skip_model_download)?;
     let embedding_cache_size = cfg.index.embedding_cache_size.unwrap_or(10_000);
     let embedding: Arc<dyn EmbeddingProvider> = Arc::new(CachedEmbedding::new(
-        Arc::clone(&raw_embedding),
+        build_embedding_provider(&cfg, args.skip_model_download)?,
         embedding_cache_size,
     ));
 
@@ -96,24 +91,14 @@ async fn main() -> Result<()> {
         }
         "sqlite" => {
             let db_path = cfg.storage.path.with_extension("sqlite");
-            let vec_path = db_path.with_extension("turbovec");
-            tracing::info!("storage: SQLite at {:?}, vectors: TurboVec at {:?}", db_path, vec_path);
+            let vec_path = db_path.with_extension("vec");
+            tracing::info!("storage: SQLite at {:?}, vectors: EdgeStore at {:?}", db_path, vec_path);
             let storage = Arc::new(
                 SqliteStorage::open(&db_path).expect("failed to open SQLite storage"),
             );
             let vidx = Arc::new(
-                TurboVecIndex::open(&vec_path, Some(embedding.model_id().to_string()), Some(embedding.dims()))
-                    .expect("failed to open TurboVec index"),
-            );
-            (storage, vidx)
-        }
-        "turbovec" => {
-            let vec_path = cfg.storage.path.with_extension("turbovec");
-            tracing::info!("storage: in-memory (metadata), vectors: TurboVec at {:?}", vec_path);
-            let storage = Arc::new(MemoryStorage::new());
-            let vidx = Arc::new(
-                TurboVecIndex::open(&vec_path, Some(embedding.model_id().to_string()), Some(embedding.dims()))
-                    .expect("failed to open TurboVec index"),
+                EdgeStoreVectorIndex::open(vec_path, Some(embedding.model_id().to_string()), Some(embedding.dims()))
+                    .expect("failed to open EdgeStore vector index"),
             );
             (storage, vidx)
         }
@@ -128,12 +113,7 @@ async fn main() -> Result<()> {
         }
     };
 
-    let weights = RankingWeights {
-        semantic: cfg.ranking.semantic,
-        popularity: cfg.ranking.popularity,
-        availability: cfg.ranking.availability,
-        margin: cfg.ranking.margin,
-    };
+    let weights = cfg.ranking.clone();
 
     let query_cache_ttl = cfg.index.query_cache_ttl_secs.unwrap_or(60);
     let query_cache_max = cfg.index.query_cache_max_entries.unwrap_or(1_000);
@@ -158,27 +138,11 @@ async fn main() -> Result<()> {
 
     let engine = Arc::new(engine);
 
-    // Background aggregation: pre-compute popularity/conversion signals.
     let agg_storage = Arc::clone(&storage);
     let agg_interval = cfg.index.aggregation_interval_secs.unwrap_or(300);
     tokio::spawn(run_aggregation_loop(agg_storage, agg_interval));
 
-    // Per-index engine registry for multi-index endpoints.
-    let data_dir = match cfg.index.vector_backend.as_str() {
-        "edgestore-hnsw" | "edgestore" | "sqlite" | "turbovec" => {
-            cfg.storage.path.parent().map(|p| p.to_path_buf())
-        }
-        _ => None,
-    };
-    let index_registry = Arc::new(IndexRegistry::new(
-        raw_embedding,
-        weights,
-        data_dir,
-        query_cache_ttl,
-        query_cache_max,
-    ));
-
-    let state = AppState { engine, index_registry, api_key: api_key.clone() };
+    let state = AppState { engine, api_key: api_key.clone() };
 
     let protected = Router::new()
         .route("/products", post(routes::products::index_product))
@@ -191,11 +155,6 @@ async fn main() -> Result<()> {
         .route("/events", post(routes::events::record_event))
         .route("/stats", get(routes::admin::stats))
         .route("/admin/reindex", post(routes::admin::reindex))
-        .route("/1/indexes/{indexName}", post(routes::admin::indexes::index_object))
-        .route("/1/indexes/{indexName}/{objectID}", put(routes::admin::indexes::update_object))
-        .route("/1/indexes/{indexName}/{objectID}", delete(routes::admin::indexes::delete_object))
-        .route("/1/indexes/{indexName}/query", post(routes::admin::indexes::search))
-        .route("/1/indexes/{indexName}/batch", post(routes::admin::indexes::batch))
         .layer(middleware::from_fn_with_state(state.clone(), auth::require_api_key));
 
     let public = Router::new()
@@ -215,8 +174,6 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// Returns true if a fastembed model cache directory exists.
-/// fastembed-rs caches models under ~/.cache/fastembed/ on Linux/macOS.
 fn is_model_cached() -> bool {
     let cache_dir = dirs_next::cache_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
@@ -227,7 +184,6 @@ fn is_model_cached() -> bool {
             .unwrap_or(false)
 }
 
-/// Prompt the user to consent to a model download. Bails if they decline.
 fn prompt_model_download_consent(model: &str) -> Result<()> {
     eprintln!();
     eprintln!("Vectoria uses a local embedding model for semantic search.");

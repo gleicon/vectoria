@@ -3,3 +3,8 @@ target/
 *.md
 docs/
 examples/
+website/
+data/
+.project/
+TODO.md
+BACKLOG.md

@@ -1,11 +1,11 @@
 use super::{ProductSignals, StorageEngine, StorageStats};
-use crate::model::{Event, EventType, Product};
+use crate::model::{Event, Product};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-/// In-memory StorageEngine for tests and development.
+#[derive(Default)]
 pub struct MemoryStorage {
     products: RwLock<HashMap<String, Product>>,
     events: RwLock<Vec<Event>>,
@@ -14,17 +14,7 @@ pub struct MemoryStorage {
 
 impl MemoryStorage {
     pub fn new() -> Self {
-        Self {
-            products: RwLock::new(HashMap::new()),
-            events: RwLock::new(Vec::new()),
-            signals_cache: RwLock::new(HashMap::new()),
-        }
-    }
-}
-
-impl Default for MemoryStorage {
-    fn default() -> Self {
-        Self::new()
+        Self::default()
     }
 }
 
@@ -58,40 +48,24 @@ impl StorageEngine for MemoryStorage {
     }
 
     async fn get_product_signals(&self, product_id: &str) -> Result<ProductSignals> {
-        // Return cached signals if available.
         if let Some(s) = self.signals_cache.read().unwrap().get(product_id).cloned() {
             return Ok(s);
         }
-        // Compute from raw events.
+        self.recompute_product_signals(product_id).await
+    }
+
+    async fn recompute_product_signals(&self, product_id: &str) -> Result<ProductSignals> {
         let events = self.events.read().unwrap();
-        let mut signals = ProductSignals::default();
-        for event in events.iter().filter(|e| e.product_id == product_id) {
-            match event.event_type {
-                EventType::Click => signals.click_count += 1,
-                EventType::Purchase => signals.purchase_count += 1,
-                EventType::View => signals.view_count += 1,
-                EventType::AddToCart => signals.cart_count += 1,
-                EventType::Wishlist => {}
-            }
-        }
-        let total = signals.view_count.max(1);
-        signals.popularity = (signals.click_count as f32 / total as f32).min(1.0);
-        signals.conversion_rate = (signals.purchase_count as f32 / total as f32).min(1.0);
-        Ok(signals)
+        Ok(super::compute_signals_from_events(
+            events.iter().filter(|e| e.product_id == product_id),
+        ))
     }
 
     async fn put_product_signals(&self, product_id: &str, signals: &ProductSignals) -> Result<()> {
         self.signals_cache
             .write()
             .unwrap()
-            .insert(product_id.to_string(), ProductSignals {
-                click_count: signals.click_count,
-                purchase_count: signals.purchase_count,
-                view_count: signals.view_count,
-                cart_count: signals.cart_count,
-                popularity: signals.popularity,
-                conversion_rate: signals.conversion_rate,
-            });
+            .insert(product_id.to_string(), signals.clone());
         Ok(())
     }
 

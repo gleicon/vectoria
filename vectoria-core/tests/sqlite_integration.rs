@@ -1,25 +1,12 @@
-/// Integration tests for SqliteStorage — in-memory and file-backed paths.
+#[allow(dead_code)]
+mod common;
+
 use vectoria_core::{
-    model::{Event, EventType, Product, ProductStatus},
+    model::{Event, EventType, Product},
     storage::{ProductSignals, StorageEngine, sqlite::SqliteStorage},
 };
 use chrono::Utc;
 use tempfile::TempDir;
-
-fn make_product(id: &str, title: &str) -> Product {
-    let now = Utc::now();
-    Product {
-        id: id.to_string(),
-        text: Some(title.to_string()),
-        vector: None,
-        metadata: serde_json::json!({ "title": title, "in_stock": true }),
-        model_id: None,
-        dims: None,
-        status: ProductStatus::PendingVector,
-        created_at: now,
-        updated_at: now,
-    }
-}
 
 fn make_event(id: &str, product_id: &str, event_type: EventType) -> Event {
     Event {
@@ -36,7 +23,7 @@ fn make_event(id: &str, product_id: &str, event_type: EventType) -> Event {
 #[tokio::test]
 async fn test_put_and_get_product() {
     let db = SqliteStorage::open_in_memory().unwrap();
-    let p = make_product("p1", "Nike Running Shoe");
+    let p = common::make_product("p1", "Nike Running Shoe");
     db.put_product(&p).await.unwrap();
 
     let fetched = db.get_product("p1").await.unwrap().expect("product must exist");
@@ -54,7 +41,7 @@ async fn test_get_product_missing_returns_none() {
 #[tokio::test]
 async fn test_put_product_upsert() {
     let db = SqliteStorage::open_in_memory().unwrap();
-    let p = make_product("up1", "Original Title");
+    let p = common::make_product("up1", "Original Title");
     db.put_product(&p).await.unwrap();
 
     let updated = Product {
@@ -71,7 +58,7 @@ async fn test_put_product_upsert() {
 #[tokio::test]
 async fn test_delete_product() {
     let db = SqliteStorage::open_in_memory().unwrap();
-    db.put_product(&make_product("del1", "Temporary")).await.unwrap();
+    db.put_product(&common::make_product("del1", "Temporary")).await.unwrap();
     db.delete_product("del1").await.unwrap();
 
     let result = db.get_product("del1").await.unwrap();
@@ -82,7 +69,7 @@ async fn test_delete_product() {
 async fn test_list_products_pagination() {
     let db = SqliteStorage::open_in_memory().unwrap();
     for i in 0..10u32 {
-        db.put_product(&make_product(&format!("lp{}", i), &format!("Shoe {}", i))).await.unwrap();
+        db.put_product(&common::make_product(&format!("lp{}", i), &format!("Shoe {}", i))).await.unwrap();
     }
 
     let page1 = db.list_products(0, 5).await.unwrap();
@@ -99,7 +86,7 @@ async fn test_list_products_pagination() {
 #[tokio::test]
 async fn test_put_event_and_compute_signals_from_events() {
     let db = SqliteStorage::open_in_memory().unwrap();
-    db.put_product(&make_product("sig1", "Popular Item")).await.unwrap();
+    db.put_product(&common::make_product("sig1", "Popular Item")).await.unwrap();
 
     for i in 0..5u32 {
         db.put_event(&make_event(&format!("v{}", i), "sig1", EventType::View)).await.unwrap();
@@ -118,7 +105,7 @@ async fn test_put_event_and_compute_signals_from_events() {
 #[tokio::test]
 async fn test_put_product_signals_cached_read() {
     let db = SqliteStorage::open_in_memory().unwrap();
-    db.put_product(&make_product("cs1", "Cached Signals Item")).await.unwrap();
+    db.put_product(&common::make_product("cs1", "Cached Signals Item")).await.unwrap();
 
     let cached = ProductSignals {
         click_count: 42,
@@ -139,8 +126,8 @@ async fn test_put_product_signals_cached_read() {
 #[tokio::test]
 async fn test_stats() {
     let db = SqliteStorage::open_in_memory().unwrap();
-    db.put_product(&make_product("st1", "Shoe A")).await.unwrap();
-    db.put_product(&make_product("st2", "Shoe B")).await.unwrap();
+    db.put_product(&common::make_product("st1", "Shoe A")).await.unwrap();
+    db.put_product(&common::make_product("st2", "Shoe B")).await.unwrap();
     db.put_event(&make_event("ev1", "st1", EventType::Click)).await.unwrap();
 
     let stats = db.stats().await.unwrap();
@@ -152,7 +139,7 @@ async fn test_stats() {
 #[tokio::test]
 async fn test_duplicate_event_ignored() {
     let db = SqliteStorage::open_in_memory().unwrap();
-    db.put_product(&make_product("de1", "Item")).await.unwrap();
+    db.put_product(&common::make_product("de1", "Item")).await.unwrap();
 
     let ev = make_event("same-id", "de1", EventType::View);
     db.put_event(&ev).await.unwrap();
@@ -169,7 +156,7 @@ async fn test_file_backed_persistence() {
 
     {
         let db = SqliteStorage::open(&path).unwrap();
-        db.put_product(&make_product("fb1", "Persisted Shoe")).await.unwrap();
+        db.put_product(&common::make_product("fb1", "Persisted Shoe")).await.unwrap();
     }
 
     let db2 = SqliteStorage::open(&path).unwrap();

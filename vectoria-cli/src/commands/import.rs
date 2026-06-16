@@ -154,7 +154,6 @@ async fn import_parquet(
                         serde_json::Value::String(arr.value(row_idx).to_string())
                     }
                 } else {
-                    // For non-string columns, use display representation.
                     serde_json::Value::String(
                         arrow::util::display::array_value_to_string(col.as_ref(), row_idx)
                             .unwrap_or_default()

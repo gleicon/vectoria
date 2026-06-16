@@ -36,7 +36,7 @@ impl CrossEncoderReranker {
             .into_iter()
             .map(|r| (r.index, r.score as f32))
             .collect();
-        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         Ok(scored)
     }
 }

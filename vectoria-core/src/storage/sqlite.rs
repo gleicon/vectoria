@@ -1,12 +1,11 @@
 use super::{ProductSignals, StorageEngine, StorageStats};
-use crate::model::{Event, EventType, Product};
+use crate::model::{Event, Product};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use rusqlite::{Connection, params};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-/// SQLite-backed StorageEngine. Fallback when EdgeStore is unavailable.
 pub struct SqliteStorage {
     conn: Arc<Mutex<Connection>>,
 }
@@ -134,39 +133,33 @@ impl StorageEngine for SqliteStorage {
         let pid = product_id.to_string();
         let result = tokio::task::spawn_blocking(move || {
             let db = conn.lock().unwrap();
-
-            // Check cached signals first.
-            {
-                let mut stmt = db.prepare_cached("SELECT data FROM signals WHERE product_id=?1")?;
-                let mut rows = stmt.query(params![pid])?;
-                if let Some(row) = rows.next()? {
-                    let data: String = row.get(0)?;
-                    return Ok::<_, anyhow::Error>(serde_json::from_str(&data)?);
-                }
+            let mut stmt = db.prepare_cached("SELECT data FROM signals WHERE product_id=?1")?;
+            let mut rows = stmt.query(params![pid])?;
+            if let Some(row) = rows.next()? {
+                let data: String = row.get(0)?;
+                return Ok::<_, anyhow::Error>(serde_json::from_str(&data)?);
             }
+            Err(anyhow::anyhow!("no cached signals"))
+        }).await?;
 
-            // Compute from raw events.
-            let mut stmt = db.prepare_cached(
-                "SELECT data FROM events WHERE product_id=?1"
-            )?;
+        match result {
+            Ok(s) => Ok(s),
+            Err(_) => self.recompute_product_signals(product_id).await,
+        }
+    }
+
+    async fn recompute_product_signals(&self, product_id: &str) -> Result<ProductSignals> {
+        let conn = Arc::clone(&self.conn);
+        let pid = product_id.to_string();
+        let result = tokio::task::spawn_blocking(move || {
+            let db = conn.lock().unwrap();
+            let mut stmt = db.prepare_cached("SELECT data FROM events WHERE product_id=?1")?;
             let rows = stmt.query_map(params![pid], |row| row.get::<_, String>(0))?;
-
-            let mut signals = ProductSignals::default();
-            for data in rows {
-                let data = data?;
-                let event: Event = serde_json::from_str(&data)?;
-                match event.event_type {
-                    EventType::Click => signals.click_count += 1,
-                    EventType::Purchase => signals.purchase_count += 1,
-                    EventType::View => signals.view_count += 1,
-                    EventType::AddToCart => signals.cart_count += 1,
-                    EventType::Wishlist => {}
-                }
-            }
-            let total = signals.view_count.max(1);
-            signals.popularity = (signals.click_count as f32 / total as f32).min(1.0);
-            signals.conversion_rate = (signals.purchase_count as f32 / total as f32).min(1.0);
-            Ok(signals)
+            let events: Vec<crate::model::Event> = rows
+                .filter_map(|data| data.ok())
+                .filter_map(|data: String| serde_json::from_str(&data).ok())
+                .collect();
+            Ok::<_, anyhow::Error>(super::compute_signals_from_events(events.iter()))
         }).await??;
         Ok(result)
     }
@@ -196,7 +189,6 @@ impl StorageEngine for SqliteStorage {
             let event_count: u64 = db.query_row(
                 "SELECT COUNT(*) FROM events", [], |r| r.get(0)
             )?;
-            // page_count * page_size gives total DB size in bytes.
             let page_count: u64 = db.query_row("PRAGMA page_count", [], |r| r.get(0))?;
             let page_size: u64 = db.query_row("PRAGMA page_size", [], |r| r.get(0))?;
             Ok::<_, anyhow::Error>(StorageStats {
