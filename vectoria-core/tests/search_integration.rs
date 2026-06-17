@@ -211,6 +211,46 @@ async fn test_event_recording_and_signals() {
     assert!(resp.hits.iter().any(|h| h.id == "ev1"), "ev1 should appear in results");
 }
 
+#[tokio::test]
+async fn test_query_ctr_boosts_clicked_product() {
+    let engine = make_engine();
+    engine.index(make_product("ctr1", "Running Shoe A", "Nike", "Footwear", true)).await.unwrap();
+    engine.index(make_product("ctr2", "Running Shoe B", "Adidas", "Footwear", true)).await.unwrap();
+
+    // Record 5 clicks on ctr1 for this exact query, none for ctr2.
+    for _ in 0..5 {
+        engine.record_event(Event {
+            id: uuid::Uuid::new_v4().to_string(),
+            event_type: EventType::Click,
+            product_id: "ctr1".into(),
+            user_id: Some("user1".into()),
+            query: Some("running shoe".into()),
+            session_id: None,
+            timestamp: Utc::now(),
+        }).await.unwrap();
+    }
+
+    let resp = engine.search(SearchRequest {
+        q: "running shoe".into(), limit: 10, offset: 0,
+        mode: SearchMode::Hybrid, filters: None, ranking_weights: None,
+        aggregate: None, explain: true, rerank: false,
+    }).await.unwrap();
+
+    let ctr1 = resp.hits.iter().find(|h| h.id == "ctr1").expect("ctr1 must be in results");
+    let ctr2 = resp.hits.iter().find(|h| h.id == "ctr2").expect("ctr2 must be in results");
+
+    assert!(
+        ctr1.score > ctr2.score,
+        "ctr1 (clicked 5×) must outscore ctr2 (never clicked): {:.4} vs {:.4}",
+        ctr1.score, ctr2.score
+    );
+
+    // Verify query_ctr factor is present and non-zero in explain.
+    let factors = ctr1.explain.as_ref().unwrap();
+    let ctr_factor = factors.factors.iter().find(|f| f.factor == "query_ctr").unwrap();
+    assert!(ctr_factor.score > 0.0, "query_ctr factor must be non-zero for ctr1");
+}
+
 
 #[tokio::test]
 async fn test_bm25_mode_only() {
@@ -329,6 +369,96 @@ async fn test_stats_query_count_ignores_cache_hits() {
 
     let stats = engine.stats().await.unwrap();
     assert_eq!(stats.query_count, 1, "cache hits must not increment query_count");
+}
+
+/// Anatomy test: index products with known characteristics, fire explain search,
+/// print the full JSON breakdown, and verify the math holds.
+/// Run with `cargo test test_explain_score_breakdown_anatomy -- --nocapture`
+/// to see the actual output used in docs.
+#[tokio::test]
+async fn test_explain_score_breakdown_anatomy() {
+
+    let engine = make_engine();
+
+    // shoe1: exact BM25 match + click events → should dominate via bm25 + query_ctr
+    engine.index(make_product("shoe1", "Nike Air Max running shoe waterproof", "Nike", "Footwear", true)).await.unwrap();
+    // shoe2: partial BM25 match, no CTR
+    engine.index(make_product("shoe2", "Adidas Ultraboost running trainer", "Adidas", "Footwear", true)).await.unwrap();
+    // mat1: no BM25 match for "running shoe" query
+    engine.index(make_product("mat1", "Yoga mat non-slip extra thick", "Manduka", "Fitness", true)).await.unwrap();
+
+    // Record 3 clicks on shoe1 for this exact query → query_ctr signal
+    for _ in 0..3 {
+        engine.record_event(Event {
+            id: uuid::Uuid::new_v4().to_string(),
+            event_type: EventType::Click,
+            product_id: "shoe1".into(),
+            user_id: Some("u1".into()),
+            query: Some("running shoe".into()),
+            session_id: None,
+            timestamp: Utc::now(),
+        }).await.unwrap();
+    }
+
+    let resp = engine.search(SearchRequest {
+        q: "running shoe".into(),
+        limit: 5,
+        offset: 0,
+        mode: SearchMode::Hybrid,
+        filters: None,
+        ranking_weights: None,
+        aggregate: None,
+        explain: true,
+        rerank: false,
+    }).await.unwrap();
+
+    println!("\n=== Explain output for 'running shoe' ===");
+    for hit in &resp.hits {
+        println!("\n--- {} (score: {:.4}) ---", hit.id, hit.score);
+        if let Some(bd) = &hit.explain {
+            println!("{}", serde_json::to_string_pretty(bd).unwrap());
+
+            // sum(contribution) must equal hit.score (within float epsilon)
+            let contrib_sum: f32 = bd.factors.iter().map(|f| f.contribution).sum();
+            assert!(
+                (contrib_sum - hit.score).abs() < 0.001,
+                "sum(contribution)={:.4} must equal score={:.4} for {}",
+                contrib_sum, hit.score, hit.id
+            );
+
+            // each contribution must equal score × weight
+            for factor in &bd.factors {
+                assert!(
+                    (factor.contribution - factor.score * factor.weight).abs() < 0.0001,
+                    "factor '{}': contribution={:.4} != score×weight={:.4}",
+                    factor.factor, factor.contribution, factor.score * factor.weight
+                );
+            }
+
+            // query_context must be populated
+            assert_eq!(bd.query_context.original_query, "running shoe");
+        }
+    }
+
+    // shoe1 must outrank shoe2 (it has query_ctr boost)
+    let pos_shoe1 = resp.hits.iter().position(|h| h.id == "shoe1").unwrap();
+    let pos_shoe2 = resp.hits.iter().position(|h| h.id == "shoe2").unwrap();
+    assert!(pos_shoe1 < pos_shoe2, "shoe1 (with CTR) must rank above shoe2");
+
+    // shoe1 explain must show match_sources including bm25
+    let shoe1 = resp.hits.iter().find(|h| h.id == "shoe1").unwrap();
+    let bd = shoe1.explain.as_ref().unwrap();
+    assert!(
+        bd.match_sources.contains(&"bm25".to_string()),
+        "shoe1 must have bm25 in match_sources: {:?}", bd.match_sources
+    );
+
+    // shoe1 query_ctr factor must be non-zero
+    let ctr_factor = bd.factors.iter().find(|f| f.factor == "query_ctr").unwrap();
+    assert!(ctr_factor.score > 0.0, "shoe1 query_ctr score must be > 0 after 3 clicks");
+
+    println!("\n=== Top result match_sources: {:?} ===", bd.match_sources);
+    println!("=== query_context: {:?} ===", bd.query_context);
 }
 
 #[tokio::test]

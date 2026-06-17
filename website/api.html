@@ -93,6 +93,7 @@
   "offset": 0,
   "mode": "hybrid",
   "filters": {"in_stock": true, "brand": "Merrell"},
+  "aggregate": ["brand", "category"],
   "ranking_weights": {"semantic": 0.7, "bm25": 0.3},
   "explain": false,
   "rerank": false
@@ -105,10 +106,11 @@
       <tr><td><code>limit</code></td><td>20</td><td>Results per page</td></tr>
       <tr><td><code>offset</code></td><td>0</td><td>Pagination offset</td></tr>
       <tr><td><code>mode</code></td><td><code>hybrid</code></td><td><code>hybrid</code>, <code>semantic</code>, or <code>bm25</code></td></tr>
-      <tr><td><code>filters</code></td><td>null</td><td>Key/value pairs matched against product metadata</td></tr>
+      <tr><td><code>filters</code></td><td>null</td><td>Key/value pairs matched against metadata. Special keys: <code>price_min</code>, <code>price_max</code></td></tr>
+      <tr><td><code>aggregate</code></td><td>null</td><td>Metadata fields to facet-count across all matched candidates (e.g. <code>["brand","category"]</code>)</td></tr>
       <tr><td><code>ranking_weights</code></td><td>see below</td><td>Override score fusion weights for this request</td></tr>
       <tr><td><code>explain</code></td><td>false</td><td>Include per-result score breakdown in response</td></tr>
-      <tr><td><code>rerank</code></td><td>false</td><td>Apply cross-encoder reranking (requires <code>VECTORIA_ENABLE_RERANKER=1</code>)</td></tr>
+      <tr><td><code>rerank</code></td><td>false</td><td>Apply cross-encoder reranking (requires <code>index.enable_reranker = true</code>)</td></tr>
     </tbody>
   </table>
 
@@ -128,10 +130,104 @@
   "offset": 0,
   "limit": 20,
   "processing_time_ms": 3,
-  "query": "waterproof trail shoes"
+  "query": "waterproof trail shoes",
+  "aggregations": {
+    "brand": {"Merrell": 8, "Salomon": 5},
+    "category": {"Trail Running": 10}
+  }
 }</code></pre>
 
-  <p>When <code>explain: true</code>, each hit includes a <code>factors</code> array showing individual component scores and weights.</p>
+  <p><code>total</code> reflects matched candidates up to <code>(limit + offset) × 5</code> — not an exact index-wide count.</p>
+
+  <h3 id="explain">Score explanation (<code>explain: true</code>)</h3>
+
+  <p>
+    The examples below come from a real test (<code>test_explain_score_breakdown_anatomy</code>): three products
+    indexed, three clicks recorded on <code>shoe1</code> for the query <code>"running shoe"</code>,
+    then a hybrid search with <code>explain:true</code>.
+  </p>
+
+  <p><strong>Why <code>shoe1</code> ranked first (score: 0.7112):</strong></p>
+  <pre><code>{
+  "id": "shoe1",
+  "score": 0.7112,
+  "explain": {
+    "match_sources": ["bm25", "vector"],
+    "query_context": {
+      "original_query": "running shoe",
+      "effective_query": "running shoe",
+      "spell_corrected": false,
+      "query_expanded": false
+    },
+    "factors": [
+      {"factor": "semantic_similarity", "score": 0.016, "weight": 0.70, "contribution": 0.011},
+      {"factor": "bm25",               "score": 1.000, "weight": 0.30, "contribution": 0.300},
+      {"factor": "popularity",         "score": 1.000, "weight": 0.20, "contribution": 0.200},
+      {"factor": "query_ctr",          "score": 1.000, "weight": 0.15, "contribution": 0.150},
+      {"factor": "availability",       "score": 1.000, "weight": 0.05, "contribution": 0.050},
+      {"factor": "margin",             "score": 0.000, "weight": 0.05, "contribution": 0.000}
+    ]
+  }
+}</code></pre>
+
+  <p>
+    <code>bm25=1.0</code>: top BM25 result (score normalized to max across candidates).
+    <code>popularity=1.0</code>: most clicks globally relative to views.
+    <code>query_ctr=1.0</code>: only product clicked for this exact query (normalized to max).
+    <code>semantic_similarity=0.016</code> is low here because this test uses a hash-based stub embedder;
+    with <code>multilingual-e5-small</code> semantic scores are typically 0.7–0.95 for relevant products.
+  </p>
+
+  <p><strong>Why <code>shoe2</code> ranked second (score: 0.1780):</strong></p>
+  <pre><code>{
+  "id": "shoe2",
+  "score": 0.1780,
+  "explain": {
+    "match_sources": ["bm25", "vector"],
+    "factors": [
+      {"factor": "bm25",        "score": 0.363, "weight": 0.30, "contribution": 0.109},
+      {"factor": "query_ctr",   "score": 0.000, "weight": 0.15, "contribution": 0.000},
+      {"factor": "availability","score": 1.000, "weight": 0.05, "contribution": 0.050},
+      ...
+    ]
+  }
+}</code></pre>
+  <p>
+    <code>bm25=0.363</code>: partial match ("running" appears but not "shoe").
+    <code>query_ctr=0</code> and <code>popularity=0</code>: never clicked.
+  </p>
+
+  <p><strong>Why <code>mat1</code> ranked last (score: 0.0566):</strong></p>
+  <p>
+    <code>match_sources: ["vector"]</code> — only returned via semantic search, no BM25 match.
+    Score is almost entirely <code>availability</code> (0.05) plus a tiny semantic contribution (0.007).
+    Not a text match; only present because the vector index found it as a distant neighbor.
+  </p>
+
+  <hr>
+
+  <table>
+    <thead><tr><th>Field</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>match_sources</code></td><td>How this product entered the candidate set: subset of <code>["bm25", "vector"]</code></td></tr>
+      <tr><td><code>query_context.original_query</code></td><td>Query as submitted</td></tr>
+      <tr><td><code>query_context.effective_query</code></td><td>Query actually used for BM25 (differs when spell-corrected or expanded)</td></tr>
+      <tr><td><code>query_context.spell_corrected</code></td><td><code>true</code> if BM25 returned no results and a corrected query was tried</td></tr>
+      <tr><td><code>query_context.query_expanded</code></td><td><code>true</code> if semantically-similar terms were appended to improve recall</td></tr>
+      <tr><td><code>factors[].score</code></td><td>Raw signal value (0.0–1.0)</td></tr>
+      <tr><td><code>factors[].weight</code></td><td>Configured weight for this factor</td></tr>
+      <tr><td><code>factors[].contribution</code></td><td><code>score × weight</code> — actual contribution to <code>hit.score</code></td></tr>
+    </tbody>
+  </table>
+
+  <p><code>sum(contribution)</code> equals <code>hit.score</code>. To diagnose a ranking:</p>
+  <ol>
+    <li>Check <code>match_sources</code> — if <code>bm25</code> is absent, product wasn't a text match (semantic retrieval only).</li>
+    <li>Check <code>query_ctr</code> contribution — if it dominates, ranking is driven by past clicks on this query.</li>
+    <li>Check <code>bm25</code> contribution — if low, the product doesn't contain the query terms verbatim.</li>
+    <li>Check <code>query_context.spell_corrected</code> — if <code>true</code>, BM25 found no results for the original query.</li>
+    <li>Check <code>semantic_similarity</code> — if the only non-zero signal, the product is semantically related but not a keyword match.</li>
+  </ol>
 
   <h3><span class="method get">GET</span> <span class="endpoint-path">/autocomplete?q=runn&amp;limit=5</span></h3>
   <p>Returns query completions based on indexed product text. Useful for search-as-you-type inputs.</p>
@@ -142,13 +238,29 @@
 
   <h3><span class="method post">POST</span> <span class="endpoint-path">/events</span></h3>
   <p>
-    Record a behavioral signal. Events are aggregated every 5 minutes
-    and fold into the <code>popularity</code> and <code>conversion</code> components of the ranking score.
+    Record a behavioral signal to improve ranking. Two distinct signals are derived:
   </p>
+  <table>
+    <thead><tr><th>Signal</th><th>How computed</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Global popularity</strong></td>
+        <td>click_count / view_count per product (all queries)</td>
+        <td>Products with high overall CTR rank slightly higher everywhere</td>
+      </tr>
+      <tr>
+        <td><strong>Query CTR</strong></td>
+        <td>click + purchase count per (query, product) pair</td>
+        <td>Products clicked for <em>this exact query</em> rank higher for future searches</td>
+      </tr>
+    </tbody>
+  </table>
+  <p>Query CTR is the stronger signal. It captures "users who searched this chose that" — something BM25 and vectors cannot provide. Always include <code>query</code> in click events to activate it.</p>
+
   <pre><code>{
   "product_id": "sku-001",
   "event_type": "click",
-  "query": "trail shoes",
+  "query": "waterproof trail shoes",
   "user_id": "u-abc",
   "session_id": "sess-xyz"
 }</code></pre>
@@ -158,11 +270,28 @@
     <tbody>
       <tr><td><code>product_id</code></td><td>Required. The product that was interacted with.</td></tr>
       <tr><td><code>event_type</code></td><td><code>view</code>, <code>click</code>, <code>add_to_cart</code>, <code>wishlist</code>, <code>purchase</code></td></tr>
-      <tr><td><code>query</code></td><td>Optional. The search query that led to this product.</td></tr>
-      <tr><td><code>user_id</code></td><td>Optional. For per-user personalization signals.</td></tr>
-      <tr><td><code>session_id</code></td><td>Optional. Groups events within a single browsing session.</td></tr>
+      <tr><td><code>query</code></td><td>The search query that led to this product. <strong>Required for query-CTR to work.</strong></td></tr>
+      <tr><td><code>user_id</code></td><td>Optional. Reserved for future per-user personalization.</td></tr>
+      <tr><td><code>session_id</code></td><td>Optional. Groups events within a browsing session.</td></tr>
     </tbody>
   </table>
+
+  <p><strong>Feedback loop:</strong></p>
+  <ol>
+    <li>User searches "running shoes" → results returned</li>
+    <li>User clicks <code>sku-001</code> → POST /events with <code>event_type=click</code>, <code>query="running shoes"</code></li>
+    <li>Background aggregation (every <code>aggregation_interval_secs</code>, default 300s) computes per-product signals</li>
+    <li>Next search for "running shoes" → <code>sku-001</code> gets a <code>query_ctr</code> boost in the score formula</li>
+  </ol>
+
+  <p><strong>Score formula</strong> (all weights configurable in <code>[ranking]</code>):</p>
+  <pre><code>score = semantic    × w_semantic
+      + bm25        × w_bm25
+      + popularity  × w_popularity     // global click/view ratio
+      + query_ctr   × w_query_ctr      // clicks for this exact query (default 0.15)
+      + availability × w_availability
+      + margin      × w_margin</code></pre>
+  <p>Pass <code>"explain": true</code> in search to see per-factor scores in each hit.</p>
 
   <hr>
 
@@ -294,7 +423,7 @@ engine.reindex_all().await?;</code></pre>
       <tr><td><code>.storage(arc)</code></td><td><code>MemoryStorage</code></td><td>Persistent backends: <code>SqliteStorage</code>, <code>EdgeStoreStorage</code></td></tr>
       <tr><td><code>.vector_index(arc)</code></td><td><code>MemoryVectorIndex</code></td><td>Persistent: <code>EdgeStoreVectorIndex</code> (HNSW)</td></tr>
       <tr><td><code>.embedding(arc)</code></td><td>Local <code>multilingual-e5-small</code></td><td>Any <code>EmbeddingProvider</code> impl, incl. OpenAI-compatible</td></tr>
-      <tr><td><code>.weights(RankingWeights)</code></td><td>semantic=0.7, bm25=0.3, popularity=0.2</td><td>Score fusion weights</td></tr>
+      <tr><td><code>.weights(RankingWeights)</code></td><td>semantic=0.7, bm25=0.3, popularity=0.2, query_ctr=0.15, availability=0.05, margin=0.05</td><td>Score fusion weights</td></tr>
       <tr><td><code>.query_cache(ttl, max)</code></td><td>disabled</td><td>LRU cache for repeated queries (TTL in seconds)</td></tr>
       <tr><td><code>.reranker()</code></td><td>disabled</td><td>Enable cross-encoder reranking (requires feature flag)</td></tr>
     </tbody>

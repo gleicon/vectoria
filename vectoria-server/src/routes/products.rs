@@ -51,7 +51,7 @@ pub async fn delete_product(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     match state.engine.delete(&id).await {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Ok(_) => Json(serde_json::json!({"status": "deleted"})).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
     }
 }

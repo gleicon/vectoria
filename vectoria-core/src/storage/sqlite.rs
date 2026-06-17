@@ -179,6 +179,31 @@ impl StorageEngine for SqliteStorage {
         Ok(())
     }
 
+    async fn get_query_ctrs(&self, query: &str) -> Result<std::collections::HashMap<String, f32>> {
+        let conn = Arc::clone(&self.conn);
+        let q = query.to_string();
+        let counts: std::collections::HashMap<String, u32> =
+            tokio::task::spawn_blocking(move || {
+                let db = conn.lock().unwrap();
+                let mut stmt = db.prepare_cached(
+                    "SELECT product_id, COUNT(*) FROM events \
+                     WHERE json_extract(data,'$.query')=?1 \
+                     AND json_extract(data,'$.event_type') IN ('click','purchase') \
+                     GROUP BY product_id",
+                )?;
+                let rows = stmt.query_map(params![q], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, u32>(1)?))
+                })?;
+                let mut m = std::collections::HashMap::new();
+                for row in rows.flatten() { m.insert(row.0, row.1); }
+                Ok::<_, anyhow::Error>(m)
+            }).await??;
+
+        let max = counts.values().copied().fold(0u32, u32::max) as f32;
+        if max == 0.0 { return Ok(std::collections::HashMap::new()); }
+        Ok(counts.into_iter().map(|(id, c)| (id, c as f32 / max)).collect())
+    }
+
     async fn stats(&self) -> Result<StorageStats> {
         let conn = Arc::clone(&self.conn);
         let result = tokio::task::spawn_blocking(move || {

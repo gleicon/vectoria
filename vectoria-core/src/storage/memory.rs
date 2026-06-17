@@ -69,6 +69,22 @@ impl StorageEngine for MemoryStorage {
         Ok(())
     }
 
+    async fn get_query_ctrs(&self, query: &str) -> Result<std::collections::HashMap<String, f32>> {
+        use crate::model::EventType;
+        let events = self.events.read().unwrap();
+        let mut counts: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+        for event in events.iter() {
+            if event.query.as_deref() == Some(query) {
+                if matches!(event.event_type, EventType::Click | EventType::Purchase) {
+                    *counts.entry(event.product_id.clone()).or_insert(0) += 1;
+                }
+            }
+        }
+        let max = counts.values().copied().fold(0u32, u32::max) as f32;
+        if max == 0.0 { return Ok(std::collections::HashMap::new()); }
+        Ok(counts.into_iter().map(|(id, c)| (id, c as f32 / max)).collect())
+    }
+
     async fn stats(&self) -> Result<StorageStats> {
         Ok(StorageStats {
             product_count: self.products.read().unwrap().len() as u64,

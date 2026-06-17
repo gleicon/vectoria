@@ -85,14 +85,32 @@ pub struct Hit {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScoreBreakdown {
+    /// Per-signal breakdown. Each factor's `contribution = score × weight`.
     pub factors: Vec<ScoreFactor>,
+    /// How this product entered the candidate set: subset of `["bm25", "vector"]`.
+    pub match_sources: Vec<String>,
+    /// Query transformations applied before scoring.
+    pub query_context: QueryContext,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScoreFactor {
     pub factor: String,
+    /// Raw signal value (0.0–1.0).
     pub score: f32,
+    /// Configured weight for this factor.
     pub weight: f32,
+    /// Actual contribution to the total score: `score × weight`.
+    pub contribution: f32,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct QueryContext {
+    pub original_query: String,
+    /// Query actually used for BM25 (may differ if spell-corrected or expanded).
+    pub effective_query: String,
+    pub spell_corrected: bool,
+    pub query_expanded: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -165,6 +183,10 @@ pub struct RankingWeights {
     pub availability: f32,
     #[serde(default = "w_margin")]
     pub margin: f32,
+    /// Weight for query-specific click-through rate signal.
+    /// Products previously clicked after this exact query rank higher.
+    #[serde(default = "w_query_ctr")]
+    pub query_ctr: f32,
 }
 
 impl Default for RankingWeights {
@@ -175,6 +197,7 @@ impl Default for RankingWeights {
             popularity: w_popularity(),
             availability: w_availability(),
             margin: w_margin(),
+            query_ctr: w_query_ctr(),
         }
     }
 }
@@ -184,6 +207,7 @@ fn w_bm25() -> f32 { 0.3 }
 fn w_popularity() -> f32 { 0.2 }
 fn w_availability() -> f32 { 0.05 }
 fn w_margin() -> f32 { 0.05 }
+fn w_query_ctr() -> f32 { 0.15 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimilarRequest {

@@ -86,7 +86,7 @@ impl SearchEngineBuilder {
         self
     }
 
-    /// Enable cross-encoder reranking (requires `VECTORIA_ENABLE_RERANKER=1` at build time).
+    /// Enable cross-encoder reranking. The server also requires `VECTORIA_ENABLE_RERANKER=1`.
     pub fn reranker(mut self) -> Self {
         self.reranker = true;
         self

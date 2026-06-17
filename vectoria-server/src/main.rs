@@ -54,14 +54,13 @@ async fn main() -> Result<()> {
     eprintln!("api_key: {}", api_key);
 
     if cfg.embedding.provider == "local" {
-        let skip = args.skip_consent
-            || std::env::var("VECTORIA_SKIP_CONSENT").as_deref() == Ok("1");
+        let skip = args.skip_consent || cfg.server.skip_consent;
         if !skip && !is_model_cached() {
             prompt_model_download_consent(&cfg.embedding.model)?;
         }
     }
 
-    let embedding_cache_size = cfg.index.embedding_cache_size.unwrap_or(10_000);
+    let embedding_cache_size = cfg.index.embedding_cache_size;
     let embedding: Arc<dyn EmbeddingProvider> = Arc::new(CachedEmbedding::new(
         build_embedding_provider(&cfg, args.skip_model_download)?,
         embedding_cache_size,
@@ -115,8 +114,8 @@ async fn main() -> Result<()> {
 
     let weights = cfg.ranking.clone();
 
-    let query_cache_ttl = cfg.index.query_cache_ttl_secs.unwrap_or(60);
-    let query_cache_max = cfg.index.query_cache_max_entries.unwrap_or(1_000);
+    let query_cache_ttl = cfg.index.query_cache_ttl_secs;
+    let query_cache_max = cfg.index.query_cache_max_entries;
 
     let mut engine = SearchEngine::new(
         Arc::clone(&storage),
@@ -126,7 +125,7 @@ async fn main() -> Result<()> {
     )
     .with_query_cache(query_cache_ttl, query_cache_max);
 
-    if std::env::var("VECTORIA_ENABLE_RERANKER").as_deref() == Ok("1") {
+    if cfg.index.enable_reranker {
         match CrossEncoderReranker::new() {
             Ok(reranker) => {
                 engine = engine.with_reranker(reranker);
@@ -139,7 +138,7 @@ async fn main() -> Result<()> {
     let engine = Arc::new(engine);
 
     let agg_storage = Arc::clone(&storage);
-    let agg_interval = cfg.index.aggregation_interval_secs.unwrap_or(300);
+    let agg_interval = cfg.index.aggregation_interval_secs;
     tokio::spawn(run_aggregation_loop(agg_storage, agg_interval));
 
     let state = AppState { engine, api_key: api_key.clone() };

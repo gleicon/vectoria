@@ -6,8 +6,8 @@ pub mod spell;
 use crate::{
     embedding::{build_product_text, EmbeddingProvider},
     model::{
-        Event, Hit, Product, ProductStatus, RankingWeights, ScoreBreakdown, ScoreFactor,
-        SearchMode, SearchRequest, SearchResponse, SimilarRequest,
+        Event, Hit, Product, ProductStatus, QueryContext, RankingWeights, ScoreBreakdown,
+        ScoreFactor, SearchMode, SearchRequest, SearchResponse, SimilarRequest,
     },
     storage::StorageEngine,
     vector::VectorIndex,
@@ -17,7 +17,7 @@ use bm25_index::Bm25Index;
 use query_cache::QueryResultCache;
 use reranker::CrossEncoderReranker;
 use spell::SpellCorrector;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
@@ -157,12 +157,19 @@ impl SearchEngine {
         // effective_q starts as the original; falls back to spell-corrected only when BM25
         // returns zero results (preserves precision for well-formed queries).
         let effective_q;
+        let mut spell_corrected = false;
+        let mut query_expanded = false;
         if matches!(req.mode, SearchMode::Hybrid | SearchMode::Bm25) {
             let bm25_results = self.bm25.search(&req.q, candidate_k);
 
             let base_q = if bm25_results.is_empty() {
                 let corrected = self.spell.correct(&req.q);
-                if corrected != req.q { corrected } else { req.q.clone() }
+                if corrected != req.q {
+                    spell_corrected = true;
+                    corrected
+                } else {
+                    req.q.clone()
+                }
             } else {
                 req.q.clone()
             };
@@ -174,6 +181,7 @@ impl SearchEngine {
                 if expansion_terms.is_empty() {
                     base_q.clone()
                 } else {
+                    query_expanded = true;
                     format!("{} {}", base_q, expansion_terms.join(" "))
                 }
             } else {
@@ -195,6 +203,16 @@ impl SearchEngine {
             effective_q = req.q.clone();
         }
 
+        // Single round-trip: fetch CTR scores for all candidates for this query.
+        let query_ctrs = self.storage.get_query_ctrs(&req.q).await.unwrap_or_default();
+
+        let query_context = QueryContext {
+            original_query: req.q.clone(),
+            effective_query: effective_q.clone(),
+            spell_corrected,
+            query_expanded,
+        };
+
         let mut hits: Vec<Hit> = Vec::new();
         for (id, candidate) in candidate_scores {
             let Some(product) = self.storage.get_product(&id).await? else { continue };
@@ -207,21 +225,31 @@ impl SearchEngine {
                 .and_then(|v| v.as_bool()).unwrap_or(true) as u8 as f32;
             let margin = product.metadata.get("margin")
                 .and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+            let ctr = query_ctrs.get(&id).copied().unwrap_or(0.0);
 
             let score = candidate.semantic * weights.semantic
                 + candidate.bm25 * weights.bm25
                 + signals.popularity * weights.popularity
                 + availability * weights.availability
-                + margin * weights.margin;
+                + margin * weights.margin
+                + ctr * weights.query_ctr;
 
-            let explain = req.explain.then(|| ScoreBreakdown {
-                factors: vec![
-                    ScoreFactor { factor: "semantic_similarity".into(), score: candidate.semantic, weight: weights.semantic },
-                    ScoreFactor { factor: "bm25".into(), score: candidate.bm25, weight: weights.bm25 },
-                    ScoreFactor { factor: "popularity".into(), score: signals.popularity, weight: weights.popularity },
-                    ScoreFactor { factor: "availability".into(), score: availability, weight: weights.availability },
-                    ScoreFactor { factor: "margin".into(), score: margin, weight: weights.margin },
-                ],
+            let explain = req.explain.then(|| {
+                let mut sources = Vec::new();
+                if candidate.bm25 > 0.0 { sources.push("bm25".to_string()); }
+                if candidate.semantic > 0.0 { sources.push("vector".to_string()); }
+                ScoreBreakdown {
+                    factors: vec![
+                        ScoreFactor { factor: "semantic_similarity".into(), score: candidate.semantic, weight: weights.semantic, contribution: candidate.semantic * weights.semantic },
+                        ScoreFactor { factor: "bm25".into(), score: candidate.bm25, weight: weights.bm25, contribution: candidate.bm25 * weights.bm25 },
+                        ScoreFactor { factor: "popularity".into(), score: signals.popularity, weight: weights.popularity, contribution: signals.popularity * weights.popularity },
+                        ScoreFactor { factor: "query_ctr".into(), score: ctr, weight: weights.query_ctr, contribution: ctr * weights.query_ctr },
+                        ScoreFactor { factor: "availability".into(), score: availability, weight: weights.availability, contribution: availability * weights.availability },
+                        ScoreFactor { factor: "margin".into(), score: margin, weight: weights.margin, contribution: margin * weights.margin },
+                    ],
+                    match_sources: sources,
+                    query_context: query_context.clone(),
+                }
             });
 
             hits.push(Hit { id: product.id, score, metadata: product.metadata.clone(), explain });
@@ -252,12 +280,11 @@ impl SearchEngine {
         }
 
         let total = hits.len();
-        let page_hits: Vec<Hit> = hits.into_iter().skip(offset).take(limit).collect();
-
         let aggregations = req.aggregate.as_ref().map(|fields| {
             let capped: Vec<String> = fields.iter().take(MAX_AGGREGATE_FIELDS).cloned().collect();
-            compute_aggregations(&page_hits, &capped)
+            compute_aggregations(&hits, &capped)
         });
+        let page_hits: Vec<Hit> = hits.into_iter().skip(offset).take(limit).collect();
 
         let response = SearchResponse {
             total,
@@ -331,13 +358,13 @@ impl SearchEngine {
         top.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         top.truncate(3);
 
-        let original_tokens: std::collections::HashSet<String> = original_query
+        let original_tokens: HashSet<String> = original_query
             .split_whitespace()
             .map(|w| w.to_lowercase())
             .collect();
 
         let mut expansion = Vec::new();
-        let mut seen: std::collections::HashSet<String> = original_tokens.clone();
+        let mut seen: HashSet<String> = original_tokens.clone();
         for (id, _) in top {
             let Ok(Some(product)) = self.storage.get_product(id).await else { continue };
             let text = product.text.unwrap_or_else(|| build_product_text(&product.metadata));

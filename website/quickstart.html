@@ -202,11 +202,12 @@ curl -X POST http://localhost:7700/search \
 curl http://localhost:7700/products/sku-001/similar \
   -H "Authorization: Bearer $API_KEY"
 
-# Record a click event (feeds behavioral ranking)
+# Record a click event — include "query" to activate query-level CTR ranking
+# Products clicked for this query will rank higher for future searches of the same query
 curl -X POST http://localhost:7700/events \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"event_type":"click","product_id":"sku-001","query":"trail shoes"}'
+  -d '{"event_type":"click","product_id":"sku-001","query":"waterproof trail shoes"}'
 
 # Stats
 curl http://localhost:7700/stats -H "Authorization: Bearer $API_KEY"</code></pre>

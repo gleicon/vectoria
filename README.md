@@ -2,7 +2,10 @@
 
 Embedded hybrid search engine for ecommerce. Single binary, no external services required.
 
-Vectoria combines BM25 full-text search with vector similarity and behavioral signals (clicks, purchases, views). Its main advantage over BM25-only search (SQLite FTS5, Meilisearch basic tier) is **zero-result elimination**: semantic mode returns results for long-tail queries that share no keywords with any product. Hybrid mode keeps BM25 precision while removing zero results entirely.
+Vectoria combines BM25 full-text search, vector similarity, and behavioral signals (clicks, purchases, views) into a single ranking formula. Its main advantages over BM25-only search (SQLite FTS5, Meilisearch basic tier):
+
+- **Zero-result elimination** — semantic mode returns results for long-tail queries that share no keywords with any product. Hybrid mode keeps BM25 precision while removing zero results entirely.
+- **Query-level CTR feedback** — products previously clicked for a given query rank higher for future searches of the same query. The feedback loop activates immediately after the first click event with a `query` field.
 
 The embedding model runs locally via ONNX; no external API calls required unless you configure an OpenAI-compatible provider.
 
@@ -62,6 +65,7 @@ Place a `vectoria.toml` in the working directory. All fields are optional.
 host = "0.0.0.0"
 port = 7700
 api_key = "your-key"        # auto-generated if absent
+skip_consent = false        # skip model download prompt on first run
 
 [storage]
 path = "./vectoria.db"      # path for persistent index files
@@ -72,12 +76,19 @@ model = "multilingual-e5-small"
 
 [index]
 vector_backend = "edgestore-hnsw"   # see below
+enable_reranker = false             # cross-encoder reranking (slower, higher quality)
+aggregation_interval_secs = 300     # how often behavioral signals fold into ranking
+query_cache_ttl_secs = 60
+query_cache_max_entries = 1000
+embedding_cache_size = 10000
 
 [ranking]
-semantic    = 0.6
-popularity  = 0.2
-availability = 0.1
-margin      = 0.1
+semantic     = 0.7
+bm25         = 0.3
+popularity   = 0.2
+query_ctr    = 0.15   # boost products previously clicked for this exact query
+availability = 0.05
+margin       = 0.05
 ```
 
 **vector_backend options:**
@@ -97,8 +108,38 @@ VECTORIA_EMBEDDING_PROVIDER
 VECTORIA_EMBEDDING_BASE_URL
 VECTORIA_EMBEDDING_MODEL
 VECTORIA_CONFIG              # path to config file, default: vectoria.toml
-VECTORIA_SKIP_CONSENT=1      # skip model download prompt
-VECTORIA_ENABLE_RERANKER=1   # enable cross-encoder reranking (slower, higher quality)
+VECTORIA_SKIP_CONSENT=1      # maps to server.skip_consent
+VECTORIA_ENABLE_RERANKER=1   # maps to index.enable_reranker
+```
+
+## Behavioral ranking
+
+Vectoria uses two behavioral signals derived from `POST /events`:
+
+| Signal | Source | Effect |
+|--------|--------|--------|
+| **Global popularity** | click_count / view_count (all queries) | Products with high overall CTR rank slightly higher everywhere |
+| **Query CTR** | click + purchase count per (query, product) | Products clicked for *this exact query* rank higher for future searches |
+
+Always include `query` in click/purchase events to activate query-level CTR:
+
+```sh
+curl -X POST http://localhost:7700/events \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"event_type":"click","product_id":"sku-001","query":"running shoes"}'
+```
+
+Events without `query` still contribute to global popularity but not per-query ranking. Background aggregation runs every `aggregation_interval_secs` (default 300s). The `query_ctr` weight defaults to `0.15` and is configurable in `[ranking]`.
+
+Use `"explain": true` in search requests to see per-factor scores:
+
+```json
+{
+  "factor": "query_ctr",
+  "score": 1.0,
+  "weight": 0.15
+}
 ```
 
 ## CLI

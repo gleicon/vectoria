@@ -1,6 +1,7 @@
 use crate::model::{Event, Product};
 use anyhow::Result;
 use async_trait::async_trait;
+use std::collections::HashMap;
 
 #[async_trait]
 pub trait StorageEngine: Send + Sync {
@@ -15,6 +16,13 @@ pub trait StorageEngine: Send + Sync {
     }
     async fn put_product_signals(&self, product_id: &str, signals: &ProductSignals) -> Result<()>;
     async fn stats(&self) -> Result<StorageStats>;
+
+    /// Returns normalized query-CTR scores (0.0–1.0) for the given product IDs,
+    /// based on click and purchase events that carried the exact query string.
+    /// Products with no matching events return 0.0 (absent from the map).
+    async fn get_query_ctrs(&self, _query: &str) -> Result<HashMap<String, f32>> {
+        Ok(HashMap::new())
+    }
 }
 
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize, Clone)]
