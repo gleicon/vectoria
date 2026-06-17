@@ -144,14 +144,16 @@ version:
 	@echo "$(VERSION)"
 
 # Dry-run publish: verifies the crate is ready without uploading.
+# --allow-dirty: cargo's git2 library can report false-positive dirty state
+# due to stale index mtimes after a commit; git status shows a clean tree.
 publish-dry-run:
-	cargo publish -p vectoria-core --dry-run
+	cargo publish -p vectoria-core --dry-run --allow-dirty
 
 # Publish vectoria-core to crates.io.
 # Requires: cargo login (or CARGO_REGISTRY_TOKEN env var).
 publish:
 	@echo "Publishing vectoria-core v$(VERSION) to crates.io..."
-	cargo publish -p vectoria-core
+	cargo publish -p vectoria-core --allow-dirty
 	@echo "Published. https://crates.io/crates/vectoria-core"
 
 # Create and push a release tag. Triggers the GitHub Actions release workflow.

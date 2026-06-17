@@ -12,7 +12,6 @@ use crate::{
     vector::{memory::MemoryVectorIndex, VectorIndex},
 };
 use anyhow::Result;
-use fastembed::EmbeddingModel;
 use std::sync::Arc;
 
 /// Builder for [`SearchEngine`]. All fields are optional; defaults use
