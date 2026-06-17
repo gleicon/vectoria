@@ -21,7 +21,7 @@
     <a href="api.html">Docs</a>
   </nav>
   <div style="color:var(--muted);font-size:0.8125rem;font-family:var(--mono);">
-    v0.1.5 <span class="blink" style="color:var(--cyan);">▌</span>
+    v0.1.6 <span class="blink" style="color:var(--cyan);">▌</span>
   </div>
 </div>
 
@@ -93,12 +93,12 @@
 <span class="cmt"># clone and build (~60s)</span>
 <span class="prompt">$</span> <span class="cmd">git clone github.com/gleicon/vectoria</span>
 <span class="prompt">$</span> <span class="cmd">cargo build --release</span>
-<span class="out">   Compiling vectoria-core v0.1.5</span>
+<span class="out">   Compiling vectoria-core v0.1.6</span>
 <span class="out">   Finished release target in 58.4s</span>
 
 <span class="cmt"># start server</span>
 <span class="prompt">$</span> <span class="cmd">./target/release/vectoria-server</span>
-<span class="ok">INFO</span> <span class="out">vectoria v0.1.5</span>
+<span class="ok">INFO</span> <span class="out">vectoria v0.1.6</span>
 <span class="key">api_key:</span> <span class="val">a1b2c3d4e5f6...</span>
 <span class="ok">INFO</span> <span class="out">listening on http://0.0.0.0:7700</span>
 
@@ -415,14 +415,14 @@
 <span class="cmt"># clone and start — ONNX model downloads automatically on first run</span>
 <span class="prompt">$</span> <span class="cmd">git clone github.com/gleicon/vectoria &amp;&amp; cd vectoria</span>
 <span class="prompt">$</span> <span class="cmd">VECTORIA_API_KEY=my-secret-key docker compose up</span>
-<span class="ok">INFO</span> <span class="out">vectoria v0.1.5</span>
+<span class="ok">INFO</span> <span class="out">vectoria v0.1.6</span>
 <span class="key">api_key:</span> <span class="val">my-secret-key</span>
 <span class="ok">INFO</span> <span class="out">listening on http://0.0.0.0:7700</span>
 
 <span class="cmt"># background</span>
 <span class="prompt">$</span> <span class="cmd">VECTORIA_API_KEY=my-secret-key docker compose up -d</span>
 <span class="prompt">$</span> <span class="cmd">curl http://localhost:7700/health</span>
-<span class="val">{"status":"ok","version":"0.1.5"}</span>
+<span class="val">{"status":"ok","version":"0.1.6"}</span>
     </div>
   </div>
 
@@ -689,7 +689,7 @@
         </div>
         <div class="terminal-body" style="font-size:0.875rem;">
 <span class="key">[dependencies]</span>
-<span class="val">vectoria-core</span> = <span class="out">"0.1.5"</span>
+<span class="val">vectoria-core</span> = <span class="out">"0.1.6"</span>
         </div>
       </div>
 
@@ -827,7 +827,7 @@ engine.stats()?;
     <a href="https://github.com/amazon-science/esci-data">ESCI Dataset</a>
     <br><br>
     <span aria-hidden="true" style="color:var(--border2);">───────────────────────────────────────────────────────────────</span><br>
-    <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.5 · DESIGNED FOR CATALOGS UP TO 500K PRODUCTS</span>
+    <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.6 · DESIGNED FOR CATALOGS UP TO 500K PRODUCTS</span>
   </p>
 </footer>
 

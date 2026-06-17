@@ -35,7 +35,7 @@ Start the server:
 On first run, it downloads the `multilingual-e5-small` embedding model (~40 MB) and prints an API key:
 
 ```
-INFO vectoria v0.1.5
+INFO vectoria v0.1.6
 INFO api_key: a1b2c3d4e5f6...
 INFO listening on http://0.0.0.0:7700
 ```
@@ -182,7 +182,7 @@ vectoria bench judges.ndjson --mode all --server http://localhost:7700 --api-key
 `vectoria-core` can be embedded directly — no HTTP server required. See [docs/api.md — Embedded library](docs/api.md#embedded-library-rust) for the full API, builder options, and examples.
 
 ```toml
-vectoria-core = "0.1.5"
+vectoria-core = "0.1.6"
 ```
 
 Publish target: `make publish` (requires `cargo login` or `CARGO_REGISTRY_TOKEN`). See [crates.io/crates/vectoria-core](https://crates.io/crates/vectoria-core).

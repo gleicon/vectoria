@@ -102,7 +102,7 @@ Verify it is up:
 
 ```sh
 curl http://localhost:7700/health
-# {"status":"ok","version":"0.1.5"}
+# {"status":"ok","version":"0.1.6"}
 ```
 
 ---
@@ -256,7 +256,7 @@ No HTTP server required. See [API reference — Embedded library](api.md#embedde
 
 ```toml
 [dependencies]
-vectoria-core = "0.1.5"
+vectoria-core = "0.1.6"
 ```
 
 ---

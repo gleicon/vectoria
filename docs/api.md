@@ -18,7 +18,7 @@ No authentication required.
 
 Response:
 ```json
-{"status": "ok", "version": "0.1.5"}
+{"status": "ok", "version": "0.1.6"}
 ```
 
 ---
@@ -400,7 +400,7 @@ Same body as `POST /products/similar`. Returns `404` if the index doesn't exist.
 
 ```toml
 # Cargo.toml
-vectoria-core = "0.1.5"
+vectoria-core = "0.1.6"
 ```
 
 ### Async API
