@@ -3,6 +3,13 @@ name = "vectoria-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Embedded hybrid search engine core — BM25 + vector + behavioral signals"
+keywords = ["search", "vector", "bm25", "hybrid", "ecommerce"]
+categories = ["database", "algorithms", "data-structures"]
+readme = "../README.md"
 
 [dependencies]
 tokio = { workspace = true }
@@ -20,8 +27,6 @@ edgestore = { workspace = true }
 bm25 = { workspace = true }
 symspell = { workspace = true }
 foyer = { workspace = true }
-parquet = { workspace = true }
-arrow = { workspace = true }
 rusqlite = { workspace = true }
 
 [dev-dependencies]

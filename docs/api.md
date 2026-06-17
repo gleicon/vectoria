@@ -18,7 +18,7 @@ No authentication required.
 
 Response:
 ```json
-{"status": "ok", "version": "0.1.0"}
+{"status": "ok", "version": "0.1.2"}
 ```
 
 ---
@@ -190,4 +190,121 @@ POST /admin/reindex
 ```
 
 Re-embeds all products using the current embedding model. Use after changing models.
+
+---
+
+## Embedded library (Rust)
+
+`vectoria-core` is published on [crates.io](https://crates.io/crates/vectoria-core) and can be embedded directly in any Rust application — no HTTP server required.
+
+```toml
+# Cargo.toml
+vectoria-core = "0.1.2"
+```
+
+### Async API
+
+```rust
+use vectoria_core::{SearchEngineBuilder, model::{SearchRequest, SearchMode}};
+
+let engine = SearchEngineBuilder::new()
+    .query_cache(300, 1_000)   // TTL secs, max entries
+    .build()
+    .await?;
+
+engine.index(product).await?;
+
+let results = engine.search(SearchRequest {
+    q: "running shoes".into(),
+    mode: SearchMode::Hybrid,
+    limit: 10,
+    ..Default::default()
+}).await?;
+```
+
+### Sync API
+
+For callers without an async runtime:
+
+```rust
+use vectoria_core::{SearchEngineSync, model::{SearchRequest, SearchMode}};
+
+let engine = SearchEngineSync::new()?;
+engine.index(product)?;
+
+let results = engine.search(SearchRequest {
+    q: "running shoes".into(),
+    ..Default::default()
+})?;
+
+engine.reindex()?;   // re-embed all products
+engine.stats()?;     // index stats
+```
+
+### Preloading an existing database
+
+Both persistent backends accept a file path. Point them at an existing database and call `reindex_all()` after opening to rebuild the in-memory BM25 index and spell corrector from stored products:
+
+```rust
+use std::{path::Path, sync::Arc};
+use vectoria_core::{SearchEngineBuilder, storage::sqlite::SqliteStorage};
+
+let storage = Arc::new(SqliteStorage::open(Path::new("./vectoria.db"))?);
+
+let engine = SearchEngineBuilder::new()
+    .storage(storage)
+    .build()
+    .await?;
+
+// Rebuild BM25 + spell corrector from stored products
+engine.reindex_all().await?;
+```
+
+For HNSW persistence, pair `EdgeStoreStorage::open(path)` with `EdgeStoreVectorIndex::open(path, model_id, dims)`. The HNSW graph persists to disk and loads automatically — no rebuild needed unless the embedding model changed.
+
+### Bulk indexing
+
+Index products individually in a loop. If products already carry pre-computed vectors, set `product.vector` and the embedding step is skipped (only storage, BM25, and spell corrector are updated). After bulk loading with HNSW, call `reindex_all()` once to flush the graph:
+
+```rust
+for p in products {
+    let product = Product {
+        id: p.id.clone(),
+        text: Some(p.text),
+        vector: Some(p.embedding),  // skip embed call
+        metadata: p.meta,
+        ..Product::new(p.id, p.meta)
+    };
+    engine.index(product).await?;
+}
+
+// Flush HNSW graph after bulk load
+engine.reindex_all().await?;
+```
+
+For concurrent async bulk loading:
+
+```rust
+let engine = Arc::new(engine);
+let handles: Vec<_> = products.into_iter().map(|p| {
+    let e = Arc::clone(&engine);
+    tokio::spawn(async move { e.index(p).await })
+}).collect();
+
+for h in handles { h.await??; }
+engine.reindex_all().await?;
+```
+
+### Builder options
+
+| Method | Default |
+|--------|---------|
+| `.storage(arc)` | `MemoryStorage` |
+| `.vector_index(arc)` | `MemoryVectorIndex` |
+| `.embedding(arc)` | `LocalEmbedding` (multilingual-e5-small) |
+| `.weights(RankingWeights)` | semantic=0.7, bm25=0.3, popularity=0.2 |
+| `.query_cache(ttl, max)` | disabled |
+| `.reranker()` | disabled |
+
+All types implement `Send + Sync`. Storage and vector index backends can be swapped to `SqliteStorage`, `EdgeStoreStorage`, or `EdgeStoreVectorIndex` for persistence.
 

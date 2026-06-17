@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quickstart — Vectoria</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<a href="#main" style="position:absolute;left:-9999px;top:0;background:var(--bg);color:var(--cyan);padding:8px 16px;z-index:9999;font-family:var(--mono);" onfocus="this.style.left='0';" onblur="this.style.left='-9999px';">Skip to content</a>
+
+<div id="topbar">
+  <a class="logo" href="index.html">vectoria<span>.</span></a>
+  <nav>
+    <a href="index.html#features">Features</a>
+    <a href="index.html#benchmark">Benchmark</a>
+    <a href="index.html#install">Install</a>
+    <a href="index.html#embed">Embed</a>
+    <a href="api.html">Docs</a>
+  </nav>
+  <div style="color:var(--muted);font-size:0.8125rem;font-family:var(--mono);">
+    v0.1.2
+  </div>
+</div>
+
+<div class="doc-breadcrumb">
+  <a href="index.html">vectoria</a> / <span>Quickstart</span>
+</div>
+
+<main id="main" class="doc-content">
+  <h1>Quickstart</h1>
+  <p class="doc-lead">
+    From zero to a running Vectoria server with real product data and a searchable demo storefront.<br>
+    <strong>Time:</strong> ~10 minutes, plus ~5 minutes on first run to download the embedding model and ESCI data.
+  </p>
+
+  <h2 id="prerequisites">Prerequisites</h2>
+  <ul>
+    <li>Rust 1.80+ — install at <a href="https://rustup.rs">rustup.rs</a></li>
+    <li><code>curl</code> or <code>wget</code></li>
+    <li><code>python3</code> (for the webstore frontend)</li>
+    <li>~1.5 GB free disk space (ESCI data + embedding model)</li>
+  </ul>
+
+  <hr>
+
+  <h2 id="step-1">1. Clone and build</h2>
+  <pre><code>git clone https://github.com/gleicon/vectoria
+cd vectoria
+cargo build --release -p vectoria-server -p vectoria-cli</code></pre>
+  <p>Or use Make:</p>
+  <pre><code>make build</code></pre>
+
+  <hr>
+
+  <h2 id="step-2">2. Configure</h2>
+  <p>
+    A ready-to-use <code>vectoria.toml</code> is included. It sets port 7700,
+    API key <code>vectoria-esci-demo</code>, and in-memory index (data resets on restart).
+  </p>
+  <p>For a persistent index, edit <code>vectoria.toml</code>:</p>
+  <pre><code>[index]
+vector_backend = "edgestore-hnsw"
+
+[storage]
+path = "./data/vectoria.db"</code></pre>
+
+  <hr>
+
+  <h2 id="step-3">3. Start the server</h2>
+
+  <p><strong>Option A — Docker Compose (recommended, no Rust required):</strong></p>
+  <pre><code># Full image — ONNX model downloaded on first start
+VECTORIA_API_KEY=my-secret-key docker compose up
+
+# Run in background
+VECTORIA_API_KEY=my-secret-key docker compose up -d</code></pre>
+  <p>
+    The compose file mounts two named volumes: <code>/data</code> for the index
+    and <code>/root/.cache/fastembed</code> for the model cache. The model (~40 MB) downloads once.
+  </p>
+
+  <p><strong>Option B — Docker run:</strong></p>
+  <pre><code>docker build --target vectoria-full -t vectoria:full .
+docker run -p 7700:7700 \
+  -v vectoria-data:/data \
+  -v fastembed-cache:/root/.cache/fastembed \
+  -e VECTORIA_API_KEY=my-secret-key \
+  vectoria:full</code></pre>
+
+  <p><strong>Option C — from source (foreground):</strong></p>
+  <pre><code>cargo run --release -p vectoria-server
+# or: make server</code></pre>
+
+  <p><strong>Option D — from source (background):</strong></p>
+  <pre><code>make server-bg
+# Waits until the server responds at http://localhost:7700/health
+# Logs → /tmp/vectoria.log</code></pre>
+
+  <p>On first run the server downloads <code>multilingual-e5-small</code> (~40 MB), then prints:</p>
+  <pre><code>api_key: vectoria-esci-demo
+INFO listening on http://0.0.0.0:7700</code></pre>
+
+  <p>Verify:</p>
+  <pre><code>curl http://localhost:7700/health
+# {"status":"ok","version":"0.1.2"}</code></pre>
+
+  <hr>
+
+  <h2 id="step-4">4. Load the ESCI demo dataset</h2>
+
+  <div class="warning">
+    <strong>License required.</strong>
+    The Amazon Shopping Queries Dataset (ESCI) is proprietary.
+    Read and accept the terms at <a href="https://github.com/amazon-science/esci-data">github.com/amazon-science/esci-data</a> before downloading.
+  </div>
+
+  <pre><code>make esci-import</code></pre>
+
+  <p>This:</p>
+  <ol>
+    <li>Downloads <code>shopping_queries_dataset_products.parquet</code> (~1.1 GB) to <code>data/esci/</code> — skipped on subsequent runs</li>
+    <li>Downloads <code>shopping_queries_dataset_examples.parquet</code> (~68 MB)</li>
+    <li>Imports 5,000 US-locale products into the running server</li>
+  </ol>
+
+  <p>To import more products or a different locale:</p>
+  <pre><code>make esci-import MAX_PRODUCTS=50000 LOCALE=es</code></pre>
+
+  <hr>
+
+  <h2 id="step-5">5. Open the demo storefront</h2>
+  <pre><code>make webstore</code></pre>
+  <p>
+    Open <a href="http://localhost:8080">http://localhost:8080</a>. The demo store lets you search in three modes —
+    BM25, semantic, and hybrid — and shows per-result score breakdowns.
+  </p>
+
+  <hr>
+
+  <h2 id="step-6">6. Benchmark search quality</h2>
+  <pre><code>make esci-judges   # writes data/esci/judges.ndjson
+make bench         # Recall@K, NDCG@K, MRR across bm25 / semantic / hybrid</code></pre>
+
+  <p>Sample output (ESCI, 5,000 US products, E+S labels, 117 judged queries):</p>
+  <pre><code>── Mode: bm25 ──────────────────────────────
+  Coverage:     100.0%
+  Recall@10:    0.5347
+  NDCG@10:      0.5796
+  MRR:          0.6595
+  Latency p50:  0.4ms
+
+── Mode: semantic ──────────────────────────
+  Coverage:     100.0%
+  Recall@10:    0.4407
+  NDCG@10:      0.4765
+  MRR:          0.5690
+  Latency p50:  2.0ms
+
+── Mode: hybrid ────────────────────────────
+  Coverage:     100.0%
+  Recall@10:    0.4914
+  NDCG@10:      0.5635
+  MRR:          0.6576
+  Latency p50:  2.2ms</code></pre>
+
+  <p>
+    All modes reach 100% coverage. Zero-result queries are retried with spell correction
+    (compound splits + typo correction on alphabetic tokens) before falling back to semantic results.
+  </p>
+
+  <hr>
+
+  <h2 id="step-7">7. Import your own data</h2>
+
+  <p><strong>NDJSON</strong> (one product per line):</p>
+  <pre><code>{"id":"sku-001","text":"Blue trail running shoe waterproof","metadata":{"title":"Trail X","brand":"Merrell","price":149.99,"in_stock":true}}
+{"id":"sku-002","text":"Yoga mat non-slip extra thick 6mm","metadata":{"title":"ProMat","brand":"Manduka","price":89.00,"in_stock":true}}</code></pre>
+  <pre><code>vectoria import products.ndjson \
+  --server http://localhost:7700 \
+  --api-key vectoria-esci-demo</code></pre>
+
+  <p><strong>CSV</strong> (any columns; <code>id</code>, <code>sku</code>, or <code>product_id</code> used as the product ID):</p>
+  <pre><code>vectoria import catalog.csv --server http://localhost:7700 --api-key vectoria-esci-demo</code></pre>
+
+  <p><strong>Parquet</strong> (all string and numeric columns mapped to metadata automatically):</p>
+  <pre><code>vectoria import catalog.parquet --server http://localhost:7700 --api-key vectoria-esci-demo</code></pre>
+
+  <hr>
+
+  <h2 id="step-8">8. Query the API directly</h2>
+  <pre><code>API_KEY=vectoria-esci-demo
+
+# Hybrid search
+curl -X POST http://localhost:7700/search \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"q":"waterproof trail shoes","limit":5,"mode":"hybrid"}'
+
+# Similar products by ID
+curl http://localhost:7700/products/sku-001/similar \
+  -H "Authorization: Bearer $API_KEY"
+
+# Record a click event (feeds behavioral ranking)
+curl -X POST http://localhost:7700/events \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"event_type":"click","product_id":"sku-001","query":"trail shoes"}'
+
+# Stats
+curl http://localhost:7700/stats -H "Authorization: Bearer $API_KEY"</code></pre>
+
+  <hr>
+
+  <h2 id="step-9">9. Stop and clean up</h2>
+  <pre><code>make kill       # stop background server
+make clean      # delete downloaded ESCI parquet files (not the model cache)</code></pre>
+  <p>The embedding model cache stays at <code>~/.cache/fastembed/</code>. Delete it manually to reclaim ~40 MB.</p>
+
+  <hr>
+
+  <h2 id="step-10">10. Use as an embedded Rust library</h2>
+  <p>No HTTP server required. Add <code>vectoria-core</code> to your <code>Cargo.toml</code>:</p>
+  <pre><code>[dependencies]
+vectoria-core = "0.1.2"</code></pre>
+
+  <p><strong>Async (Tokio):</strong></p>
+  <pre><code>use vectoria_core::{SearchEngineBuilder, model::{SearchRequest, SearchMode}};
+
+let engine = SearchEngineBuilder::new()
+    .query_cache(300, 1_000)
+    .build()
+    .await?;
+
+engine.index(product).await?;
+
+let results = engine.search(SearchRequest {
+    q: "running shoes".into(),
+    mode: SearchMode::Hybrid,
+    limit: 10,
+    ..Default::default()
+}).await?;</code></pre>
+
+  <p><strong>Sync (no runtime required in caller):</strong></p>
+  <pre><code>use vectoria_core::{SearchEngineSync, model::SearchRequest};
+
+let engine = SearchEngineSync::new()?;
+engine.index(product)?;
+
+let results = engine.search(SearchRequest {
+    q: "running shoes".into(),
+    ..Default::default()
+})?;</code></pre>
+
+  <p>
+    Defaults: in-memory storage, local <code>multilingual-e5-small</code> ONNX embeddings.
+    Override with builder methods (<code>.storage()</code>, <code>.vector_index()</code>, <code>.embedding()</code>, <code>.weights()</code>).
+    See <a href="api.html#embedded-library">API reference — Embedded library</a> for the full builder options table.
+  </p>
+
+  <hr>
+
+  <h2 id="make-targets">Make target reference</h2>
+  <table>
+    <thead><tr><th>Target</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>make build</code></td><td><code>cargo build --release</code> for server + CLI</td></tr>
+      <tr><td><code>make server</code></td><td>Start server in foreground</td></tr>
+      <tr><td><code>make server-bg</code></td><td>Start server in background, wait until healthy</td></tr>
+      <tr><td><code>make kill</code></td><td>Stop background server</td></tr>
+      <tr><td><code>make esci-download</code></td><td>Download ESCI parquet files only</td></tr>
+      <tr><td><code>make esci-import</code></td><td>Download + import products</td></tr>
+      <tr><td><code>make esci-judges</code></td><td>Build judged query file for benchmarking</td></tr>
+      <tr><td><code>make bench</code></td><td>Run benchmark against running server</td></tr>
+      <tr><td><code>make webstore</code></td><td>Serve demo store at <code>:8080</code></td></tr>
+      <tr><td><code>make clean</code></td><td>Delete downloaded data files</td></tr>
+      <tr><td><code>make version</code></td><td>Print current version from <code>Cargo.toml</code></td></tr>
+      <tr><td><code>make publish-dry-run</code></td><td>Verify <code>vectoria-core</code> is ready for crates.io</td></tr>
+      <tr><td><code>make publish</code></td><td>Publish <code>vectoria-core</code> to crates.io</td></tr>
+      <tr><td><code>make tag</code></td><td>Create and push <code>v&lt;version&gt;</code> git tag → triggers release workflow</td></tr>
+    </tbody>
+  </table>
+
+  <p>Override variables on the command line:</p>
+  <pre><code>make esci-import MAX_PRODUCTS=10000 LOCALE=es SERVER=http://myserver:7700 API_KEY=mykey</code></pre>
+
+  <hr>
+
+  <h2 id="next-steps">Next steps</h2>
+  <ul>
+    <li><a href="api.html">API reference</a> — full HTTP endpoint docs and embedded library usage</li>
+    <li><a href="https://crates.io/crates/vectoria-core">crates.io — vectoria-core</a> — embed in your Rust app</li>
+    <li><a href="https://github.com/gleicon/vectoria">GitHub</a> — source, issues, releases</li>
+  </ul>
+</main>
+
+<footer>
+  <p>
+    <a href="index.html">vectoria</a> &nbsp;·&nbsp;
+    <a href="https://github.com/gleicon/vectoria">GitHub</a> &nbsp;·&nbsp;
+    <a href="https://crates.io/crates/vectoria-core">crates.io</a> &nbsp;·&nbsp;
+    <a href="api.html">API Docs</a> &nbsp;·&nbsp;
+    <a href="quickstart.html">Quickstart</a>
+    <br><br>
+    <span style="color:var(--border2);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.2</span>
+  </p>
+</footer>
+
+</body>
+</html>

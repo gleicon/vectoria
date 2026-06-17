@@ -10,7 +10,10 @@ MAX_PRODUCTS  := 5000
 LOCALE        := us
 WEBSTORE_PORT := 8080
 
-.PHONY: help build server server-bg kill esci-download esci-import esci-judges bench webstore clean
+.PHONY: help build server server-bg kill esci-download esci-import esci-judges bench webstore clean \
+        publish publish-dry-run tag version
+
+VERSION       := $(shell cargo metadata --no-deps --format-version 1 | python3 -c "import sys,json; print(json.load(sys.stdin)['packages'][0]['version'])" 2>/dev/null || grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
 
 help:
 	@echo "Vectoria — demo targets"
@@ -31,6 +34,12 @@ help:
 	@echo "    bench               run Recall@K / NDCG@K / MRR benchmark (all modes)"
 	@echo "    webstore            serve examples/webstore/ at :$(WEBSTORE_PORT)"
 	@echo "    clean               remove downloaded data files"
+	@echo ""
+	@echo "  Release:"
+	@echo "    version             print current version from Cargo.toml"
+	@echo "    publish-dry-run     verify vectoria-core is ready for crates.io"
+	@echo "    publish             publish vectoria-core to crates.io"
+	@echo "    tag                 create + push git tag v<version> → triggers release workflow"
 	@echo ""
 	@echo "  Variables (override on command line):"
 	@echo "    MAX_PRODUCTS=$(MAX_PRODUCTS)   LOCALE=$(LOCALE)   WEBSTORE_PORT=$(WEBSTORE_PORT)"
@@ -128,3 +137,27 @@ webstore:
 clean:
 	rm -f $(PRODUCTS) $(EXAMPLES) $(JUDGES)
 	@echo "Data files removed. Server still running if started with 'make server-bg'."
+
+# ── Release / publish ──────────────────────────────────────────────────────
+
+version:
+	@echo "$(VERSION)"
+
+# Dry-run publish: verifies the crate is ready without uploading.
+publish-dry-run:
+	cargo publish -p vectoria-core --dry-run
+
+# Publish vectoria-core to crates.io.
+# Requires: cargo login (or CARGO_REGISTRY_TOKEN env var).
+publish:
+	@echo "Publishing vectoria-core v$(VERSION) to crates.io..."
+	cargo publish -p vectoria-core
+	@echo "Published. https://crates.io/crates/vectoria-core"
+
+# Create and push a release tag. Triggers the GitHub Actions release workflow.
+# Usage: make tag   (uses current version from Cargo.toml)
+tag:
+	@echo "Tagging v$(VERSION)..."
+	git tag -s "v$(VERSION)" -m "vectoria v$(VERSION)"
+	git push origin "v$(VERSION)"
+	@echo "Tag pushed. Release workflow will build binaries."

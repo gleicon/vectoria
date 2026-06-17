@@ -117,6 +117,22 @@ pub const DEFAULT_LIMIT: usize = 20;
 fn default_limit() -> usize { DEFAULT_LIMIT }
 fn default_mode() -> SearchMode { SearchMode::Hybrid }
 
+impl Default for SearchRequest {
+    fn default() -> Self {
+        Self {
+            q: String::new(),
+            limit: DEFAULT_LIMIT,
+            offset: 0,
+            mode: SearchMode::Hybrid,
+            filters: None,
+            ranking_weights: None,
+            aggregate: None,
+            explain: false,
+            rerank: false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum SearchMode {

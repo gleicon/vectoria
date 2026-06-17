@@ -102,7 +102,7 @@ Verify it is up:
 
 ```sh
 curl http://localhost:7700/health
-# {"status":"ok","version":"0.1.0"}
+# {"status":"ok","version":"0.1.2"}
 ```
 
 ---
@@ -250,6 +250,55 @@ The embedding model cache stays at `~/.cache/fastembed/`. Delete it manually if 
 
 ---
 
+## 10. Use as an embedded Rust library
+
+No HTTP server required. Add `vectoria-core` to your `Cargo.toml`:
+
+```toml
+[dependencies]
+vectoria-core = "0.1.2"
+```
+
+**Async (Tokio):**
+
+```rust
+use vectoria_core::{SearchEngineBuilder, model::{SearchRequest, SearchMode}};
+
+let engine = SearchEngineBuilder::new()
+    .query_cache(300, 1_000)
+    .build()
+    .await?;
+
+engine.index(product).await?;
+
+let results = engine.search(SearchRequest {
+    q: "running shoes".into(),
+    mode: SearchMode::Hybrid,
+    limit: 10,
+    ..Default::default()
+}).await?;
+```
+
+**Sync (no runtime required in caller):**
+
+```rust
+use vectoria_core::{SearchEngineSync, model::SearchRequest};
+
+let engine = SearchEngineSync::new()?;
+engine.index(product)?;
+
+let results = engine.search(SearchRequest {
+    q: "running shoes".into(),
+    ..Default::default()
+})?;
+```
+
+Defaults: in-memory storage, local `multilingual-e5-small` ONNX embeddings. Override with builder methods (`.storage()`, `.vector_index()`, `.embedding()`, `.weights()`).
+
+See [API reference — Embedded library](api.md#embedded-library-rust) for the full builder options table.
+
+---
+
 ## Make target reference
 
 | Target | What it does |
@@ -264,6 +313,10 @@ The embedding model cache stays at `~/.cache/fastembed/`. Delete it manually if 
 | `make bench` | Run benchmark against running server |
 | `make webstore` | Serve demo store at `:8080` |
 | `make clean` | Delete downloaded data files |
+| `make version` | Print current version from `Cargo.toml` |
+| `make publish-dry-run` | Verify `vectoria-core` is ready for crates.io |
+| `make publish` | Publish `vectoria-core` to crates.io |
+| `make tag` | Create and push `v<version>` git tag → triggers release workflow |
 
 Override variables on the command line:
 
@@ -275,6 +328,7 @@ make esci-import MAX_PRODUCTS=10000 LOCALE=es SERVER=http://myserver:7700 API_KE
 
 ## Next steps
 
-- [API reference](api.md)
+- [API reference](api.md) — HTTP endpoints and embedded library usage
 - [Configuration reference](../vectoria.toml) — all fields documented inline
 - [Production deployment](prod.md)
+- [crates.io — vectoria-core](https://crates.io/crates/vectoria-core) — embed in your Rust app

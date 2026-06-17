@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Reference — Vectoria</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<a href="#main" style="position:absolute;left:-9999px;top:0;background:var(--bg);color:var(--cyan);padding:8px 16px;z-index:9999;font-family:var(--mono);" onfocus="this.style.left='0';" onblur="this.style.left='-9999px';">Skip to content</a>
+
+<div id="topbar">
+  <a class="logo" href="index.html">vectoria<span>.</span></a>
+  <nav>
+    <a href="index.html#features">Features</a>
+    <a href="index.html#benchmark">Benchmark</a>
+    <a href="index.html#install">Install</a>
+    <a href="index.html#embed">Embed</a>
+    <a href="api.html" class="active">Docs</a>
+  </nav>
+  <div style="color:var(--muted);font-size:0.8125rem;font-family:var(--mono);">
+    v0.1.2
+  </div>
+</div>
+
+<div class="doc-breadcrumb">
+  <a href="index.html">vectoria</a> / <span>API Reference</span>
+</div>
+
+<main id="main" class="doc-content">
+  <h1>API Reference</h1>
+  <p class="doc-lead">
+    HTTP API for the Vectoria server. All endpoints except <code>/health</code> require
+    <code>Authorization: Bearer &lt;api_key&gt;</code>. Base URL: <code>http://localhost:7700</code> by default.<br>
+    For embedding Vectoria directly in a Rust application without a server, see <a href="#embedded-library">Embedded library</a>.
+  </p>
+
+  <h2 id="health">Health</h2>
+
+  <h3><span class="method get">GET</span> <span class="endpoint-path">/health</span></h3>
+  <p>No authentication required. Use this to wait for the server to be ready.</p>
+  <pre><code>{"status": "ok", "version": "0.1.2"}</code></pre>
+
+  <hr>
+
+  <h2 id="products">Products</h2>
+
+  <h3><span class="method post">POST</span> <span class="endpoint-path">/products</span></h3>
+  <p>Index a product. Generates an embedding from <code>text</code> and stores the product.</p>
+  <pre><code>{
+  "id": "sku-001",
+  "text": "Blue trail running shoe waterproof breathable",
+  "metadata": {
+    "title": "Trail X Pro",
+    "brand": "Merrell",
+    "price": 149.99,
+    "in_stock": true
+  }
+}</code></pre>
+  <table>
+    <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>string, required</td><td>Unique product identifier</td></tr>
+      <tr><td><code>text</code></td><td>string</td><td>Indexed for BM25 and used to generate the embedding vector</td></tr>
+      <tr><td><code>metadata</code></td><td>JSON object</td><td>Arbitrary key/value pairs stored and returned with search hits. Supports filter matching.</td></tr>
+    </tbody>
+  </table>
+  <p>Returns <code>201 Created</code>.</p>
+
+  <h3><span class="method put">PUT</span> <span class="endpoint-path">/products/{id}</span></h3>
+  <p>Replace an existing product and re-embed. Same body as <code>POST /products</code>.</p>
+
+  <h3><span class="method del">DELETE</span> <span class="endpoint-path">/products/{id}</span></h3>
+  <p>Remove a product from the index. Returns <code>200 OK</code>.</p>
+
+  <h3><span class="method get">GET</span> <span class="endpoint-path">/products/{id}/similar?limit=10</span></h3>
+  <p>Return products whose vectors are nearest to the given product. Useful for "customers also viewed" widgets.</p>
+
+  <h3><span class="method post">POST</span> <span class="endpoint-path">/products/similar</span></h3>
+  <p>Find similar products by text or raw vector.</p>
+  <pre><code>{ "text": "lightweight running shoe", "limit": 10 }</code></pre>
+  <p>Or pass <code>"vector": [0.12, -0.34, ...]</code> directly to skip embedding generation.</p>
+
+  <hr>
+
+  <h2 id="search">Search</h2>
+
+  <h3><span class="method post">POST</span> <span class="endpoint-path">/search</span></h3>
+  <pre><code>{
+  "q": "waterproof trail shoes",
+  "limit": 20,
+  "offset": 0,
+  "mode": "hybrid",
+  "filters": {"in_stock": true, "brand": "Merrell"},
+  "ranking_weights": {"semantic": 0.7, "bm25": 0.3},
+  "explain": false,
+  "rerank": false
+}</code></pre>
+
+  <table>
+    <thead><tr><th>Field</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>q</code></td><td>—</td><td>Query string, required</td></tr>
+      <tr><td><code>limit</code></td><td>20</td><td>Results per page</td></tr>
+      <tr><td><code>offset</code></td><td>0</td><td>Pagination offset</td></tr>
+      <tr><td><code>mode</code></td><td><code>hybrid</code></td><td><code>hybrid</code>, <code>semantic</code>, or <code>bm25</code></td></tr>
+      <tr><td><code>filters</code></td><td>null</td><td>Key/value pairs matched against product metadata</td></tr>
+      <tr><td><code>ranking_weights</code></td><td>see below</td><td>Override score fusion weights for this request</td></tr>
+      <tr><td><code>explain</code></td><td>false</td><td>Include per-result score breakdown in response</td></tr>
+      <tr><td><code>rerank</code></td><td>false</td><td>Apply cross-encoder reranking (requires <code>VECTORIA_ENABLE_RERANKER=1</code>)</td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>Default ranking weights:</strong> <code>semantic=0.7</code>, <code>bm25=0.3</code>, <code>popularity=0.2</code>, <code>availability=0.05</code>, <code>margin=0.05</code>.</p>
+
+  <p><strong>Response:</strong></p>
+  <pre><code>{
+  "hits": [
+    {
+      "id": "sku-001",
+      "score": 0.87,
+      "metadata": {"title": "Trail X Pro", "price": 149.99},
+      "explain": null
+    }
+  ],
+  "total": 42,
+  "offset": 0,
+  "limit": 20,
+  "processing_time_ms": 3,
+  "query": "waterproof trail shoes"
+}</code></pre>
+
+  <p>When <code>explain: true</code>, each hit includes a <code>factors</code> array showing individual component scores and weights.</p>
+
+  <h3><span class="method get">GET</span> <span class="endpoint-path">/autocomplete?q=runn&amp;limit=5</span></h3>
+  <p>Returns query completions based on indexed product text. Useful for search-as-you-type inputs.</p>
+
+  <hr>
+
+  <h2 id="events">Events</h2>
+
+  <h3><span class="method post">POST</span> <span class="endpoint-path">/events</span></h3>
+  <p>
+    Record a behavioral signal. Events are aggregated every 5 minutes
+    and fold into the <code>popularity</code> and <code>conversion</code> components of the ranking score.
+  </p>
+  <pre><code>{
+  "product_id": "sku-001",
+  "event_type": "click",
+  "query": "trail shoes",
+  "user_id": "u-abc",
+  "session_id": "sess-xyz"
+}</code></pre>
+
+  <table>
+    <thead><tr><th>Field</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>product_id</code></td><td>Required. The product that was interacted with.</td></tr>
+      <tr><td><code>event_type</code></td><td><code>view</code>, <code>click</code>, <code>add_to_cart</code>, <code>wishlist</code>, <code>purchase</code></td></tr>
+      <tr><td><code>query</code></td><td>Optional. The search query that led to this product.</td></tr>
+      <tr><td><code>user_id</code></td><td>Optional. For per-user personalization signals.</td></tr>
+      <tr><td><code>session_id</code></td><td>Optional. Groups events within a single browsing session.</td></tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <h2 id="admin">Admin</h2>
+
+  <h3><span class="method get">GET</span> <span class="endpoint-path">/stats</span></h3>
+  <p>Returns index size, vector count, storage backend, and embedding model info.</p>
+
+  <h3><span class="method post">POST</span> <span class="endpoint-path">/admin/reindex</span></h3>
+  <p>Re-embeds all products using the current embedding model and rebuilds the HNSW index. Use after:</p>
+  <ul>
+    <li>Changing the embedding model or provider</li>
+    <li>Switching the <code>vector_backend</code> to <code>edgestore-hnsw</code></li>
+    <li>Bulk-importing products that were added with <code>PendingVector</code> status</li>
+  </ul>
+  <pre><code>{"reindexed": 5000, "errors": 0, "duration_ms": 12400}</code></pre>
+
+  <hr>
+
+  <h2 id="embedded-library">Embedded library (Rust)</h2>
+
+  <p>
+    <code>vectoria-core</code> is published on
+    <a href="https://crates.io/crates/vectoria-core">crates.io</a>
+    and can be embedded directly in any Rust application — no HTTP server required.
+  </p>
+
+  <pre><code>[dependencies]
+vectoria-core = "0.1.2"</code></pre>
+
+  <h3>Async API (Tokio)</h3>
+  <pre><code>use vectoria_core::{SearchEngineBuilder, model::{SearchRequest, SearchMode}};
+
+let engine = SearchEngineBuilder::new()
+    .query_cache(300, 1_000)   // TTL seconds, max cached queries
+    .build()
+    .await?;
+
+engine.index(product).await?;
+
+let results = engine.search(SearchRequest {
+    q: "running shoes".into(),
+    mode: SearchMode::Hybrid,
+    limit: 10,
+    ..Default::default()
+}).await?;</code></pre>
+
+  <h3>Sync API (no async runtime required)</h3>
+  <pre><code>use vectoria_core::{SearchEngineSync, model::SearchRequest};
+
+let engine = SearchEngineSync::new()?;
+engine.index(product)?;
+
+let results = engine.search(SearchRequest {
+    q: "running shoes".into(),
+    ..Default::default()
+})?;
+
+engine.reindex()?;   // re-embed all products
+engine.stats()?;     // index stats</code></pre>
+
+  <p><code>SearchEngineSync</code> creates a single-threaded Tokio runtime internally. Safe to use from synchronous callers with no existing runtime.</p>
+
+  <h3>Preloading an existing database</h3>
+  <p>
+    Both persistent storage backends accept a file path. Point them at an existing database
+    and the engine loads from it at startup. Call <code>reindex_all()</code> after opening
+    to rebuild the in-memory BM25 index and spell corrector from stored products.
+  </p>
+  <pre><code>use std::{path::Path, sync::Arc};
+use vectoria_core::{
+    SearchEngineBuilder,
+    storage::sqlite::SqliteStorage,
+};
+
+let storage = Arc::new(SqliteStorage::open(Path::new("./vectoria.db"))?);
+
+let engine = SearchEngineBuilder::new()
+    .storage(storage)
+    .build()
+    .await?;
+
+// Rebuild BM25 + spell corrector from stored products
+engine.reindex_all().await?;</code></pre>
+  <p>
+    For HNSW persistence, use <code>EdgeStoreStorage::open(path)</code> paired with
+    <code>EdgeStoreVectorIndex::open(path, model_id, dims)</code>.
+    The HNSW graph is persisted to disk and loaded automatically — no rebuild needed unless
+    the embedding model changed.
+  </p>
+
+  <h3>Bulk indexing</h3>
+  <p>
+    There is no single batch call — index products individually in a loop.
+    If products already have pre-computed vectors, set <code>product.vector</code> and the
+    embedding step is skipped (only storage + BM25 + spell corrector are updated).
+    After bulk loading with HNSW, call <code>reindex_all()</code> once to flush the graph.
+  </p>
+  <pre><code>// Fast path: skip embedding if vectors already computed
+for p in products {
+    let product = Product {
+        id: p.id,
+        text: Some(p.text),
+        vector: Some(p.embedding),  // skip embed call
+        metadata: p.meta,
+        ..Product::new(p.id, p.meta)
+    };
+    engine.index(product).await?;
+}
+
+// Flush HNSW graph after bulk load
+engine.reindex_all().await?;</code></pre>
+  <p>
+    For concurrent bulk loading in async code, spawn tasks and join:
+  </p>
+  <pre><code>let engine = Arc::new(engine);
+let handles: Vec<_> = products.into_iter().map(|p| {
+    let e = Arc::clone(&engine);
+    tokio::spawn(async move { e.index(p).await })
+}).collect();
+
+for h in handles { h.await??; }
+engine.reindex_all().await?;</code></pre>
+
+  <h3>Builder options</h3>
+  <table>
+    <thead><tr><th>Method</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>.storage(arc)</code></td><td><code>MemoryStorage</code></td><td>Persistent backends: <code>SqliteStorage</code>, <code>EdgeStoreStorage</code></td></tr>
+      <tr><td><code>.vector_index(arc)</code></td><td><code>MemoryVectorIndex</code></td><td>Persistent: <code>EdgeStoreVectorIndex</code> (HNSW)</td></tr>
+      <tr><td><code>.embedding(arc)</code></td><td>Local <code>multilingual-e5-small</code></td><td>Any <code>EmbeddingProvider</code> impl, incl. OpenAI-compatible</td></tr>
+      <tr><td><code>.weights(RankingWeights)</code></td><td>semantic=0.7, bm25=0.3, popularity=0.2</td><td>Score fusion weights</td></tr>
+      <tr><td><code>.query_cache(ttl, max)</code></td><td>disabled</td><td>LRU cache for repeated queries (TTL in seconds)</td></tr>
+      <tr><td><code>.reranker()</code></td><td>disabled</td><td>Enable cross-encoder reranking (requires feature flag)</td></tr>
+    </tbody>
+  </table>
+
+  <p>All types implement <code>Send + Sync</code>. Storage and vector index can be wrapped in <code>Arc</code> and shared across threads.</p>
+
+  <div class="note">
+    <strong>Publishing</strong> — run <code>make publish</code> after <code>cargo login</code> (or set <code>CARGO_REGISTRY_TOKEN</code>).
+    Tag a release with <code>make tag</code> to trigger the GitHub Actions release workflow.
+  </div>
+</main>
+
+<footer>
+  <p>
+    <a href="index.html">vectoria</a> &nbsp;·&nbsp;
+    <a href="https://github.com/gleicon/vectoria">GitHub</a> &nbsp;·&nbsp;
+    <a href="https://crates.io/crates/vectoria-core">crates.io</a> &nbsp;·&nbsp;
+    <a href="api.html">API Docs</a> &nbsp;·&nbsp;
+    <a href="quickstart.html">Quickstart</a>
+    <br><br>
+    <span style="color:var(--border2);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.2</span>
+  </p>
+</footer>
+
+</body>
+</html>

@@ -30,7 +30,7 @@ Start the server:
 On first run, it downloads the `multilingual-e5-small` embedding model (~40 MB) and prints an API key:
 
 ```
-INFO vectoria v0.1.0
+INFO vectoria v0.1.2
 INFO api_key: a1b2c3d4e5f6...
 INFO listening on http://0.0.0.0:7700
 ```
@@ -115,6 +115,67 @@ vectoria reindex --server http://localhost:7700 --api-key <key>
 # Benchmark search quality (Recall@K, NDCG@K, MRR) across all modes
 vectoria bench judges.ndjson --mode all --server http://localhost:7700 --api-key <key>
 ```
+
+## Embedded usage (Rust)
+
+Add `vectoria-core` to your `Cargo.toml`:
+
+```toml
+vectoria-core = "0.1.2"
+```
+
+**Async (with Tokio):**
+
+```rust
+use vectoria_core::{SearchEngineBuilder, model::{SearchRequest, SearchMode}};
+
+let engine = SearchEngineBuilder::new()
+    .query_cache(300, 1_000)
+    .build()
+    .await?;
+
+engine.index(product).await?;
+
+let results = engine.search(SearchRequest {
+    q: "running shoes".into(),
+    mode: SearchMode::Hybrid,
+    limit: 10,
+    ..Default::default()
+}).await?;
+```
+
+**Sync (no Tokio required in caller):**
+
+```rust
+use vectoria_core::{SearchEngineSync, model::{SearchRequest, SearchMode}};
+
+let engine = SearchEngineSync::new()?;
+
+let results = engine.search(SearchRequest {
+    q: "running shoes".into(),
+    ..Default::default()
+})?;
+```
+
+`SearchEngineBuilder` accepts optional overrides for storage backend, vector index, embedding provider, ranking weights, query cache TTL/size, and cross-encoder reranking. All default to in-memory storage and the local `multilingual-e5-small` ONNX model.
+
+**Preloading an existing database** — pass a persistent backend pointing to an existing file, then call `reindex_all()` to rebuild the BM25 index and spell corrector from stored products:
+
+```rust
+use std::{path::Path, sync::Arc};
+use vectoria_core::{SearchEngineBuilder, storage::sqlite::SqliteStorage};
+
+let engine = SearchEngineBuilder::new()
+    .storage(Arc::new(SqliteStorage::open(Path::new("./vectoria.db"))?))
+    .build()
+    .await?;
+
+engine.reindex_all().await?;  // rebuild BM25 + spell corrector
+```
+
+**Bulk indexing** — call `engine.index()` in a loop. If products already have vectors, set `product.vector` to skip the embedding step. Call `reindex_all()` once after bulk loading to flush the HNSW graph.
+
+Publish target: `make publish` (requires `cargo login` or `CARGO_REGISTRY_TOKEN`). See [crates.io/crates/vectoria-core](https://crates.io/crates/vectoria-core).
 
 ## Demo webstore
 
