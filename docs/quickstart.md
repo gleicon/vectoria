@@ -102,7 +102,7 @@ Verify it is up:
 
 ```sh
 curl http://localhost:7700/health
-# {"status":"ok","version":"0.1.2"}
+# {"status":"ok","version":"0.1.5"}
 ```
 
 ---
@@ -256,7 +256,7 @@ No HTTP server required. Add `vectoria-core` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-vectoria-core = "0.1.2"
+vectoria-core = "0.1.5"
 ```
 
 **Async (Tokio):**

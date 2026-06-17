@@ -33,7 +33,7 @@ Start the server:
 On first run, it downloads the `multilingual-e5-small` embedding model (~40 MB) and prints an API key:
 
 ```
-INFO vectoria v0.1.2
+INFO vectoria v0.1.5
 INFO api_key: a1b2c3d4e5f6...
 INFO listening on http://0.0.0.0:7700
 ```
@@ -162,7 +162,7 @@ vectoria bench judges.ndjson --mode all --server http://localhost:7700 --api-key
 Add `vectoria-core` to your `Cargo.toml`:
 
 ```toml
-vectoria-core = "0.1.2"
+vectoria-core = "0.1.5"
 ```
 
 **Async (with Tokio):**

@@ -18,7 +18,7 @@ No authentication required.
 
 Response:
 ```json
-{"status": "ok", "version": "0.1.2"}
+{"status": "ok", "version": "0.1.5"}
 ```
 
 ---
@@ -325,7 +325,7 @@ Re-embeds all products using the current embedding model. Use after changing mod
 
 ```toml
 # Cargo.toml
-vectoria-core = "0.1.2"
+vectoria-core = "0.1.5"
 ```
 
 ### Async API

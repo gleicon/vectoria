@@ -39,7 +39,7 @@ help:
 	@echo "    version             print current version from Cargo.toml"
 	@echo "    publish-dry-run     verify vectoria-core is ready for crates.io"
 	@echo "    publish             publish vectoria-core to crates.io"
-	@echo "    tag                 create + push git tag v<version> → triggers release workflow"
+	@echo "    tag NEW_VERSION=x.y.z  bump Cargo.toml + docs, commit, push branch + tag"
 	@echo ""
 	@echo "  Variables (override on command line):"
 	@echo "    MAX_PRODUCTS=$(MAX_PRODUCTS)   LOCALE=$(LOCALE)   WEBSTORE_PORT=$(WEBSTORE_PORT)"
@@ -157,9 +157,28 @@ publish:
 	@echo "Published. https://crates.io/crates/vectoria-core"
 
 # Create and push a release tag. Triggers the GitHub Actions release workflow.
-# Usage: make tag   (uses current version from Cargo.toml)
+# Requires NEW_VERSION argument. Updates Cargo.toml, all doc/web version strings,
+# commits everything, pushes branch, then creates and pushes the tag.
+# Usage: make tag NEW_VERSION=0.1.5
 tag:
-	@echo "Tagging v$(VERSION)..."
-	git tag -s "v$(VERSION)" -m "vectoria v$(VERSION)"
-	git push origin "v$(VERSION)"
-	@echo "Tag pushed. Release workflow will build binaries."
+	@test -n "$(NEW_VERSION)" || { echo "ERROR: specify version: make tag NEW_VERSION=x.y.z"; exit 1; }
+	@echo "Bumping Cargo.toml workspace version to $(NEW_VERSION)..."
+	sed -i '' 's/^version = ".*"/version = "$(NEW_VERSION)"/' Cargo.toml
+	@PREV=$$(grep -ohE '[0-9]+\.[0-9]+\.[0-9]+' website/index.html | head -1); \
+	echo "Bumping version strings $$PREV → $(NEW_VERSION)..."; \
+	sed -i '' "s/$$PREV/$(NEW_VERSION)/g" \
+		README.md \
+		docs/api.md \
+		docs/quickstart.md \
+		website/api.html \
+		website/quickstart.html \
+		website/index.html
+	@echo "Committing release v$(NEW_VERSION)..."
+	git add -A
+	git commit -m "chore: release v$(NEW_VERSION)"
+	@echo "Pushing branch to origin..."
+	git push origin HEAD
+	@echo "Tagging v$(NEW_VERSION)..."
+	git tag -s "v$(NEW_VERSION)" -m "vectoria v$(NEW_VERSION)"
+	git push origin "v$(NEW_VERSION)"
+	@echo "Done. Branch and tag v$(NEW_VERSION) pushed."
