@@ -46,7 +46,6 @@ pub struct StorageStats {
 
 pub mod edgestore;
 pub mod memory;
-pub mod sqlite;
 
 pub(super) fn compute_signals_from_events<'a>(
     events: impl Iterator<Item = &'a crate::model::Event>,

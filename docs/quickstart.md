@@ -252,50 +252,12 @@ The embedding model cache stays at `~/.cache/fastembed/`. Delete it manually if 
 
 ## 10. Use as an embedded Rust library
 
-No HTTP server required. Add `vectoria-core` to your `Cargo.toml`:
+No HTTP server required. See [API reference — Embedded library](api.md#embedded-library-rust) for the full builder API, sync wrapper, persistence, and bulk indexing examples.
 
 ```toml
 [dependencies]
 vectoria-core = "0.1.5"
 ```
-
-**Async (Tokio):**
-
-```rust
-use vectoria_core::{SearchEngineBuilder, model::{SearchRequest, SearchMode}};
-
-let engine = SearchEngineBuilder::new()
-    .query_cache(300, 1_000)
-    .build()
-    .await?;
-
-engine.index(product).await?;
-
-let results = engine.search(SearchRequest {
-    q: "running shoes".into(),
-    mode: SearchMode::Hybrid,
-    limit: 10,
-    ..Default::default()
-}).await?;
-```
-
-**Sync (no runtime required in caller):**
-
-```rust
-use vectoria_core::{SearchEngineSync, model::SearchRequest};
-
-let engine = SearchEngineSync::new()?;
-engine.index(product)?;
-
-let results = engine.search(SearchRequest {
-    q: "running shoes".into(),
-    ..Default::default()
-})?;
-```
-
-Defaults: in-memory storage, local `multilingual-e5-small` ONNX embeddings. Override with builder methods (`.storage()`, `.vector_index()`, `.embedding()`, `.weights()`).
-
-See [API reference — Embedded library](api.md#embedded-library-rust) for the full builder options table.
 
 ---
 
@@ -308,15 +270,19 @@ See [API reference — Embedded library](api.md#embedded-library-rust) for the f
 | `make server-bg` | Start server in background, wait until healthy |
 | `make kill` | Stop background server |
 | `make esci-download` | Download ESCI parquet files only |
-| `make esci-import` | Download + import products |
-| `make esci-judges` | Build judged query file for benchmarking |
-| `make bench` | Run benchmark against running server |
+| `make esci-import` | Download + import ESCI products |
+| `make esci-judges` | Build judged query file from ESCI labels |
+| `make bench` | Run ESCI benchmark against running server |
+| `make wands-download` | Download WANDS dataset (CC BY-SA 4.0, no license required) |
+| `make wands-import` | Download + import 42 994 WANDS products |
+| `make wands-judges` | Build judged query file from WANDS labels |
+| `make wands-bench` | Run WANDS benchmark against running server |
 | `make webstore` | Serve demo store at `:8080` |
 | `make clean` | Delete downloaded data files |
 | `make version` | Print current version from `Cargo.toml` |
 | `make publish-dry-run` | Verify `vectoria-core` is ready for crates.io |
 | `make publish` | Publish `vectoria-core` to crates.io |
-| `make tag` | Create and push `v<version>` git tag → triggers release workflow |
+| `make tag NEW_VERSION=x.y.z` | Bump version, commit, push branch + tag |
 
 Override variables on the command line:
 

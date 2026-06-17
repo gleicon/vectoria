@@ -99,8 +99,8 @@ uuid = { version = "1", features = ["v4"] }
 # Platform dirs (model cache detection)
 dirs-next = "2"
 
-# SQLite StorageEngine fallback
-rusqlite = { version = "0.31", features = ["bundled"] }
-
 # Time
 chrono = { version = "0.4", features = ["serde"] }
+
+# Rate limiting
+governor = { version = "0.6", features = ["std"] }

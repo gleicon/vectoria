@@ -7,8 +7,8 @@ use vectoria_core::model::{
 };
 use chrono::Utc;
 
-fn make_engine() -> vectoria_core::search::SearchEngine {
-    let (engine, _) = common::make_engine(384);
+async fn make_engine() -> vectoria_core::search::SearchEngine {
+    let (engine, _) = common::make_engine(384).await;
     engine
 }
 
@@ -35,7 +35,7 @@ fn make_product(id: &str, title: &str, brand: &str, category: &str, in_stock: bo
 
 #[tokio::test]
 async fn test_index_and_search_basic() {
-    let engine = make_engine();
+    let engine = make_engine().await;
 
     engine.index(make_product("p1", "Nike Air Max Running Shoe", "Nike", "Running Shoes", true)).await.unwrap();
     engine.index(make_product("p2", "Adidas Ultraboost", "Adidas", "Running Shoes", true)).await.unwrap();
@@ -60,7 +60,7 @@ async fn test_index_and_search_basic() {
 
 #[tokio::test]
 async fn test_index_and_delete() {
-    let engine = make_engine();
+    let engine = make_engine().await;
     engine.index(make_product("del1", "Temporary Product", "Brand", "Category", true)).await.unwrap();
 
     let resp = engine.search(SearchRequest {
@@ -81,7 +81,7 @@ async fn test_index_and_delete() {
 
 #[tokio::test]
 async fn test_metadata_filters() {
-    let engine = make_engine();
+    let engine = make_engine().await;
     engine.index(make_product("f1", "Nike Shoe", "Nike", "Footwear", true)).await.unwrap();
     engine.index(make_product("f2", "Nike Shirt", "Nike", "Apparel", false)).await.unwrap();
 
@@ -103,7 +103,7 @@ async fn test_metadata_filters() {
 
 #[tokio::test]
 async fn test_aggregations() {
-    let engine = make_engine();
+    let engine = make_engine().await;
     for (id, brand) in [("a1","Nike"), ("a2","Nike"), ("a3","Adidas"), ("a4","Puma")] {
         engine.index(make_product(id, &format!("{} shoe", brand), brand, "Footwear", true)).await.unwrap();
     }
@@ -123,7 +123,7 @@ async fn test_aggregations() {
 
 #[tokio::test]
 async fn test_explainability() {
-    let engine = make_engine();
+    let engine = make_engine().await;
     engine.index(make_product("e1", "Explainable Product", "Brand", "Cat", true)).await.unwrap();
 
     let resp = engine.search(SearchRequest {
@@ -141,7 +141,7 @@ async fn test_explainability() {
 
 #[tokio::test]
 async fn test_similar_by_product_id() {
-    let engine = make_engine();
+    let engine = make_engine().await;
     engine.index(make_product("s1", "Nike Running Shoe", "Nike", "Running", true)).await.unwrap();
     engine.index(make_product("s2", "Adidas Running Shoe", "Adidas", "Running", true)).await.unwrap();
     engine.index(make_product("s3", "Sony Headphones", "Sony", "Audio", true)).await.unwrap();
@@ -161,7 +161,7 @@ async fn test_similar_by_product_id() {
 
 #[tokio::test]
 async fn test_similar_by_text() {
-    let engine = make_engine();
+    let engine = make_engine().await;
     engine.index(make_product("t1", "Running Shoe", "Nike", "Footwear", true)).await.unwrap();
     engine.index(make_product("t2", "Yoga Mat", "Lululemon", "Fitness", true)).await.unwrap();
 
@@ -178,7 +178,7 @@ async fn test_similar_by_text() {
 
 #[tokio::test]
 async fn test_event_recording_and_signals() {
-    let engine = make_engine();
+    let engine = make_engine().await;
     engine.index(make_product("ev1", "Popular Shoe", "Nike", "Footwear", true)).await.unwrap();
 
     for _ in 0..5 {
@@ -213,7 +213,7 @@ async fn test_event_recording_and_signals() {
 
 #[tokio::test]
 async fn test_query_ctr_boosts_clicked_product() {
-    let engine = make_engine();
+    let engine = make_engine().await;
     engine.index(make_product("ctr1", "Running Shoe A", "Nike", "Footwear", true)).await.unwrap();
     engine.index(make_product("ctr2", "Running Shoe B", "Adidas", "Footwear", true)).await.unwrap();
 
@@ -254,7 +254,7 @@ async fn test_query_ctr_boosts_clicked_product() {
 
 #[tokio::test]
 async fn test_bm25_mode_only() {
-    let engine = make_engine();
+    let engine = make_engine().await;
     engine.index(make_product("b1", "Bluetooth Headphones", "Sony", "Audio", true)).await.unwrap();
     engine.index(make_product("b2", "Wireless Earbuds", "Apple", "Audio", true)).await.unwrap();
 
@@ -270,7 +270,7 @@ async fn test_bm25_mode_only() {
 
 #[tokio::test]
 async fn test_pre_computed_vector_ingestion() {
-    let engine = make_engine();
+    let engine = make_engine().await;
     let now = Utc::now();
     let vector: Vec<f32> = (0..384).map(|i| (i as f32 * 0.001).sin()).collect();
     let product = Product {
@@ -298,7 +298,7 @@ async fn test_pre_computed_vector_ingestion() {
 
 #[tokio::test]
 async fn test_pagination() {
-    let engine = make_engine();
+    let engine = make_engine().await;
     for i in 0..10 {
         engine.index(make_product(
             &format!("pg{}", i),
@@ -331,7 +331,7 @@ async fn test_pagination() {
 
 #[tokio::test]
 async fn test_stats_query_count_and_latency_p95() {
-    let engine = make_engine();
+    let engine = make_engine().await;
     engine.index(make_product("qc1", "Running Shoe", "Nike", "Footwear", true)).await.unwrap();
     engine.index(make_product("qc2", "Yoga Mat", "Lululemon", "Fitness", true)).await.unwrap();
 
@@ -351,7 +351,7 @@ async fn test_stats_query_count_and_latency_p95() {
 
 #[tokio::test]
 async fn test_stats_query_count_ignores_cache_hits() {
-    let engine = make_engine()
+    let engine = make_engine().await
         .with_query_cache(60, 100);
     engine.index(make_product("cc1", "Cached Product", "Brand", "Cat", true)).await.unwrap();
 
@@ -378,7 +378,7 @@ async fn test_stats_query_count_ignores_cache_hits() {
 #[tokio::test]
 async fn test_explain_score_breakdown_anatomy() {
 
-    let engine = make_engine();
+    let engine = make_engine().await;
 
     // shoe1: exact BM25 match + click events → should dominate via bm25 + query_ctr
     engine.index(make_product("shoe1", "Nike Air Max running shoe waterproof", "Nike", "Footwear", true)).await.unwrap();
@@ -463,7 +463,7 @@ async fn test_explain_score_breakdown_anatomy() {
 
 #[tokio::test]
 async fn test_model_mismatch_rejected() {
-    let engine = make_engine();
+    let engine = make_engine().await;
     let now = Utc::now();
     let product = Product {
         id: "mm1".into(),

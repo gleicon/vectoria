@@ -5,7 +5,7 @@ use vectoria_core::model::{SearchMode, SearchRequest};
 
 #[tokio::test]
 async fn test_query_cache_second_call_skips_embedding() {
-    let (engine, stub) = common::make_engine_with_cache(32);
+    let (engine, stub) = common::make_engine_with_cache(32).await;
 
     engine.index(common::make_product("qc1", "Running Shoes")).await.unwrap();
     let calls_after_index = stub.call_count();
@@ -33,7 +33,7 @@ async fn test_query_cache_second_call_skips_embedding() {
 
 #[tokio::test]
 async fn test_query_cache_different_queries_not_shared() {
-    let (engine, stub) = common::make_engine_with_cache(32);
+    let (engine, stub) = common::make_engine_with_cache(32).await;
     engine.index(common::make_product("qc2", "Yoga Mat")).await.unwrap();
     let after_index = stub.call_count();
 
@@ -56,7 +56,7 @@ async fn test_query_cache_different_queries_not_shared() {
 
 #[tokio::test]
 async fn test_explain_not_cached() {
-    let (engine, stub) = common::make_engine_with_cache(32);
+    let (engine, stub) = common::make_engine_with_cache(32).await;
     engine.index(common::make_product("qc3", "Coffee Mug")).await.unwrap();
     let after_index = stub.call_count();
 

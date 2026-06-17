@@ -7,10 +7,9 @@ use std::sync::{
 };
 use vectoria_core::{
     embedding::EmbeddingProvider,
-    model::{Product, ProductStatus, RankingWeights},
+    model::{Product, ProductStatus},
     search::SearchEngine,
-    storage::memory::MemoryStorage,
-    vector::memory::MemoryVectorIndex,
+    SearchEngineBuilder,
 };
 
 pub struct StubEmbedding {
@@ -55,22 +54,26 @@ impl EmbeddingProvider for StubEmbedding {
     fn dims(&self) -> usize { self.dims }
 }
 
-pub fn make_engine(dims: usize) -> (SearchEngine, Arc<StubEmbedding>) {
+pub async fn make_engine(dims: usize) -> (SearchEngine, Arc<StubEmbedding>) {
     let embed = Arc::new(StubEmbedding::new(dims));
-    let storage = Arc::new(MemoryStorage::new());
-    let vidx = Arc::new(MemoryVectorIndex::new(Some("stub".into()), Some(dims)));
     let embed_dyn: Arc<dyn EmbeddingProvider> = Arc::clone(&embed) as Arc<dyn EmbeddingProvider>;
-    let engine = SearchEngine::new(storage, vidx, embed_dyn, RankingWeights::default());
+    let engine = SearchEngineBuilder::new()
+        .embedding(embed_dyn)
+        .build()
+        .await
+        .unwrap();
     (engine, embed)
 }
 
-pub fn make_engine_with_cache(dims: usize) -> (SearchEngine, Arc<StubEmbedding>) {
+pub async fn make_engine_with_cache(dims: usize) -> (SearchEngine, Arc<StubEmbedding>) {
     let embed = Arc::new(StubEmbedding::new(dims));
-    let storage = Arc::new(MemoryStorage::new());
-    let vidx = Arc::new(MemoryVectorIndex::new(Some("stub".into()), Some(dims)));
     let embed_dyn: Arc<dyn EmbeddingProvider> = Arc::clone(&embed) as Arc<dyn EmbeddingProvider>;
-    let engine = SearchEngine::new(storage, vidx, embed_dyn, RankingWeights::default())
-        .with_query_cache(60, 1000);
+    let engine = SearchEngineBuilder::new()
+        .embedding(embed_dyn)
+        .query_cache(60, 1000)
+        .build()
+        .await
+        .unwrap();
     (engine, embed)
 }
 

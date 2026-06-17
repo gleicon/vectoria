@@ -1,8 +1,10 @@
 use std::sync::Arc;
-use vectoria_core::SearchEngine;
+use crate::index_registry::IndexRegistry;
+use crate::rate_limit::SharedRateLimiter;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub engine: Arc<SearchEngine>,
+    pub registry: Arc<IndexRegistry>,
     pub api_key: String,
+    pub limiter: Option<SharedRateLimiter>,
 }

@@ -12,6 +12,7 @@ use crate::{
     vector::{memory::MemoryVectorIndex, VectorIndex},
 };
 use anyhow::Result;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Builder for [`SearchEngine`]. All fields are optional; defaults use
@@ -38,6 +39,8 @@ pub struct SearchEngineBuilder {
     query_cache_ttl: Option<u64>,
     query_cache_max: Option<usize>,
     reranker: bool,
+    reranker_instance: Option<CrossEncoderReranker>,
+    field_weights: Option<HashMap<String, usize>>,
 }
 
 impl Default for SearchEngineBuilder {
@@ -56,6 +59,8 @@ impl SearchEngineBuilder {
             query_cache_ttl: None,
             query_cache_max: None,
             reranker: false,
+            reranker_instance: None,
+            field_weights: None,
         }
     }
 
@@ -86,9 +91,23 @@ impl SearchEngineBuilder {
         self
     }
 
-    /// Enable cross-encoder reranking. The server also requires `VECTORIA_ENABLE_RERANKER=1`.
+    /// Enable cross-encoder reranking (builder creates the model during `build()`).
     pub fn reranker(mut self) -> Self {
         self.reranker = true;
+        self
+    }
+
+    /// Supply a pre-built reranker. Avoids creating the model twice when the caller
+    /// needs to check for init errors before building the engine.
+    pub fn with_reranker_instance(mut self, r: CrossEncoderReranker) -> Self {
+        self.reranker_instance = Some(r);
+        self
+    }
+
+    /// Configure per-field repetition weights for embedding text construction.
+    /// Fields repeated more times get proportionally more weight in the embedding.
+    pub fn field_weights(mut self, weights: HashMap<String, usize>) -> Self {
+        self.field_weights = Some(weights);
         self
     }
 
@@ -121,10 +140,16 @@ impl SearchEngineBuilder {
             engine = engine.with_query_cache(ttl, max);
         }
 
-        if self.reranker {
+        if let Some(r) = self.reranker_instance {
+            engine = engine.with_reranker(r);
+        } else if self.reranker {
             if let Ok(r) = CrossEncoderReranker::new() {
                 engine = engine.with_reranker(r);
             }
+        }
+
+        if let Some(fw) = self.field_weights {
+            engine = engine.with_field_weights(fw);
         }
 
         Ok(engine)

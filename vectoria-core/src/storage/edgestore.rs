@@ -1,14 +1,21 @@
 use super::{ProductSignals, StorageEngine, StorageStats};
-use crate::model::{Event, Product};
+use crate::model::{Event, EventType, Product};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use edgestore::{EdgestoreConfig, Engine};
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 const NS_PRODUCTS: &[u8] = b"products";
 const NS_EVENTS: &[u8] = b"events";
 const NS_SIGNALS: &[u8] = b"signals";
+// Key: {query_bytes}\x00{product_id_bytes}, Value: u64 LE count.
+// Null-byte separator is safe: JSON strings never contain \x00.
+const NS_CTRS: &[u8] = b"ctrs";
+// Queries longer than this are not written to NS_CTRS; reads return empty immediately.
+// Prevents storage amplification from oversized client-supplied query strings.
+const MAX_QUERY_BYTES: usize = 512;
 
 pub struct EdgeStoreStorage {
     engine: Arc<Mutex<Engine>>,
@@ -84,16 +91,59 @@ impl StorageEngine for EdgeStoreStorage {
     }
 
     async fn put_event(&self, event: &Event) -> Result<()> {
-        // Key: "{product_id}/{event_id}" — prefix scan by product
         let key = format!("{}/{}", event.product_id, event.id).into_bytes();
         let value = encode(event)?;
+        let ctr_key: Option<Vec<u8>> = match (&event.query, &event.event_type) {
+            (Some(q), EventType::Click | EventType::Purchase) if q.len() <= MAX_QUERY_BYTES => {
+                let mut k = q.as_bytes().to_vec();
+                k.push(0);
+                k.extend_from_slice(event.product_id.as_bytes());
+                Some(k)
+            }
+            _ => None,
+        };
         let engine = Arc::clone(&self.engine);
         tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().put(NS_EVENTS, &key, &value)
+            let mut eng = engine.lock().unwrap();
+            eng.put(NS_EVENTS, &key, &value).context("put_event failed")?;
+            if let Some(ck) = ctr_key {
+                let count = eng.get(NS_CTRS, &ck)?
+                    .and_then(|b| <[u8; 8]>::try_from(b).ok())
+                    .map(u64::from_le_bytes)
+                    .unwrap_or(0);
+                eng.put(NS_CTRS, &ck, &(count + 1).to_le_bytes()).context("put_ctr failed")?;
+            }
+            Ok::<_, anyhow::Error>(())
         })
-        .await?
-        .context("put_event failed")?;
+        .await??;
         Ok(())
+    }
+
+    async fn get_query_ctrs(&self, query: &str) -> Result<HashMap<String, f32>> {
+        if query.len() > MAX_QUERY_BYTES {
+            return Ok(HashMap::new());
+        }
+        let mut prefix = query.as_bytes().to_vec();
+        prefix.push(0);
+        let prefix_len = prefix.len();
+        let engine = Arc::clone(&self.engine);
+        let pairs = tokio::task::spawn_blocking(move || {
+            engine.lock().unwrap().prefix(NS_CTRS, &prefix)
+        })
+        .await??;
+        let counts: HashMap<String, u64> = pairs
+            .into_iter()
+            .filter_map(|(k, v)| {
+                let product_id = String::from_utf8(k[prefix_len..].to_vec()).ok()?;
+                let count = <[u8; 8]>::try_from(v).ok().map(u64::from_le_bytes)?;
+                Some((product_id, count))
+            })
+            .collect();
+        let max = counts.values().copied().max().unwrap_or(0) as f32;
+        if max == 0.0 {
+            return Ok(HashMap::new());
+        }
+        Ok(counts.into_iter().map(|(id, c)| (id, c as f32 / max)).collect())
     }
 
     async fn get_product_signals(&self, product_id: &str) -> Result<ProductSignals> {

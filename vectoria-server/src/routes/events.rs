@@ -27,7 +27,7 @@ pub async fn record_event(
     event.query = req.query;
     event.session_id = req.session_id;
 
-    let engine = state.engine.clone();
+    let engine = state.registry.default_engine();
     tokio::spawn(async move {
         if let Err(e) = engine.record_event(event).await {
             tracing::warn!("failed to record event: {}", e);

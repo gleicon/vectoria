@@ -27,7 +27,6 @@ edgestore = { workspace = true }
 bm25 = { workspace = true }
 symspell = { workspace = true }
 foyer = { workspace = true }
-rusqlite = { workspace = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "rt-multi-thread", "macros"] }

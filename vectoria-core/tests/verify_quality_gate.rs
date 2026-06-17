@@ -20,7 +20,7 @@ fn verify_nan_scores_do_not_panic_sort() {
 
 #[tokio::test]
 async fn verify_limit_capped_at_max() {
-    let (engine, _) = make_engine(32);
+    let (engine, _) = make_engine(32).await;
     engine.index(make_product("lim1", "Shoe")).await.unwrap();
 
     let resp = engine.search(SearchRequest {
@@ -35,7 +35,7 @@ async fn verify_limit_capped_at_max() {
 
 #[tokio::test]
 async fn verify_offset_capped_at_max() {
-    let (engine, _) = make_engine(32);
+    let (engine, _) = make_engine(32).await;
     engine.index(make_product("off1", "Boot")).await.unwrap();
 
     let resp = engine.search(SearchRequest {
@@ -50,7 +50,7 @@ async fn verify_offset_capped_at_max() {
 
 #[tokio::test]
 async fn verify_custom_weights_bypass_cache() {
-    let (engine, embed) = make_engine_with_cache(32);
+    let (engine, embed) = make_engine_with_cache(32).await;
     engine.index(make_product("wt1", "Tent")).await.unwrap();
     let after_index = embed.call_count();
 

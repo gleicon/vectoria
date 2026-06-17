@@ -25,6 +25,8 @@ pub struct ServerConfig {
     pub api_key: Option<String>,
     #[serde(default)]
     pub skip_consent: bool,
+    #[serde(default)]
+    pub rate_limit_per_second: Option<u32>,
 }
 
 impl Default for ServerConfig {
@@ -34,6 +36,7 @@ impl Default for ServerConfig {
             port: default_port(),
             api_key: None,
             skip_consent: false,
+            rate_limit_per_second: None,
         }
     }
 }
@@ -59,6 +62,7 @@ pub struct EmbeddingConfig {
     pub base_url: Option<String>,
     pub api_key: Option<String>,
     pub dims: Option<usize>,
+    pub fields: Option<std::collections::HashMap<String, usize>>,
 }
 
 impl Default for EmbeddingConfig {
@@ -69,6 +73,7 @@ impl Default for EmbeddingConfig {
             base_url: None,
             api_key: None,
             dims: None,
+            fields: None,
         }
     }
 }

@@ -10,8 +10,17 @@ MAX_PRODUCTS  := 5000
 LOCALE        := us
 WEBSTORE_PORT := 8080
 
+WANDS_DIR       := data/wands
+WANDS_BASE_URL  := https://raw.githubusercontent.com/wayfair/WANDS/main/dataset
+WANDS_PRODUCTS  := $(WANDS_DIR)/product.csv
+WANDS_QUERIES   := $(WANDS_DIR)/query.csv
+WANDS_LABELS    := $(WANDS_DIR)/label.csv
+WANDS_JUDGES    := $(WANDS_DIR)/judges.ndjson
+WANDS_MAX       := 42994
+
 .PHONY: help build server server-bg kill esci-download esci-import esci-judges bench webstore clean \
-        publish publish-dry-run tag version
+        publish publish-dry-run tag version \
+        wands-download wands-import wands-judges wands-bench
 
 VERSION       := $(shell cargo metadata --no-deps --format-version 1 | python3 -c "import sys,json; print(json.load(sys.stdin)['packages'][0]['version'])" 2>/dev/null || grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
 
@@ -136,7 +145,54 @@ webstore:
 
 clean:
 	rm -f $(PRODUCTS) $(EXAMPLES) $(JUDGES)
+	rm -rf $(WANDS_DIR)
 	@echo "Data files removed. Server still running if started with 'make server-bg'."
+
+# ── WANDS dataset ──────────────────────────────────────────────────────────
+# Wayfair WANDS dataset — open license (CC BY-SA 4.0)
+# https://github.com/wayfair/WANDS
+
+$(WANDS_DIR):
+	mkdir -p $(WANDS_DIR)
+
+$(WANDS_PRODUCTS): | $(WANDS_DIR)
+	@echo "Downloading WANDS products..."
+	curl -L --progress-bar -o $@ "$(WANDS_BASE_URL)/product.csv"
+
+$(WANDS_QUERIES): | $(WANDS_DIR)
+	@echo "Downloading WANDS queries..."
+	curl -L --progress-bar -o $@ "$(WANDS_BASE_URL)/query.csv"
+
+$(WANDS_LABELS): | $(WANDS_DIR)
+	@echo "Downloading WANDS labels..."
+	curl -L --progress-bar -o $@ "$(WANDS_BASE_URL)/label.csv"
+
+wands-download: $(WANDS_PRODUCTS) $(WANDS_QUERIES) $(WANDS_LABELS)
+
+wands-import: wands-download
+	@curl -sf $(SERVER)/health >/dev/null 2>&1 || \
+		(echo "Error: server not running at $(SERVER). Run 'make server-bg' first."; exit 1)
+	python3 scripts/wands_import.py \
+		--products $(WANDS_PRODUCTS) \
+		--server $(SERVER) \
+		--api-key $(API_KEY) \
+		--max-products $(WANDS_MAX)
+
+wands-judges: wands-download
+	python3 scripts/wands_judges.py \
+		--queries $(WANDS_QUERIES) \
+		--labels $(WANDS_LABELS) \
+		--output $(WANDS_JUDGES)
+	@echo "Judges written to $(WANDS_JUDGES)"
+
+wands-bench: $(WANDS_JUDGES)
+	@curl -sf $(SERVER)/health >/dev/null 2>&1 || \
+		(echo "Error: server not running at $(SERVER). Run 'make server-bg' first."; exit 1)
+	cargo run --release -p vectoria-cli -- \
+		--server $(SERVER) --api-key $(API_KEY) \
+		bench $(WANDS_JUDGES) --mode all
+
+$(WANDS_JUDGES): wands-judges
 
 # ── Release / publish ──────────────────────────────────────────────────────
 

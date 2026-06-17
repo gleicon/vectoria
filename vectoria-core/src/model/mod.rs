@@ -3,6 +3,38 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+pub fn build_product_text(
+    metadata: &serde_json::Value,
+    field_weights: Option<&HashMap<String, usize>>,
+) -> String {
+    let mut parts: Vec<String> = Vec::new();
+
+    for field in &["title", "name", "brand", "category", "description"] {
+        if let Some(v) = metadata.get(field).and_then(|v| v.as_str()) {
+            if !v.is_empty() {
+                let repeat = field_weights
+                    .and_then(|fw| fw.get(*field))
+                    .copied()
+                    .unwrap_or(1)
+                    .max(1);
+                for _ in 0..repeat {
+                    parts.push(v.to_string());
+                }
+            }
+        }
+    }
+
+    if let Some(attrs) = metadata.get("attributes").and_then(|v| v.as_object()) {
+        for (k, v) in attrs {
+            if let Some(s) = v.as_str() {
+                parts.push(format!("{}: {}", k, s));
+            }
+        }
+    }
+
+    parts.join(". ")
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Product {
     pub id: String,

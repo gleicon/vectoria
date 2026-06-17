@@ -6,6 +6,8 @@ Vectoria combines BM25 full-text search, vector similarity, and behavioral signa
 
 - **Zero-result elimination** — semantic mode returns results for long-tail queries that share no keywords with any product. Hybrid mode keeps BM25 precision while removing zero results entirely.
 - **Query-level CTR feedback** — products previously clicked for a given query rank higher for future searches of the same query. The feedback loop activates immediately after the first click event with a `query` field.
+- **Multi-index / namespaces** — create isolated catalogs via `POST /indexes`. Each named index is independent; the `"default"` index is the persistent one configured at startup.
+- **Rate limiting** — optional per-IP request rate limit configurable via `[server] rate_limit_per_second`.
 
 The embedding model runs locally via ONNX; no external API calls required unless you configure an OpenAI-compatible provider.
 
@@ -19,7 +21,7 @@ Designed for catalogs up to ~500K products on a single node.
 ## Getting started
 
 ```sh
-git clone https://github.com/yourorg/vectoria
+git clone https://github.com/gleicon/vectoria
 cd vectoria
 cargo build --release
 ```
@@ -64,15 +66,25 @@ Place a `vectoria.toml` in the working directory. All fields are optional.
 [server]
 host = "0.0.0.0"
 port = 7700
-api_key = "your-key"        # auto-generated if absent
-skip_consent = false        # skip model download prompt on first run
+api_key = "your-key"           # auto-generated if absent
+skip_consent = false           # skip model download prompt on first run
+# rate_limit_per_second = 100  # per-IP rate limit; omit to disable
 
 [storage]
-path = "./vectoria.db"      # path for persistent index files
+path = "./vectoria.db"         # path for persistent index files
 
 [embedding]
-provider = "local"          # "local" | "openai-compatible"
+provider = "local"             # "local" | "openai-compatible"
 model = "multilingual-e5-small"
+# base_url = "http://localhost:11434"  # required for openai-compatible
+# dims = 768                           # required for openai-compatible
+
+# Field repeat weights — repeat important fields more times during embedding
+# to increase their influence on semantic similarity. Values are repeat counts.
+# [embedding.fields]
+# title = 3
+# brand = 2
+# description = 1
 
 [index]
 vector_backend = "edgestore-hnsw"   # see below
@@ -88,13 +100,12 @@ bm25         = 0.3
 popularity   = 0.2
 query_ctr    = 0.15   # boost products previously clicked for this exact query
 availability = 0.05
-margin       = 0.05
+margin       = 0.05   # reads metadata.margin (float 0–1); 0 if absent
 ```
 
 **vector_backend options:**
 
 - `edgestore-hnsw` — persistent HNSW index (activated after `POST /admin/reindex`), recommended for production
-- `sqlite` — SQLite metadata + EdgeStore flat vector index
 - `memory` — everything in-memory, lost on restart (development only)
 
 **Environment variable overrides** (take precedence over `vectoria.toml`):
@@ -112,6 +123,15 @@ VECTORIA_SKIP_CONSENT=1      # maps to server.skip_consent
 VECTORIA_ENABLE_RERANKER=1   # maps to index.enable_reranker
 ```
 
+**OpenAI-compatible embedding** (Ollama, llama.cpp, vLLM, LM Studio, OpenAI):
+
+```sh
+VECTORIA_EMBEDDING_PROVIDER=openai-compatible \
+VECTORIA_EMBEDDING_BASE_URL=http://localhost:11434 \
+VECTORIA_EMBEDDING_MODEL=nomic-embed-text \
+  ./vectoria-server
+```
+
 ## Behavioral ranking
 
 Vectoria uses two behavioral signals derived from `POST /events`:
@@ -127,7 +147,7 @@ Always include `query` in click/purchase events to activate query-level CTR:
 curl -X POST http://localhost:7700/events \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"event_type":"click","product_id":"sku-001","query":"running shoes"}'
+  -d '{"type":"click","product_id":"sku-001","query":"running shoes"}'
 ```
 
 Events without `query` still contribute to global popularity but not per-query ranking. Background aggregation runs every `aggregation_interval_secs` (default 300s). The `query_ctr` weight defaults to `0.15` and is configurable in `[ranking]`.
@@ -159,62 +179,11 @@ vectoria bench judges.ndjson --mode all --server http://localhost:7700 --api-key
 
 ## Embedded usage (Rust)
 
-Add `vectoria-core` to your `Cargo.toml`:
+`vectoria-core` can be embedded directly — no HTTP server required. See [docs/api.md — Embedded library](docs/api.md#embedded-library-rust) for the full API, builder options, and examples.
 
 ```toml
 vectoria-core = "0.1.5"
 ```
-
-**Async (with Tokio):**
-
-```rust
-use vectoria_core::{SearchEngineBuilder, model::{SearchRequest, SearchMode}};
-
-let engine = SearchEngineBuilder::new()
-    .query_cache(300, 1_000)
-    .build()
-    .await?;
-
-engine.index(product).await?;
-
-let results = engine.search(SearchRequest {
-    q: "running shoes".into(),
-    mode: SearchMode::Hybrid,
-    limit: 10,
-    ..Default::default()
-}).await?;
-```
-
-**Sync (no Tokio required in caller):**
-
-```rust
-use vectoria_core::{SearchEngineSync, model::{SearchRequest, SearchMode}};
-
-let engine = SearchEngineSync::new()?;
-
-let results = engine.search(SearchRequest {
-    q: "running shoes".into(),
-    ..Default::default()
-})?;
-```
-
-`SearchEngineBuilder` accepts optional overrides for storage backend, vector index, embedding provider, ranking weights, query cache TTL/size, and cross-encoder reranking. All default to in-memory storage and the local `multilingual-e5-small` ONNX model.
-
-**Preloading an existing database** — pass a persistent backend pointing to an existing file, then call `reindex_all()` to rebuild the BM25 index and spell corrector from stored products:
-
-```rust
-use std::{path::Path, sync::Arc};
-use vectoria_core::{SearchEngineBuilder, storage::sqlite::SqliteStorage};
-
-let engine = SearchEngineBuilder::new()
-    .storage(Arc::new(SqliteStorage::open(Path::new("./vectoria.db"))?))
-    .build()
-    .await?;
-
-engine.reindex_all().await?;  // rebuild BM25 + spell corrector
-```
-
-**Bulk indexing** — call `engine.index()` in a loop. If products already have vectors, set `product.vector` to skip the embedding step. Call `reindex_all()` once after bulk loading to flush the HNSW graph.
 
 Publish target: `make publish` (requires `cargo login` or `CARGO_REGISTRY_TOKEN`). See [crates.io/crates/vectoria-core](https://crates.io/crates/vectoria-core).
 
@@ -271,7 +240,47 @@ cargo run --example esci_import -p vectoria-cli -- \
 make bench
 ```
 
-**Next benchmark target**: [WANDS (Wayfair)](https://github.com/wayfair/WANDS) — 42K furniture/home goods products, complex descriptive concept queries ("mid century modern floor lamp"). Expected to show larger hybrid advantage since Wayfair queries are more concept-driven than ESCI exact matches.
+**WANDS benchmark** (Wayfair, CC BY-SA 4.0 — no license required):
+
+```sh
+make wands-import   # download + import 42 994 products
+make wands-judges   # build judged query file
+make wands-bench    # Recall@K / NDCG@K / MRR
+```
+
+[WANDS](https://github.com/wayfair/WANDS) — 42K furniture/home goods products, complex descriptive concept queries ("mid century modern floor lamp"). Expected to show larger hybrid advantage than ESCI since Wayfair queries are more concept-driven than keyword matches.
+
+## Multi-index
+
+Create isolated catalogs in a single server instance:
+
+```sh
+# Create a named index
+curl -X POST http://localhost:7700/indexes \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "staging"}'
+
+# Index into it
+curl -X POST http://localhost:7700/indexes/staging/products \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"id":"p1","text":"...","metadata":{}}'
+
+# Search it
+curl -X POST http://localhost:7700/indexes/staging/search \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"q":"running shoes"}'
+
+# List all indexes
+curl http://localhost:7700/indexes -H "Authorization: Bearer $API_KEY"
+
+# Delete
+curl -X DELETE http://localhost:7700/indexes/staging -H "Authorization: Bearer $API_KEY"
+```
+
+Named indexes use in-memory storage and are lost on restart. The `"default"` index is the persistent one configured at startup and cannot be deleted.
 
 ## API reference
 

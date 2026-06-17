@@ -1,7 +1,10 @@
 mod auth;
 mod config;
+mod index_registry;
+mod rate_limit;
 mod routes;
 mod state;
+mod storage_factory;
 
 use anyhow::Result;
 use axum::{
@@ -10,6 +13,7 @@ use axum::{
     Router,
 };
 use clap::Parser;
+use index_registry::IndexRegistry;
 use std::sync::Arc;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -17,9 +21,7 @@ use vectoria_core::{
     aggregation::run_aggregation_loop,
     embedding::{cache::CachedEmbedding, EmbeddingProvider},
     search::reranker::CrossEncoderReranker,
-    storage::{edgestore::EdgeStoreStorage, memory::MemoryStorage, sqlite::SqliteStorage},
-    vector::{edgestore::EdgeStoreVectorIndex, memory::MemoryVectorIndex},
-    SearchEngine,
+    SearchEngineBuilder,
 };
 
 use config::VectoriaConfig;
@@ -60,88 +62,57 @@ async fn main() -> Result<()> {
         }
     }
 
-    let embedding_cache_size = cfg.index.embedding_cache_size;
     let embedding: Arc<dyn EmbeddingProvider> = Arc::new(CachedEmbedding::new(
         build_embedding_provider(&cfg, args.skip_model_download)?,
-        embedding_cache_size,
+        cfg.index.embedding_cache_size,
     ));
 
-    let (storage, vector_index): (
-        Arc<dyn vectoria_core::storage::StorageEngine>,
-        Arc<dyn vectoria_core::vector::VectorIndex>,
-    ) = match cfg.index.vector_backend.as_str() {
-        "edgestore-hnsw" | "edgestore" => {
-            let db_path = &cfg.storage.path;
-            let vec_path = db_path.with_extension("vec");
-            tracing::info!("storage: EdgeStore at {:?}", db_path);
-            let storage = Arc::new(
-                EdgeStoreStorage::open(db_path)
-                    .expect("failed to open EdgeStore storage"),
-            );
-            let vidx = Arc::new(
-                EdgeStoreVectorIndex::open(
-                    vec_path,
-                    Some(embedding.model_id().to_string()),
-                    Some(embedding.dims()),
-                )
-                .expect("failed to open EdgeStore vector index"),
-            );
-            (storage, vidx)
-        }
-        "sqlite" => {
-            let db_path = cfg.storage.path.with_extension("sqlite");
-            let vec_path = db_path.with_extension("vec");
-            tracing::info!("storage: SQLite at {:?}, vectors: EdgeStore at {:?}", db_path, vec_path);
-            let storage = Arc::new(
-                SqliteStorage::open(&db_path).expect("failed to open SQLite storage"),
-            );
-            let vidx = Arc::new(
-                EdgeStoreVectorIndex::open(vec_path, Some(embedding.model_id().to_string()), Some(embedding.dims()))
-                    .expect("failed to open EdgeStore vector index"),
-            );
-            (storage, vidx)
-        }
-        _ => {
-            tracing::info!("storage: in-memory (set index.vector_backend = \"edgestore-hnsw\" for persistence)");
-            let storage = Arc::new(MemoryStorage::new());
-            let vidx = Arc::new(MemoryVectorIndex::new(
-                Some(embedding.model_id().to_string()),
-                Some(embedding.dims()),
-            ));
-            (storage, vidx)
-        }
-    };
+    let (storage, vector_index) = storage_factory::open(&cfg.index, &cfg.storage, &embedding)?;
 
     let weights = cfg.ranking.clone();
-
     let query_cache_ttl = cfg.index.query_cache_ttl_secs;
     let query_cache_max = cfg.index.query_cache_max_entries;
 
-    let mut engine = SearchEngine::new(
-        Arc::clone(&storage),
-        Arc::clone(&vector_index),
-        Arc::clone(&embedding),
-        weights.clone(),
-    )
-    .with_query_cache(query_cache_ttl, query_cache_max);
+    let mut builder = SearchEngineBuilder::new()
+        .storage(Arc::clone(&storage))
+        .vector_index(Arc::clone(&vector_index))
+        .embedding(Arc::clone(&embedding))
+        .weights(weights.clone())
+        .query_cache(query_cache_ttl, query_cache_max);
+
+    if let Some(fw) = cfg.embedding.fields.clone() {
+        builder = builder.field_weights(fw);
+    }
 
     if cfg.index.enable_reranker {
         match CrossEncoderReranker::new() {
             Ok(reranker) => {
-                engine = engine.with_reranker(reranker);
+                builder = builder.with_reranker_instance(reranker);
                 tracing::info!("cross-encoder reranker: enabled");
             }
             Err(e) => tracing::warn!("reranker init failed (continuing without): {}", e),
         }
     }
 
-    let engine = Arc::new(engine);
+    let engine = Arc::new(builder.build().await?);
 
-    let agg_storage = Arc::clone(&storage);
-    let agg_interval = cfg.index.aggregation_interval_secs;
-    tokio::spawn(run_aggregation_loop(agg_storage, agg_interval));
+    tokio::spawn(run_aggregation_loop(Arc::clone(&storage), cfg.index.aggregation_interval_secs));
 
-    let state = AppState { engine, api_key: api_key.clone() };
+    let limiter = cfg.server.rate_limit_per_second.map(|rps| {
+        tracing::info!("rate limiting: {} requests/sec per IP", rps);
+        rate_limit::new_limiter(rps)
+    });
+
+    let registry = Arc::new(IndexRegistry::new(
+        Arc::clone(&engine),
+        Arc::clone(&embedding),
+        weights,
+        Some(query_cache_ttl),
+        Some(query_cache_max),
+        cfg.embedding.fields.clone(),
+    ));
+
+    let state = AppState { registry, api_key: api_key.clone(), limiter };
 
     let protected = Router::new()
         .route("/products", post(routes::products::index_product))
@@ -154,6 +125,12 @@ async fn main() -> Result<()> {
         .route("/events", post(routes::events::record_event))
         .route("/stats", get(routes::admin::stats))
         .route("/admin/reindex", post(routes::admin::reindex))
+        .route("/indexes", get(routes::indexes::list_indexes))
+        .route("/indexes", post(routes::indexes::create_index))
+        .route("/indexes/{name}", delete(routes::indexes::delete_index))
+        .route("/indexes/{name}/products", post(routes::indexes::index_product))
+        .route("/indexes/{name}/search", post(routes::indexes::search))
+        .route("/indexes/{name}/similar", post(routes::indexes::similar))
         .layer(middleware::from_fn_with_state(state.clone(), auth::require_api_key));
 
     let public = Router::new()
@@ -162,6 +139,7 @@ async fn main() -> Result<()> {
     let app = Router::new()
         .merge(protected)
         .merge(public)
+        .layer(middleware::from_fn_with_state(state.clone(), rate_limit::rate_limit_middleware))
         .with_state(state)
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
@@ -169,7 +147,7 @@ async fn main() -> Result<()> {
     let addr = format!("{}:{}", cfg.server.host, cfg.server.port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!("listening on http://{}", addr);
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).await?;
     Ok(())
 }
 
@@ -217,8 +195,7 @@ fn build_embedding_provider(cfg: &VectoriaConfig, skip_download: bool) -> Result
                      Remove the flag to allow download on first run."
                 );
             }
-            let embedding = LocalEmbedding::default_model()?;
-            Ok(Arc::new(embedding))
+            Ok(Arc::new(LocalEmbedding::default_model()?))
         }
         "openai-compatible" => {
             use vectoria_core::embedding::openai::OpenAIEmbedding;

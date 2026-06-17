@@ -32,6 +32,12 @@ impl EmbeddingProvider for CachedEmbedding {
         let vector = self.inner.embed(text).await?;
         {
             let cache = self.cache.lock().unwrap();
+            // Re-check: a concurrent task may have computed and inserted the same text
+            // while we were awaiting. Prefer the already-cached value to avoid a
+            // redundant insert and keep cache entry lifetimes consistent.
+            if let Some(entry) = cache.get(text) {
+                return Ok(entry.value().as_ref().clone());
+            }
             cache.insert(text.to_string(), Arc::new(vector.clone()));
         }
         Ok(vector)

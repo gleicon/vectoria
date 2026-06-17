@@ -12,12 +12,17 @@ pub async fn search(
     State(state): State<AppState>,
     Json(req): Json<SearchRequest>,
 ) -> impl IntoResponse {
-    match state.engine.search(req).await {
+    match state.registry.default_engine().search(req).await {
         Ok(resp) => Json(resp).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
-        ).into_response(),
+        Err(e) => {
+            let msg = e.to_string();
+            let status = if msg.contains("rerank requested but not enabled") {
+                StatusCode::BAD_REQUEST
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            };
+            (status, Json(serde_json::json!({"error": msg}))).into_response()
+        }
     }
 }
 
@@ -34,26 +39,9 @@ pub async fn autocomplete(
     State(state): State<AppState>,
     Query(params): Query<AutocompleteQuery>,
 ) -> impl IntoResponse {
-    let req = SearchRequest {
-        q: params.q.clone(),
-        limit: params.limit,
-        offset: 0,
-        mode: vectoria_core::model::SearchMode::Bm25,
-        filters: None,
-        ranking_weights: None,
-        aggregate: None,
-        explain: false,
-        rerank: false,
-    };
-    match state.engine.search(req).await {
-        Ok(resp) => Json(serde_json::json!({
-            "query": params.q,
-            "hits": resp.hits,
-            "processing_time_ms": resp.processing_time_ms,
-        })).into_response(),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": e.to_string()})),
-        ).into_response(),
-    }
+    let suggestions = state.registry.default_engine().autocomplete(&params.q, params.limit);
+    Json(serde_json::json!({
+        "query": params.q,
+        "suggestions": suggestions,
+    }))
 }

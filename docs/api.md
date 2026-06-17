@@ -69,10 +69,10 @@ Response: `200 OK`
 ### Similar by ID
 
 ```
-GET /products/{id}/similar?limit=10
+GET /products/{id}/similar
 ```
 
-Returns products with similar vectors to the given product.
+Returns up to 10 products with similar vectors to the given product. Limit is fixed at 10; use `POST /products/similar` to control it.
 
 ### Similar by vector or text
 
@@ -260,7 +260,7 @@ Body:
 ```json
 {
   "product_id": "sku-001",
-  "event_type": "click",
+  "type": "click",
   "query": "waterproof trail shoes",
   "user_id": "u-abc",
   "session_id": "sess-xyz"
@@ -270,7 +270,7 @@ Body:
 | Field | Description |
 |-------|-------------|
 | `product_id` | Required. Product that was interacted with. |
-| `event_type` | `view`, `click`, `add_to_cart`, `wishlist`, `purchase` |
+| `type` | `view`, `click`, `add_to_cart`, `wishlist`, `purchase` |
 | `query` | The search query that led to this product. **Required for query-CTR to work.** |
 | `user_id` | Optional. For future per-user personalization. |
 | `session_id` | Optional. Groups events within a browsing session. |
@@ -316,6 +316,81 @@ POST /admin/reindex
 ```
 
 Re-embeds all products using the current embedding model. Use after changing models.
+
+---
+
+## Indexes
+
+Named indexes let you run multiple isolated catalogs in a single server instance. Common use cases: A/B testing different catalogs, multi-tenant isolation, experimental product sets alongside production.
+
+The `"default"` index is always present — it is the persistent index configured at startup (`[index] vector_backend` setting). Named indexes created via the API use in-memory storage and are lost on restart.
+
+### List indexes
+
+```
+GET /indexes
+```
+
+Response:
+```json
+{"indexes": ["default", "staging", "tenant-acme"]}
+```
+
+### Create an index
+
+```
+POST /indexes
+```
+
+Body:
+```json
+{"name": "staging"}
+```
+
+Name rules: 1–64 characters, letters/digits/hyphens/underscores only.
+
+Response: `201 Created`
+```json
+{"name": "staging", "status": "created"}
+```
+
+Error responses:
+- `400 Bad Request` — name fails validation
+- `409 Conflict` — name already exists
+- `422 Unprocessable Entity` — server-wide limit of 100 named indexes reached
+- `500 Internal Server Error` — index build failed
+
+### Delete an index
+
+```
+DELETE /indexes/{name}
+```
+
+Returns `404` if not found. Returns `400` if you attempt to delete `"default"`.
+
+### Index a product into a named index
+
+```
+POST /indexes/{name}/products
+```
+
+Same body as `POST /products`. Returns `404` if the index doesn't exist.
+
+### Search a named index
+
+```
+POST /indexes/{name}/search
+```
+
+Same body as `POST /search`. Returns `404` if the index doesn't exist.
+
+### Similar items in a named index
+
+```
+POST /indexes/{name}/similar
+```
+
+Same body as `POST /products/similar`. Returns `404` if the index doesn't exist.
 
 ---
 
@@ -372,13 +447,19 @@ engine.stats()?;     // index stats
 Both persistent backends accept a file path. Point them at an existing database and call `reindex_all()` after opening to rebuild the in-memory BM25 index and spell corrector from stored products:
 
 ```rust
-use std::{path::Path, sync::Arc};
-use vectoria_core::{SearchEngineBuilder, storage::sqlite::SqliteStorage};
+use std::sync::Arc;
+use vectoria_core::{
+    SearchEngineBuilder,
+    storage::edgestore::EdgeStoreStorage,
+    vector::edgestore::EdgeStoreVectorIndex,
+};
 
-let storage = Arc::new(SqliteStorage::open(Path::new("./vectoria.db"))?);
+let storage = Arc::new(EdgeStoreStorage::open("./vectoria.db")?);
+let vidx = Arc::new(EdgeStoreVectorIndex::open("./vectoria.vec", None, None)?);
 
 let engine = SearchEngineBuilder::new()
     .storage(storage)
+    .vector_index(vidx)
     .build()
     .await?;
 
@@ -386,7 +467,7 @@ let engine = SearchEngineBuilder::new()
 engine.reindex_all().await?;
 ```
 
-For HNSW persistence, pair `EdgeStoreStorage::open(path)` with `EdgeStoreVectorIndex::open(path, model_id, dims)`. The HNSW graph persists to disk and loads automatically — no rebuild needed unless the embedding model changed.
+`EdgeStoreStorage` and `EdgeStoreVectorIndex` open the same files on restart. The HNSW graph loads automatically — no rebuild needed unless the embedding model changed.
 
 ### Bulk indexing
 
@@ -431,6 +512,38 @@ engine.reindex_all().await?;
 | `.weights(RankingWeights)` | semantic=0.7, bm25=0.3, popularity=0.2, query_ctr=0.15, availability=0.05, margin=0.05 |
 | `.query_cache(ttl, max)` | disabled |
 | `.reranker()` | disabled |
+| `.field_weights(HashMap<String, usize>)` | uniform (1× repeat for each field) |
 
-All types implement `Send + Sync`. Storage and vector index backends can be swapped to `SqliteStorage`, `EdgeStoreStorage`, or `EdgeStoreVectorIndex` for persistence.
+All types implement `Send + Sync`. Storage and vector index backends can be swapped to `EdgeStoreStorage` and `EdgeStoreVectorIndex` for persistence.
+
+### OpenAI-compatible embedding provider
+
+Set `embedding.provider = "openai-compatible"` to use any OpenAI-compatible `/v1/embeddings` endpoint (Ollama, llama.cpp, vLLM, LM Studio, OpenAI):
+
+```toml
+[embedding]
+provider = "openai-compatible"
+model = "nomic-embed-text"
+base_url = "http://localhost:11434"
+dims = 768
+```
+
+Or via environment variables:
+- `VECTORIA_EMBEDDING_PROVIDER=openai-compatible`
+- `VECTORIA_EMBEDDING_BASE_URL=http://localhost:11434`
+- `VECTORIA_EMBEDDING_MODEL=nomic-embed-text`
+
+### Margin signal
+
+The `margin` factor in the score formula reads `metadata.margin` (float 0.0–1.0) from indexed product metadata. It is 0.0 if the field is absent. To activate it, include a `margin` field when indexing:
+
+```json
+{"id": "p1", "text": "...", "metadata": {"title": "...", "price": 99.0, "margin": 0.35}}
+```
+
+Configure its weight in `[ranking]`:
+```toml
+[ranking]
+margin = 0.05
+```
 

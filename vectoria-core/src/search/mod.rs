@@ -1,13 +1,14 @@
 pub mod bm25_index;
 pub mod query_cache;
 pub mod reranker;
+pub mod scoring;
 pub mod spell;
 
 use crate::{
-    embedding::{build_product_text, EmbeddingProvider},
+    embedding::EmbeddingProvider,
     model::{
-        Event, Hit, Product, ProductStatus, QueryContext, RankingWeights, ScoreBreakdown,
-        ScoreFactor, SearchMode, SearchRequest, SearchResponse, SimilarRequest,
+        build_product_text, Event, Hit, Product, ProductStatus, QueryContext, RankingWeights,
+        SearchMode, SearchRequest, SearchResponse, SimilarRequest,
     },
     storage::StorageEngine,
     vector::VectorIndex,
@@ -16,6 +17,10 @@ use anyhow::{bail, Result};
 use bm25_index::Bm25Index;
 use query_cache::QueryResultCache;
 use reranker::CrossEncoderReranker;
+use scoring::{
+    compute_aggregations, make_cache_key, matches_filters, percentile_p95, score_candidate,
+    CandidateScore,
+};
 use spell::SpellCorrector;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -38,10 +43,11 @@ pub struct SearchEngine {
     query_cache: Option<Arc<QueryResultCache>>,
     query_count: Arc<AtomicU64>,
     latency_window: Arc<Mutex<VecDeque<u32>>>,
+    field_weights: Option<HashMap<String, usize>>,
 }
 
 impl SearchEngine {
-    pub fn new(
+    pub(crate) fn new(
         storage: Arc<dyn StorageEngine>,
         vector_index: Arc<dyn VectorIndex>,
         embedding: Arc<dyn EmbeddingProvider>,
@@ -58,6 +64,7 @@ impl SearchEngine {
             query_cache: None,
             query_count: Arc::new(AtomicU64::new(0)),
             latency_window: Arc::new(Mutex::new(VecDeque::with_capacity(LATENCY_WINDOW))),
+            field_weights: None,
         }
     }
 
@@ -68,6 +75,11 @@ impl SearchEngine {
 
     pub fn with_query_cache(mut self, ttl_secs: u64, max_entries: usize) -> Self {
         self.query_cache = Some(Arc::new(QueryResultCache::new(ttl_secs, max_entries)));
+        self
+    }
+
+    pub fn with_field_weights(mut self, weights: HashMap<String, usize>) -> Self {
+        self.field_weights = Some(weights);
         self
     }
 
@@ -86,11 +98,11 @@ impl SearchEngine {
         let product_text = product
             .text
             .clone()
-            .unwrap_or_else(|| build_product_text(&product.metadata));
+            .unwrap_or_else(|| build_product_text(&product.metadata, self.field_weights.as_ref()));
 
-        self.spell.add_text(&product_text);
-        self.bm25.upsert(&product.id, &product_text);
-
+        // Persist to durable storage before updating in-memory indexes.
+        // This ordering means BM25/spell never have phantom entries for products
+        // that failed to persist.
         if product.vector.is_none() {
             let vector = self.embedding.embed(&product_text).await?;
             product.vector = Some(vector.clone());
@@ -105,13 +117,19 @@ impl SearchEngine {
 
         product.status = ProductStatus::Indexed;
         self.storage.put_product(&product).await?;
+
+        self.bm25.upsert(&product.id, &product_text);
+        self.spell.add_text(&product_text);
         Ok(())
     }
 
     pub async fn delete(&self, id: &str) -> Result<()> {
+        // Delete from storage first so that if the call fails the record is not
+        // a zombie: it stays in BM25/vector and a subsequent reindex_all() won't
+        // resurrect a product that was already removed from the source of truth.
+        self.storage.delete_product(id).await?;
         self.vector_index.delete(id).await?;
         self.bm25.remove(id);
-        self.storage.delete_product(id).await?;
         Ok(())
     }
 
@@ -203,7 +221,6 @@ impl SearchEngine {
             effective_q = req.q.clone();
         }
 
-        // Single round-trip: fetch CTR scores for all candidates for this query.
         let query_ctrs = self.storage.get_query_ctrs(&req.q).await.unwrap_or_default();
 
         let query_context = QueryContext {
@@ -227,37 +244,25 @@ impl SearchEngine {
                 .and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
             let ctr = query_ctrs.get(&id).copied().unwrap_or(0.0);
 
-            let score = candidate.semantic * weights.semantic
-                + candidate.bm25 * weights.bm25
-                + signals.popularity * weights.popularity
-                + availability * weights.availability
-                + margin * weights.margin
-                + ctr * weights.query_ctr;
+            let scored = score_candidate(
+                &candidate, signals.popularity, availability, margin, ctr,
+                &weights, req.explain, &query_context,
+            );
 
-            let explain = req.explain.then(|| {
-                let mut sources = Vec::new();
-                if candidate.bm25 > 0.0 { sources.push("bm25".to_string()); }
-                if candidate.semantic > 0.0 { sources.push("vector".to_string()); }
-                ScoreBreakdown {
-                    factors: vec![
-                        ScoreFactor { factor: "semantic_similarity".into(), score: candidate.semantic, weight: weights.semantic, contribution: candidate.semantic * weights.semantic },
-                        ScoreFactor { factor: "bm25".into(), score: candidate.bm25, weight: weights.bm25, contribution: candidate.bm25 * weights.bm25 },
-                        ScoreFactor { factor: "popularity".into(), score: signals.popularity, weight: weights.popularity, contribution: signals.popularity * weights.popularity },
-                        ScoreFactor { factor: "query_ctr".into(), score: ctr, weight: weights.query_ctr, contribution: ctr * weights.query_ctr },
-                        ScoreFactor { factor: "availability".into(), score: availability, weight: weights.availability, contribution: availability * weights.availability },
-                        ScoreFactor { factor: "margin".into(), score: margin, weight: weights.margin, contribution: margin * weights.margin },
-                    ],
-                    match_sources: sources,
-                    query_context: query_context.clone(),
-                }
+            hits.push(Hit {
+                id: product.id,
+                score: scored.score,
+                metadata: product.metadata.clone(),
+                explain: scored.explain,
             });
-
-            hits.push(Hit { id: product.id, score, metadata: product.metadata.clone(), explain });
         }
 
         hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
 
         if req.rerank {
+            if self.reranker.is_none() {
+                bail!("rerank requested but not enabled; set index.enable_reranker = true in vectoria.toml");
+            }
             if let Some(reranker) = &self.reranker {
                 let top_n = hits.len().min(50);
                 let texts: Vec<String> = hits[..top_n]
@@ -346,6 +351,10 @@ impl SearchEngine {
         self.storage.put_event(&event).await
     }
 
+    pub fn autocomplete(&self, prefix: &str, limit: usize) -> Vec<String> {
+        self.bm25.suggest(prefix, limit)
+    }
+
     async fn expand_query_terms(
         &self,
         original_query: &str,
@@ -367,7 +376,7 @@ impl SearchEngine {
         let mut seen: HashSet<String> = original_tokens.clone();
         for (id, _) in top {
             let Ok(Some(product)) = self.storage.get_product(id).await else { continue };
-            let text = product.text.unwrap_or_else(|| build_product_text(&product.metadata));
+            let text = product.text.unwrap_or_else(|| build_product_text(&product.metadata, self.field_weights.as_ref()));
             for word in text.split_whitespace() {
                 let lower = word.to_lowercase().trim_matches(|c: char| !c.is_alphabetic()).to_string();
                 if lower.len() >= 3 && !seen.contains(&lower) {
@@ -442,61 +451,8 @@ pub struct EngineStats {
     pub latency_p95_ms: u32,
 }
 
-fn percentile_p95(window: &VecDeque<u32>) -> u32 {
-    if window.is_empty() { return 0; }
-    let mut sorted: Vec<u32> = window.iter().copied().collect();
-    sorted.sort_unstable();
-    let idx = ((sorted.len() as f64 * 0.95) as usize).saturating_sub(1).min(sorted.len() - 1);
-    sorted[idx]
-}
-
 #[derive(serde::Serialize)]
 pub struct ReindexReport {
     pub reindexed: usize,
     pub errors: usize,
-}
-
-#[derive(Default)]
-struct CandidateScore {
-    semantic: f32,
-    bm25: f32,
-}
-
-fn matches_filters(metadata: &serde_json::Value, filters: &HashMap<String, serde_json::Value>) -> bool {
-    for (key, expected) in filters {
-        if key == "price_max" {
-            let price = metadata.get("price").and_then(|v| v.as_f64()).unwrap_or(f64::MAX);
-            if let Some(max) = expected.as_f64() { if price > max { return false; } }
-            continue;
-        }
-        if key == "price_min" {
-            let price = metadata.get("price").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            if let Some(min) = expected.as_f64() { if price < min { return false; } }
-            continue;
-        }
-        if metadata.get(key) != Some(expected) { return false; }
-    }
-    true
-}
-
-fn make_cache_key(req: &SearchRequest) -> String {
-    let filters = req.filters.as_ref().map(|f| {
-        let mut pairs: Vec<_> = f.iter().collect();
-        pairs.sort_by_key(|(k, _)| k.as_str());
-        serde_json::to_string(&pairs).unwrap_or_default()
-    }).unwrap_or_default();
-    format!("{}|{:?}|{}|{}|{}", req.q, req.mode, req.limit, req.offset, filters)
-}
-
-fn compute_aggregations(hits: &[Hit], fields: &[String]) -> HashMap<String, HashMap<String, usize>> {
-    let mut aggs: HashMap<String, HashMap<String, usize>> = HashMap::new();
-    for field in fields {
-        let counts = aggs.entry(field.clone()).or_default();
-        for hit in hits {
-            if let Some(v) = hit.metadata.get(field).and_then(|v| v.as_str()) {
-                *counts.entry(v.to_string()).or_insert(0) += 1;
-            }
-        }
-    }
-    aggs
 }
