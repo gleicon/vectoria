@@ -9,7 +9,7 @@ name = "vectoria-server"
 path = "src/main.rs"
 
 [dependencies]
-vectoria-core = { path = "../vectoria-core" }
+vectoria-core = { workspace = true }
 tokio = { workspace = true }
 axum = { workspace = true }
 tower = { workspace = true }

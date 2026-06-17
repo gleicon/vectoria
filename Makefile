@@ -162,11 +162,10 @@ publish:
 # Usage: make tag NEW_VERSION=0.1.5
 tag:
 	@test -n "$(NEW_VERSION)" || { echo "ERROR: specify version: make tag NEW_VERSION=x.y.z"; exit 1; }
-	@echo "Bumping Cargo.toml workspace version to $(NEW_VERSION)..."
-	sed -i '' 's/^version = ".*"/version = "$(NEW_VERSION)"/' Cargo.toml
 	@PREV=$$(grep -ohE '[0-9]+\.[0-9]+\.[0-9]+' website/index.html | head -1); \
-	echo "Bumping version strings $$PREV → $(NEW_VERSION)..."; \
+	echo "Bumping $$PREV → $(NEW_VERSION) in Cargo.toml and docs..."; \
 	sed -i '' "s/$$PREV/$(NEW_VERSION)/g" \
+		Cargo.toml \
 		README.md \
 		docs/api.md \
 		docs/quickstart.md \

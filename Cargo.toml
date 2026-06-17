@@ -31,6 +31,9 @@ publish-jobs = ["homebrew"]
 tap = "gleicon/homebrew-tap"
 
 [workspace.dependencies]
+# Internal crates
+vectoria-core = { path = "vectoria-core", version = "0.1.5" }
+
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 

@@ -9,7 +9,7 @@ name = "vectoria"
 path = "src/main.rs"
 
 [dependencies]
-vectoria-core = { path = "../vectoria-core" }
+vectoria-core = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
