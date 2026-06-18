@@ -1192,9 +1192,9 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "edgestore"
-version = "1.0.2"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d45b3a86c6215609415b41c2ff4f632909670b66bc96b3100839bda81abf3944"
+checksum = "043c5d1a30b2b92555aeab9338e75c7baed1499b78a3581d7572201efe2bcd2a"
 dependencies = [
  "blake3",
  "byteorder",
