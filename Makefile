@@ -18,7 +18,7 @@ WANDS_LABELS    := $(WANDS_DIR)/label.csv
 WANDS_JUDGES    := $(WANDS_DIR)/judges.ndjson
 WANDS_MAX       := 42994
 
-.PHONY: help build server server-bg kill esci-download esci-import esci-judges bench webstore clean \
+.PHONY: help build test server server-bg kill esci-download esci-import esci-judges bench webstore clean \
         publish publish-dry-run tag version \
         wands-download wands-import wands-judges wands-bench
 
@@ -33,6 +33,7 @@ help:
 	@echo "    make webstore       serve demo store at http://localhost:$(WEBSTORE_PORT)"
 	@echo ""
 	@echo "  All targets:"
+	@echo "    test                run full test suite (no server, no model download)"
 	@echo "    build               cargo build --release (server + CLI)"
 	@echo "    server              start server in foreground (own terminal)"
 	@echo "    server-bg           start server in background, log → /tmp/vectoria.log"
@@ -57,6 +58,9 @@ help:
 	@echo "  ESCI dataset: Amazon license required — https://github.com/amazon-science/esci-data"
 
 # ── Build ──────────────────────────────────────────────────────────────────
+
+test:
+	cargo test --workspace
 
 build:
 	cargo build --release -p vectoria-server -p vectoria-cli

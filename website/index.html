@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vectoria — Embedded Hybrid Search for Ecommerce</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,10 +21,11 @@
     <a href="#benchmark">Benchmark</a>
     <a href="#install">Install</a>
     <a href="#embed">Embed</a>
+    <a href="#algolia-compat">Algolia API</a>
     <a href="api.html">Docs</a>
   </nav>
   <div style="color:var(--muted);font-size:0.8125rem;font-family:var(--mono);">
-    v0.1.7 <span class="blink" style="color:var(--cyan);">▌</span>
+    v0.1.7
   </div>
 </div>
 
@@ -808,15 +812,89 @@ engine.stats()?;
   </p>
 </section>
 
+<!-- ═══════════════════════ ALGOLIA COMPAT ═══════════════════════ -->
+<div id="algolia-compat">
+<section>
+  <div class="section-tag">// algolia-compatible api</div>
+  <h2>Algolia-compatible API. Drop-in demo.</h2>
+  <p class="lead">
+    vectoria-algolia speaks the same protocol as Algolia Search. Point any InstantSearch or algoliasearch v5
+    app at <code>localhost:8108</code> — no code changes beyond the host override. Ships with a React demo
+    and 550 sample products.
+  </p>
+
+  <div class="terminal" style="max-width:640px;margin-bottom:40px;">
+    <div class="terminal-bar">
+      <div class="terminal-dot"></div>
+      <div class="terminal-dot"></div>
+      <div class="terminal-dot"></div>
+      <div class="terminal-title">bash</div>
+    </div>
+    <div class="terminal-body">
+<span class="cmt"># clone and start (builds + loads 550 products automatically)</span>
+<span class="prompt">$</span> <span class="cmd">git clone github.com/gleicon/vectoria-algolia</span>
+<span class="prompt">$</span> <span class="cmd">cd vectoria-algolia</span>
+<span class="prompt">$</span> <span class="cmd">docker compose up --build</span>
+<span class="ok">✓</span>  <span class="out">search healthy at http://localhost:8108</span>
+<span class="ok">✓</span>  <span class="out">550 products loaded</span>
+<span class="cmt"># open the demo storefront</span>
+<span class="prompt">$</span> <span class="cmd">open http://localhost:8108</span>
+    </div>
+  </div>
+
+  <div class="algolia-two-col">
+    <div>
+      <p style="font-size:0.875rem;font-weight:600;color:var(--text);margin-bottom:12px;">Wire up your InstantSearch app</p>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="terminal-dot"></div>
+          <div class="terminal-dot"></div>
+          <div class="terminal-dot"></div>
+          <div class="terminal-title">TypeScript</div>
+        </div>
+        <div class="terminal-body" style="font-size:0.8125rem;">
+<span class="key">import</span> <span class="val">{ liteClient }</span> <span class="key">from</span> <span class="out">'algoliasearch/lite'</span>
+
+<span class="key">const</span> <span class="val">searchClient</span> = liteClient(<span class="out">'local'</span>, <span class="out">'local'</span>, <span class="val">{</span>
+  <span class="key">hosts</span>: [<span class="val">{</span> <span class="key">url</span>: <span class="out">'localhost:8108'</span>, <span class="key">protocol</span>: <span class="out">'http'</span>, <span class="key">accept</span>: <span class="out">'readWrite'</span> <span class="val">}</span>],
+<span class="val">}</span>)
+<span class="cmt">// drop this into any &lt;InstantSearch&gt; tree</span>
+        </div>
+      </div>
+    </div>
+    <div>
+      <p style="font-size:0.875rem;font-weight:600;color:var(--text);margin-bottom:12px;">API compatibility</p>
+      <table class="algolia-compat-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Single-index search</td><td>✓</td></tr>
+          <tr><td>Multi-search (InstantSearch)</td><td>✓</td></tr>
+          <tr><td><code>facets</code> / <code>facetFilters</code></td><td>✓</td></tr>
+          <tr><td><code>_highlightResult</code> + AIS tags</td><td>✓</td></tr>
+          <tr><td><code>filters</code> string syntax</td><td>✓</td></tr>
+          <tr><td><code>numericFilters</code></td><td>✓</td></tr>
+          <tr><td>Batch index / delete</td><td>✓</td></tr>
+          <tr><td>React demo (InstantSearch UI)</td><td>✓</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="algolia-link-row">
+    <a href="https://github.com/gleicon/vectoria-algolia">View on GitHub →</a>
+    <a href="#">Full API reference →</a>
+  </div>
+</section>
+</div>
+
 <!-- ═══════════════════════ FOOTER ═══════════════════════ -->
 <footer>
-  <pre class="ascii" aria-hidden="true" style="margin: 0 auto 20px; display:inline-block;">
- ██╗   ██╗███████╗ ██████╗████████╗ ██████╗ ██████╗ ██╗ █████╗
- ██║   ██║██╔════╝██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗██║██╔══██╗
- ██║   ██║█████╗  ██║        ██║   ██║   ██║██████╔╝██║███████║
- ╚██╗ ██╔╝██╔══╝  ██║        ██║   ██║   ██║██╔══██╗██║██╔══██║
-  ╚████╔╝ ███████╗╚██████╗   ██║   ╚██████╔╝██║  ██║██║██║  ██║
-   ╚═══╝  ╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚═╝╚═╝  ╚═╝</pre>
+  <p style="font-size:1.5rem;font-weight:700;color:var(--text);letter-spacing:-0.02em;margin-bottom:16px;">Vectoria</p>
   <p>
     Embedded hybrid search engine for ecommerce. Single binary. No external services.<br>
     Built with Rust · EdgeStore HNSW · SymSpell · ONNX · Axum<br><br>
@@ -826,7 +904,6 @@ engine.stats()?;
     <a href="quickstart.html">Quickstart</a> &nbsp;·&nbsp;
     <a href="https://github.com/amazon-science/esci-data">ESCI Dataset</a>
     <br><br>
-    <span aria-hidden="true" style="color:var(--border2);">───────────────────────────────────────────────────────────────</span><br>
     <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.7 · DESIGNED FOR CATALOGS UP TO 500K PRODUCTS</span>
   </p>
 </footer>

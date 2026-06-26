@@ -325,11 +325,41 @@ Volumes:
 - `/data` — persistent index and SQLite storage
 - `/root/.cache/fastembed` — ONNX model cache (full image only; mount to avoid re-downloading)
 
+## Testing
+
+No running server or model download required — all tests use a hash-based stub embedder that runs in milliseconds.
+
+```sh
+cargo test --workspace   # 57 tests, 0 mocks
+```
+
+| Suite | Tests | Covers |
+|-------|------:|--------|
+| Search integration | 16 | hybrid/BM25/semantic search, filters, aggregations, pagination, similar, stats, explainability |
+| EdgeStore persistence | 9 | index+search, vector search, BM25, CTR (click/purchase events), delete, model mismatch rejection |
+| Spell correction | 8 | compound splits, typo correction, query normalization |
+| Sync API | 5 | sync wrappers for index, delete, reindex, similar, stats |
+| Index registry | 4 | create, list, delete, isolation, duplicate rejection |
+| Quality gate | 4 | offset/limit capping, NaN-score safety, cache bypass with custom weights |
+| Engine builder | 3 | default config, custom weights, query cache wiring |
+| Query cache | 2 | second call skips embedding, per-query isolation |
+| Embedding cache | 2 | cache hits skip inner embed, distinct queries both embedded |
+| Doc tests | 2 | compile-check embedded API examples in `engine.rs` |
+
+Run a specific suite:
+
+```sh
+cargo test -p vectoria-core spell          # spell correction tests only
+cargo test -p vectoria-core edgestore      # EdgeStore persistence tests
+cargo test -p vectoria-server              # index registry tests
+```
+
+---
+
 ## Building from source
 
 ```sh
 cargo build --release               # server + CLI
-cargo test                          # integration tests (no mocks)
 cargo build --release -p vectoria-server
 cargo build --release -p vectoria-cli
 ```

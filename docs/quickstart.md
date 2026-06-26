@@ -239,7 +239,31 @@ curl http://localhost:7700/stats -H "Authorization: Bearer $API_KEY"
 
 ---
 
-## 9. Stop and clean up
+## 9. Run the test suite
+
+No running server or model download needed — all tests use a stub embedder.
+
+```sh
+cargo test --workspace
+```
+
+Expected output:
+
+```
+test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured
+```
+
+Scope to a specific area:
+
+```sh
+cargo test -p vectoria-core edgestore   # persistence tests
+cargo test -p vectoria-core spell       # spell correction
+cargo test -p vectoria-server           # index registry
+```
+
+---
+
+## 10. Stop and clean up
 
 ```sh
 make kill       # stop background server
@@ -250,7 +274,7 @@ The embedding model cache stays at `~/.cache/fastembed/`. Delete it manually if 
 
 ---
 
-## 10. Use as an embedded Rust library
+## 11. Use as an embedded Rust library
 
 No HTTP server required. See [API reference — Embedded library](api.md#embedded-library-rust) for the full builder API, sync wrapper, persistence, and bulk indexing examples.
 
@@ -265,6 +289,7 @@ vectoria-core = "0.1.7"
 
 | Target | What it does |
 |---|---|
+| `make test` | Run full test suite (57 tests, no server, no model download) |
 | `make build` | `cargo build --release` for server + CLI |
 | `make server` | Start server in foreground |
 | `make server-bg` | Start server in background, wait until healthy |
