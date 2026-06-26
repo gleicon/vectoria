@@ -425,13 +425,16 @@ code {
 .algolia-two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 32px;
+  gap: 40px;
   align-items: start;
 }
+.algolia-two-col > div { min-width: 0; }
 
+/* border-collapse:collapse breaks border-radius; use separate+0 instead */
 .algolia-compat-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.875rem;
   background: #ffffff;
   border: 1px solid var(--border);
@@ -441,7 +444,6 @@ code {
 }
 .algolia-compat-table thead tr {
   background: var(--bg2);
-  border-bottom: 1px solid var(--border);
 }
 .algolia-compat-table thead th {
   text-align: left;
@@ -451,12 +453,10 @@ code {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-weight: 500;
-}
-.algolia-compat-table tbody tr {
   border-bottom: 1px solid var(--border);
 }
-.algolia-compat-table tbody tr:last-child {
-  border-bottom: none;
+.algolia-compat-table tbody tr:not(:last-child) td {
+  border-bottom: 1px solid var(--border);
 }
 .algolia-compat-table tbody tr:hover {
   background: var(--bg2);
