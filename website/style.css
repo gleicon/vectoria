@@ -157,6 +157,7 @@ body {
   line-height: 1.75;
   overflow-x: auto;
   white-space: pre;
+  color: #adbac7;
 }
 .terminal-body .prompt { color: #3fb950; }
 .terminal-body .cmd    { color: #e6edf3; }
