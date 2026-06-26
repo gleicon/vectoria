@@ -45,11 +45,17 @@ help:
 	@echo "    webstore            serve examples/webstore/ at :$(WEBSTORE_PORT)"
 	@echo "    clean               remove downloaded data files"
 	@echo ""
-	@echo "  Release:"
+	@echo "  Release (run in order):"
+	@echo "    make test                    confirm all tests pass"
+	@echo "    make publish-dry-run         preflight check (no upload)"
+	@echo "    make tag NEW_VERSION=x.y.z   bump versions, commit, push branch + signed tag"
+	@echo "    make publish                 upload vectoria-core to crates.io"
+	@echo ""
+	@echo "  Release targets:"
 	@echo "    version             print current version from Cargo.toml"
-	@echo "    publish-dry-run     verify vectoria-core is ready for crates.io"
-	@echo "    publish             publish vectoria-core to crates.io"
-	@echo "    tag NEW_VERSION=x.y.z  bump Cargo.toml + docs, commit, push branch + tag"
+	@echo "    publish-dry-run     verify crate passes crates.io preflight (no upload)"
+	@echo "    publish             publish vectoria-core to crates.io (cargo login required)"
+	@echo "    tag NEW_VERSION=x.y.z  bump Cargo.toml + 6 doc/web files, commit, push, sign tag"
 	@echo ""
 	@echo "  Variables (override on command line):"
 	@echo "    MAX_PRODUCTS=$(MAX_PRODUCTS)   LOCALE=$(LOCALE)   WEBSTORE_PORT=$(WEBSTORE_PORT)"
@@ -58,10 +64,26 @@ help:
 	@echo "  ESCI dataset: Amazon license required — https://github.com/amazon-science/esci-data"
 
 # ── Build ──────────────────────────────────────────────────────────────────
+#
+# Requires: Rust 1.80+ (rustup.rs). No external services or model downloads needed.
+#
+# Outputs:
+#   ./target/release/vectoria-server   — HTTP search server (port 7700)
+#   ./target/release/vectoria-cli      — import / benchmark / reindex CLI
+#
+# Typical dev flow:
+#   make test     → confirm all tests pass (fast, no model needed)
+#   make build    → compile release binaries
+#   make server   → start server in foreground to verify it runs
 
+# Run the full workspace test suite.
+# Uses a hash-based stub embedder — no model download, no running server required.
+# 57 tests covering search, persistence, behavioral signals, caching, and spell correction.
 test:
 	cargo test --workspace
 
+# Compile release binaries for vectoria-server and vectoria-cli.
+# Skips vectoria-core (library only, no binary).
 build:
 	cargo build --release -p vectoria-server -p vectoria-cli
 
@@ -199,27 +221,64 @@ wands-bench: $(WANDS_JUDGES)
 $(WANDS_JUDGES): wands-judges
 
 # ── Release / publish ──────────────────────────────────────────────────────
+#
+# Standard release sequence:
+#
+#   1. make test                     confirm all 57 tests pass
+#   2. make publish-dry-run          verify vectoria-core passes crates.io preflight
+#   3. make tag NEW_VERSION=x.y.z    bump versions, commit, push branch + signed tag
+#   4. make publish                  upload vectoria-core to crates.io
+#
+# Prerequisites:
+#   - git remote 'origin' must be set and you must have push access
+#   - GPG signing key configured for git (used by 'tag' target: git tag -s)
+#   - cargo login, or CARGO_REGISTRY_TOKEN set (used by 'publish' target)
+#
+# What gets version-bumped by 'make tag':
+#   Cargo.toml  README.md  docs/api.md  docs/quickstart.md
+#   website/index.html  website/api.html  website/quickstart.html
+#
+# Only vectoria-core is published to crates.io (it is the embeddable library).
+# vectoria-server and vectoria-cli are distributed as binaries / Docker images only.
 
+# Print the current version from Cargo.toml (used internally by other targets).
 version:
 	@echo "$(VERSION)"
 
-# Dry-run publish: verifies the crate is ready without uploading.
-# --allow-dirty: cargo's git2 library can report false-positive dirty state
-# due to stale index mtimes after a commit; git status shows a clean tree.
+# Preflight check: verifies the crate package is valid without uploading.
+# Catches missing files, bad metadata, or dependency issues before the real publish.
+#
+# --allow-dirty: cargo's git2 library reports false-positive dirty state due to
+# stale index mtimes after a commit even when 'git status' shows a clean tree.
+# This flag is safe here — actual file changes are caught by 'make test' first.
 publish-dry-run:
 	cargo publish -p vectoria-core --dry-run --allow-dirty
 
-# Publish vectoria-core to crates.io.
-# Requires: cargo login (or CARGO_REGISTRY_TOKEN env var).
+# Upload vectoria-core to crates.io.
+#
+# Prerequisites:
+#   Run 'cargo login' once, or set CARGO_REGISTRY_TOKEN in the environment.
+#   Run 'make publish-dry-run' and 'make tag' first.
+#
+# Only vectoria-core is published. The server and CLI are not on crates.io.
 publish:
 	@echo "Publishing vectoria-core v$(VERSION) to crates.io..."
 	cargo publish -p vectoria-core --allow-dirty
 	@echo "Published. https://crates.io/crates/vectoria-core"
 
-# Create and push a release tag. Triggers the GitHub Actions release workflow.
-# Requires NEW_VERSION argument. Updates Cargo.toml, all doc/web version strings,
-# commits everything, pushes branch, then creates and pushes the tag.
-# Usage: make tag NEW_VERSION=0.1.5
+# Bump version strings, commit, push branch, create a signed tag, push tag.
+#
+# Usage:
+#   make tag NEW_VERSION=0.1.8
+#
+# Steps performed:
+#   1. Reads current version from website/index.html (regex: first semver found)
+#   2. Replaces OLD → NEW in Cargo.toml + 6 doc/web files (sed in-place)
+#   3. Stages all changes with 'git add -A' and commits "chore: release vX.Y.Z"
+#   4. Pushes current branch to origin
+#   5. Creates a GPG-signed tag vX.Y.Z and pushes it to origin
+#
+# After this: run 'make publish' to upload vectoria-core to crates.io.
 tag:
 	@test -n "$(NEW_VERSION)" || { echo "ERROR: specify version: make tag NEW_VERSION=x.y.z"; exit 1; }
 	@PREV=$$(grep -ohE '[0-9]+\.[0-9]+\.[0-9]+' website/index.html | head -1); \
