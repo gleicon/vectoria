@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+"""
+Vectoria deployment — Cook configuration
+https://github.com/gleicon/cook
+
+Usage:
+  cook plan  Cookfile      # dry-run: show what would change
+  cook apply Cookfile      # apply changes to remote server
+  cook state Cookfile      # show current remote state
+
+Fallback (cook not installed):
+  ./deploy/setup.sh        # first-time
+  ./deploy/deploy.sh       # incremental
+"""
+
+from cook import Plan, File, Exec, Service, Package
+
+APP_DIR = "/opt/apps/vectoria"
+ALGOLIA_REPO = "https://github.com/gleicon/vectoria-algolia.git"
+
+plan = Plan(
+    name="vectoria",
+    host="169.150.1.130",
+    user="ubuntu",
+    key="~/.ssh/id_rsa_mgc_saas_apps",
+)
+
+# ── Directory structure ────────────────────────────────────────────────────
+Exec(
+    f"mkdir -p {APP_DIR}/{{website,webstore,deploy/nginx,data,logs}}",
+    plan=plan,
+    sudo=True,
+    name="create-dirs",
+)
+
+# ── nginx configuration ────────────────────────────────────────────────────
+File(
+    path="/etc/nginx/sites-available/vectoriasearch.com",
+    src="deploy/nginx/vectoriasearch.com",
+    plan=plan,
+    sudo=True,
+    name="nginx-config",
+)
+
+Exec(
+    "ln -sf /etc/nginx/sites-available/vectoriasearch.com "
+    "/etc/nginx/sites-enabled/vectoriasearch.com",
+    plan=plan,
+    sudo=True,
+    name="nginx-enable",
+)
+
+# ── nginx service ──────────────────────────────────────────────────────────
+Service(
+    name="nginx",
+    action="reload",
+    plan=plan,
+    sudo=True,
+)
+
+# ── Website static files ───────────────────────────────────────────────────
+File(
+    path=f"{APP_DIR}/website",
+    src="website/",
+    plan=plan,
+    name="website-files",
+)
+
+# ── Webstore static files ──────────────────────────────────────────────────
+File(
+    path=f"{APP_DIR}/webstore",
+    src="examples/webstore/",
+    plan=plan,
+    name="webstore-files",
+)
+
+# ── Deploy config ──────────────────────────────────────────────────────────
+File(
+    path=f"{APP_DIR}/deploy",
+    src="deploy/",
+    plan=plan,
+    name="deploy-config",
+)
+
+# ── vectoria-algolia clone ─────────────────────────────────────────────────
+Exec(
+    f"test -d {APP_DIR}/vectoria-algolia/.git "
+    f"  && git -C {APP_DIR}/vectoria-algolia pull --ff-only "
+    f"  || git clone {ALGOLIA_REPO} {APP_DIR}/vectoria-algolia",
+    plan=plan,
+    name="algolia-repo",
+)
+
+# ── vectoria-server (Docker Compose) ──────────────────────────────────────
+Exec(
+    f"cd {APP_DIR} && "
+    "sudo docker compose -f deploy/docker-compose.prod.yml --env-file .env "
+    "up -d --build --remove-orphans",
+    plan=plan,
+    name="vectoria-server",
+)
+
+# ── vectoria-algolia (Docker Compose with port override) ──────────────────
+Exec(
+    f"cd {APP_DIR}/vectoria-algolia && "
+    "sudo docker compose "
+    f"-f docker-compose.yml "
+    f"-f {APP_DIR}/deploy/docker-compose.algolia-override.yml "
+    "up -d --build --remove-orphans search loader",
+    plan=plan,
+    name="vectoria-algolia",
+)
+
+# ── Webstore config.js (inject API key from .env) ─────────────────────────
+Exec(
+    f"VECTORIA_API_KEY=$(grep ^VECTORIA_API_KEY {APP_DIR}/.env | cut -d= -f2 | tr -d '\"') && "
+    f"echo \"window.VECTORIA_API_KEY = '${{VECTORIA_API_KEY}}';\" > {APP_DIR}/webstore/config.js",
+    plan=plan,
+    name="webstore-config",
+)

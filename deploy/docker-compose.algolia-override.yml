@@ -1,0 +1,13 @@
+# Override for vectoria-algolia — binds port to loopback only.
+# Usage: docker compose -f docker-compose.yml -f /opt/apps/vectoria/deploy/docker-compose.algolia-override.yml up -d search loader
+
+services:
+  search:
+    ports:
+      - "127.0.0.1:8108:8108"
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"

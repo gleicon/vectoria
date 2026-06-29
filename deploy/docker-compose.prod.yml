@@ -1,0 +1,39 @@
+# Vectoria production stack
+# Port bindings use 127.0.0.1 — nginx is the only public entry point.
+
+services:
+  vectoria-server:
+    build:
+      context: ..
+      target: vectoria-full
+    image: vectoria:full
+    container_name: vectoria-server
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:7700:7700"
+    volumes:
+      - vectoria-data:/data
+      - fastembed-cache:/root/.cache/fastembed
+    environment:
+      VECTORIA_API_KEY: ${VECTORIA_API_KEY}
+      VECTORIA_STORAGE_PATH: /data/vectoria.db
+      VECTORIA_EMBEDDING_PROVIDER: local
+      VECTORIA_EMBEDDING_MODEL: multilingual-e5-small
+      VECTORIA_SKIP_CONSENT: "1"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 90s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+volumes:
+  vectoria-data:
+    name: vectoria-data
+  fastembed-cache:
+    name: vectoria-fastembed-cache

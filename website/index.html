@@ -17,34 +17,35 @@
 <div id="topbar">
   <a class="logo" href="#">vectoria<span>.</span></a>
   <nav>
-    <a href="#features">Features</a>
+    <a href="#features" data-i18n="nav-features">Features</a>
     <a href="#benchmark">Benchmark</a>
-    <a href="#install">Install</a>
-    <a href="#embed">Embed</a>
+    <a href="#install" data-i18n="nav-install">Install</a>
+    <a href="#embed" data-i18n="nav-embed">Embed</a>
     <a href="#algolia-compat">Algolia API</a>
     <a href="api.html">Docs</a>
   </nav>
-  <div style="color:var(--muted);font-size:0.8125rem;font-family:var(--mono);">
-    v0.1.8
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span style="color:var(--muted);font-size:0.8125rem;font-family:var(--mono);">v0.1.8</span>
+    <button id="lang-toggle" class="lang-toggle" aria-label="Mudar para Português">PT</button>
   </div>
 </div>
 
 <!-- ═══════════════════════ HERO ═══════════════════════ -->
 <section id="hero">
-  <div class="pre-tag">hybrid search engine</div>
-  <h1>
+  <div class="pre-tag" data-i18n="hero-tag">hybrid search engine</div>
+  <h1 data-i18n="hero-h1">
     Search that finds what<br>
     customers <em>mean</em>,<br>
     not just what they type.
   </h1>
-  <p>
+  <p data-i18n="hero-p">
     Vectoria combines BM25 full-text search with vector similarity and behavioral signals.
     Single binary. No external services. Runs on your server.
     Zero-result elimination included.
   </p>
   <div class="cta-row">
-    <a href="#install" class="btn btn-primary">Get Started →</a>
-    <a href="#benchmark" class="btn btn-outline">View Benchmark</a>
+    <a href="#install" class="btn btn-primary" data-i18n="cta-start">Get Started →</a>
+    <a href="#benchmark" class="btn btn-outline" data-i18n="cta-bench">View Benchmark</a>
   </div>
 </section>
 
@@ -55,32 +56,32 @@
   <div class="stat-strip">
     <div class="stat">
       <span class="num">100%</span>
-      <span class="desc">Query Coverage</span>
+      <span class="desc" data-i18n="stat-coverage">Query Coverage</span>
     </div>
     <div class="stat">
       <span class="num">2ms</span>
-      <span class="desc">Semantic p50</span>
+      <span class="desc" data-i18n="stat-semantic">Semantic p50</span>
     </div>
     <div class="stat">
       <span class="num">500K</span>
-      <span class="desc">Products / Node</span>
+      <span class="desc" data-i18n="stat-products">Products / Node</span>
     </div>
     <div class="stat">
       <span class="num">40MB</span>
-      <span class="desc">Model Size</span>
+      <span class="desc" data-i18n="stat-model">Model Size</span>
     </div>
   </div>
 
   <!-- terminal demo -->
   <div class="two-col">
     <div>
-      <div class="section-tag">// quick start</div>
-      <h2>Up in <em>three commands</em>.</h2>
-      <p class="lead">
+      <div class="section-tag" data-i18n="qs-tag">// quick start</div>
+      <h2 data-i18n="qs-h2">Up in <em>three commands</em>.</h2>
+      <p class="lead" data-i18n="qs-lead">
         Clone, build, start. The embedding model downloads automatically on first run.
         No Python, no Docker, no search cluster to provision.
       </p>
-      <p style="color:var(--muted);font-size:0.9375rem;line-height:1.75;">
+      <p style="color:var(--muted);font-size:0.9375rem;line-height:1.75;" data-i18n="qs-p2">
         Works with NDJSON, CSV, and Parquet out of the box.
         POST products to the HTTP API — they're immediately searchable.
         BM25, semantic, and hybrid search on the same index with a single flag.
@@ -125,9 +126,9 @@
 
 <!-- ═══════════════════════ FEATURES ═══════════════════════ -->
 <section id="features">
-  <div class="section-tag">// features</div>
-  <h2>Everything in one binary.</h2>
-  <p class="lead">
+  <div class="section-tag" data-i18n="feat-tag">// features</div>
+  <h2 data-i18n="feat-h2">Everything in one binary.</h2>
+  <p class="lead" data-i18n="feat-lead">
     No microservices. No managed search cluster. No per-query API billing.
     Ship search on your own infrastructure.
   </p>
@@ -135,16 +136,16 @@
   <div class="feat-grid">
     <div class="feat">
       <div class="feat-icon">⚡</div>
-      <h3>BM25 + Vector Hybrid</h3>
-      <p>
+      <h3 data-i18n="feat-bm25-h3">BM25 + Vector Hybrid</h3>
+      <p data-i18n="feat-bm25-p">
         Full-text precision for exact queries. Semantic fallback for concept queries
         ("jogging footwear" finds "Nike Air Max"). Scores are fused and re-ranked in a single pass.
       </p>
     </div>
     <div class="feat">
       <div class="feat-icon">◈</div>
-      <h3>Zero-Result Elimination</h3>
-      <p>
+      <h3 data-i18n="feat-zero-h3">Zero-Result Elimination</h3>
+      <p data-i18n="feat-zero-p">
         <span class="accent">100% query coverage</span> on ESCI benchmark.
         Spell correction fires on zero-result queries only — compound splits
         ("whiteshoes" → "white shoes"), typo correction, space joining — without
@@ -153,8 +154,8 @@
     </div>
     <div class="feat">
       <div class="feat-icon">▣</div>
-      <h3>HNSW Vector Index</h3>
-      <p>
+      <h3 data-i18n="feat-hnsw-h3">HNSW Vector Index</h3>
+      <p data-i18n="feat-hnsw-p">
         EdgeStore HNSW built automatically after reindex. Activates on
         <code>POST /admin/reindex</code>. Approximate nearest-neighbor search
         at 2ms p50 for a 5K product catalog.
@@ -162,8 +163,8 @@
     </div>
     <div class="feat">
       <div class="feat-icon">↑</div>
-      <h3>Behavioral Signals</h3>
-      <p>
+      <h3 data-i18n="feat-behav-h3">Behavioral Signals</h3>
+      <p data-i18n="feat-behav-p">
         Record clicks, purchases, views, and cart events via
         <code>POST /events</code>. Popularity and conversion signals are
         aggregated and fold into ranking scores automatically.
@@ -171,8 +172,8 @@
     </div>
     <div class="feat">
       <div class="feat-icon">◎</div>
-      <h3>Local ONNX Embeddings</h3>
-      <p>
+      <h3 data-i18n="feat-onnx-h3">Local ONNX Embeddings</h3>
+      <p data-i18n="feat-onnx-p">
         Ships with <code>multilingual-e5-small</code> (~40 MB, 100+ languages).
         Swap to any OpenAI-compatible embedding provider via config —
         no code changes required.
@@ -180,16 +181,16 @@
     </div>
     <div class="feat">
       <div class="feat-icon">≡</div>
-      <h3>Persistent Storage</h3>
-      <p>
+      <h3 data-i18n="feat-storage-h3">Persistent Storage</h3>
+      <p data-i18n="feat-storage-p">
         Three backends: in-memory (dev), SQLite + EdgeStore flat scan (light prod),
         EdgeStore HNSW (production). Switch with one config line, no data migration.
       </p>
     </div>
     <div class="feat">
       <div class="feat-icon">⊕</div>
-      <h3>Catalog-Seeded Spell Correction</h3>
-      <p>
+      <h3 data-i18n="feat-spell-h3">Catalog-Seeded Spell Correction</h3>
+      <p data-i18n="feat-spell-p">
         SymSpell seeded from your product catalog as items are indexed.
         Vocabulary grows with the catalog. No dictionary files to manage.
         Skips numeric tokens and product codes automatically.
@@ -197,8 +198,8 @@
     </div>
     <div class="feat">
       <div class="feat-icon">⌖</div>
-      <h3>Cross-Encoder Reranking</h3>
-      <p>
+      <h3 data-i18n="feat-rerank-h3">Cross-Encoder Reranking</h3>
+      <p data-i18n="feat-rerank-p">
         Optional <code>rerank: true</code> flag in any search request.
         Top-50 results re-scored with a cross-encoder model.
         Enable with <code>VECTORIA_ENABLE_RERANKER=1</code>.
@@ -206,8 +207,8 @@
     </div>
     <div class="feat">
       <div class="feat-icon">⊡</div>
-      <h3>Bulk Import CLI</h3>
-      <p>
+      <h3 data-i18n="feat-bulk-h3">Bulk Import CLI</h3>
+      <p data-i18n="feat-bulk-p">
         <code>vectoria import products.ndjson</code> handles NDJSON, CSV,
         and Parquet. Batch size configurable. Progress reported per batch.
         Re-embed all products after a model change with <code>vectoria reindex</code>.
@@ -220,23 +221,23 @@
 
 <!-- ═══════════════════════ HOW IT WORKS ═══════════════════════ -->
 <section>
-  <div class="section-tag">// how it works</div>
-  <h2>The query pipeline.</h2>
-  <p class="lead">Every search request goes through the same pipeline regardless of mode.</p>
+  <div class="section-tag" data-i18n="how-tag">// how it works</div>
+  <h2 data-i18n="how-h2">The query pipeline.</h2>
+  <p class="lead" data-i18n="how-lead">Every search request goes through the same pipeline regardless of mode.</p>
 
   <div class="steps">
     <div class="step">
       <div class="step-num">01</div>
       <div class="step-body">
-        <h4>Receive query</h4>
-        <p>The original query string is used as-is. No pre-processing that could hurt precision.</p>
+        <h4 data-i18n="how-s1-h4">Receive query</h4>
+        <p data-i18n="how-s1-p">The original query string is used as-is. No pre-processing that could hurt precision.</p>
       </div>
     </div>
     <div class="step">
       <div class="step-num">02</div>
       <div class="step-body">
-        <h4>BM25 search</h4>
-        <p>
+        <h4 data-i18n="how-s2-h4">BM25 search</h4>
+        <p data-i18n="how-s2-p">
           Full-text search over the indexed catalog using BM25 scoring.
           If zero results, spell correction fires: compound splits + typo correction
           on alphabetic tokens, then BM25 retries with the corrected query.
@@ -246,8 +247,8 @@
     <div class="step">
       <div class="step-num">03</div>
       <div class="step-body">
-        <h4>Semantic search <span class="badge badge-amber">hybrid / semantic only</span></h4>
-        <p>
+        <h4 data-i18n="how-s3-h4">Semantic search <span class="badge badge-amber">hybrid / semantic only</span></h4>
+        <p data-i18n="how-s3-p">
           Query embedded via <code>multilingual-e5-small</code> (or configured provider).
           HNSW approximate nearest-neighbor search over product vectors.
           Semantic candidates merged with BM25 candidates.
@@ -257,8 +258,8 @@
     <div class="step">
       <div class="step-num">04</div>
       <div class="step-body">
-        <h4>Query expansion <span class="badge badge-green">automatic</span></h4>
-        <p>
+        <h4 data-i18n="how-s4-h4">Query expansion <span class="badge badge-green">automatic</span></h4>
+        <p data-i18n="how-s4-p">
           If BM25 returns fewer than <code>limit/2</code> results, top semantic hits
           are mined for expansion terms. BM25 retries with the enriched query.
           Narrows the zero-result gap further without increasing latency for normal queries.
@@ -268,8 +269,8 @@
     <div class="step">
       <div class="step-num">05</div>
       <div class="step-body">
-        <h4>Score fusion and ranking</h4>
-        <p>
+        <h4 data-i18n="how-s5-h4">Score fusion and ranking</h4>
+        <p data-i18n="how-s5-p">
           Final score = <code>semantic × 0.6 + bm25 × w + popularity × 0.2 + availability × 0.1 + margin × 0.1</code>.
           All weights configurable in <code>vectoria.toml</code> or per-request.
         </p>
@@ -278,8 +279,8 @@
     <div class="step">
       <div class="step-num">06</div>
       <div class="step-body">
-        <h4>Optional cross-encoder reranking</h4>
-        <p>With <code>"rerank": true</code>, top-50 results re-scored. Adds ~20–50ms latency. Off by default.</p>
+        <h4 data-i18n="how-s6-h4">Optional cross-encoder reranking</h4>
+        <p data-i18n="how-s6-p">With <code>"rerank": true</code>, top-50 results re-scored. Adds ~20–50ms latency. Off by default.</p>
       </div>
     </div>
   </div>
@@ -289,9 +290,9 @@
 
 <!-- ═══════════════════════ BENCHMARK ═══════════════════════ -->
 <section id="benchmark">
-  <div class="section-tag">// benchmark</div>
-  <h2>Measured on <em>real ecommerce data</em>.</h2>
-  <p class="lead">
+  <div class="section-tag" data-i18n="bench-tag">// benchmark</div>
+  <h2 data-i18n="bench-h2">Measured on <em>real ecommerce data</em>.</h2>
+  <p class="lead" data-i18n="bench-lead">
     Amazon ESCI dataset — 5,000 US products, 107–119 judged queries,
     <code>multilingual-e5-small</code> embedding.
     ESCI labels represent three levels of query hardness.
@@ -301,17 +302,17 @@
     <table>
       <thead>
         <tr>
-          <th>Label Set</th>
-          <th>Queries</th>
+          <th data-i18n="bench-th-label">Label Set</th>
+          <th data-i18n="bench-th-queries">Queries</th>
           <th>BM25 MRR</th>
           <th>Hybrid MRR</th>
           <th>Semantic MRR</th>
-          <th>Coverage (all modes)</th>
+          <th data-i18n="bench-th-coverage">Coverage (all modes)</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td class="label-e">E — exact match</td>
+          <td class="label-e" data-i18n="bench-row-e">E — exact match</td>
           <td>107</td>
           <td>0.5842</td>
           <td class="hi">0.5882</td>
@@ -319,7 +320,7 @@
           <td class="hi">100%</td>
         </tr>
         <tr>
-          <td class="label-es">E+S — exact + concept</td>
+          <td class="label-es" data-i18n="bench-row-es">E+S — exact + concept</td>
           <td>117</td>
           <td>0.6595</td>
           <td>0.6576</td>
@@ -327,7 +328,7 @@
           <td class="hi">100%</td>
         </tr>
         <tr>
-          <td class="label-esc">E+S+C — all labels</td>
+          <td class="label-esc" data-i18n="bench-row-esc">E+S+C — all labels</td>
           <td>119</td>
           <td>0.6835</td>
           <td>0.6803</td>
@@ -337,7 +338,7 @@
       </tbody>
     </table>
   </div>
-  <div class="table-note">
+  <div class="table-note" data-i18n="bench-note">
     <span>E</span> = exact product name match (BM25-optimal). &nbsp;
     <span>S</span> = substitute/concept (keyword overlap low). &nbsp;
     <span>C</span> = complement (e.g. "camera" → "camera bag").
@@ -354,16 +355,16 @@
 
 <!-- ═══════════════════════ VS COMPARISON ═══════════════════════ -->
 <section>
-  <div class="section-tag">// comparison</div>
-  <h2>vs. the alternatives.</h2>
-  <p class="lead">
+  <div class="section-tag" data-i18n="comp-tag">// comparison</div>
+  <h2 data-i18n="comp-h2">vs. the alternatives.</h2>
+  <p class="lead" data-i18n="comp-lead">
     Vectoria's niche is the gap between "just add SQLite FTS5" and "stand up Elasticsearch."
   </p>
 
   <div class="compare-grid">
     <div class="compare-col">
-      <h3 class="muted">SQLite FTS5</h3>
-      <ul class="check-list">
+      <h3 class="muted" data-i18n="comp-sqlite-h3">SQLite FTS5</h3>
+      <ul class="check-list" data-i18n="comp-sqlite-items">
         <li><span class="mark y">✓</span> Zero-dependency</li>
         <li><span class="mark y">✓</span> Fast BM25</li>
         <li><span class="mark n">✗</span> No semantic fallback</li>
@@ -374,8 +375,8 @@
       </ul>
     </div>
     <div class="compare-col highlight">
-      <h3 class="green">Vectoria ← you are here</h3>
-      <ul class="check-list">
+      <h3 class="green" data-i18n="comp-vec-h3">Vectoria ← you are here</h3>
+      <ul class="check-list" data-i18n="comp-vec-items">
         <li><span class="mark y">✓</span> Single binary, no external services</li>
         <li><span class="mark y">✓</span> BM25 + HNSW hybrid</li>
         <li><span class="mark y">✓</span> 100% query coverage</li>
@@ -386,8 +387,8 @@
       </ul>
     </div>
     <div class="compare-col">
-      <h3 class="muted">Elasticsearch / Algolia</h3>
-      <ul class="check-list">
+      <h3 class="muted" data-i18n="comp-es-h3">Elasticsearch / Algolia</h3>
+      <ul class="check-list" data-i18n="comp-es-items">
         <li><span class="mark y">✓</span> Mature ecosystem</li>
         <li><span class="mark y">✓</span> Multi-tenant / SaaS</li>
         <li><span class="mark n">✗</span> External service required</li>
@@ -405,15 +406,15 @@
 <!-- ═══════════════════════ INSTALL ═══════════════════════ -->
 <div id="install">
 <section>
-  <div class="section-tag">// installation</div>
-  <h2>Docker Compose or from source.</h2>
+  <div class="section-tag" data-i18n="inst-tag">// installation</div>
+  <h2 data-i18n="inst-h2">Docker Compose or from source.</h2>
 
   <div class="terminal" style="margin-bottom:24px;">
     <div class="terminal-bar">
       <div class="terminal-dot"></div>
       <div class="terminal-dot"></div>
       <div class="terminal-dot"></div>
-      <div class="terminal-title">quickest start — docker compose (no Rust required)</div>
+      <div class="terminal-title" data-i18n="inst-docker-title">quickest start — docker compose (no Rust required)</div>
     </div>
     <div class="terminal-body">
 <span class="cmt"># clone and start — ONNX model downloads automatically on first run</span>
@@ -432,11 +433,11 @@
 
   <div class="install-grid">
     <div>
-      <p style="color:var(--amber);font-size:0.75rem;font-family:var(--mono);margin-bottom:8px;letter-spacing:0.04em;">DOCKER — FULL IMAGE (~400 MB)</p>
+      <p style="color:var(--amber);font-size:0.75rem;font-family:var(--mono);margin-bottom:8px;letter-spacing:0.04em;" data-i18n="inst-full-label">DOCKER — FULL IMAGE (~400 MB)</p>
       <div class="terminal">
         <div class="terminal-bar">
           <div class="terminal-dot"></div>
-          <div class="terminal-title">local ONNX embeddings, model cached in volume</div>
+          <div class="terminal-title" data-i18n="inst-full-title">local ONNX embeddings, model cached in volume</div>
         </div>
         <div class="terminal-body" style="font-size:0.8125rem;">
 <span class="prompt">$</span> <span class="cmd">docker build --target vectoria-full \</span>
@@ -450,11 +451,11 @@
       </div>
     </div>
     <div>
-      <p style="color:var(--amber);font-size:0.75rem;font-family:var(--mono);margin-bottom:8px;letter-spacing:0.04em;">DOCKER — SLIM IMAGE (~50 MB)</p>
+      <p style="color:var(--amber);font-size:0.75rem;font-family:var(--mono);margin-bottom:8px;letter-spacing:0.04em;" data-i18n="inst-slim-label">DOCKER — SLIM IMAGE (~50 MB)</p>
       <div class="terminal" style="margin-bottom:16px;">
         <div class="terminal-bar">
           <div class="terminal-dot"></div>
-          <div class="terminal-title">requires external OpenAI-compatible embedding API</div>
+          <div class="terminal-title" data-i18n="inst-slim-title">requires external OpenAI-compatible embedding API</div>
         </div>
         <div class="terminal-body" style="font-size:0.8125rem;">
 <span class="prompt">$</span> <span class="cmd">docker build --target vectoria-slim \</span>
@@ -467,7 +468,7 @@
 <span class="cmd">  vectoria:slim</span>
         </div>
       </div>
-      <p style="color:var(--amber);font-size:0.75rem;font-family:var(--mono);margin-bottom:8px;letter-spacing:0.04em;">FROM SOURCE (Rust 1.80+)</p>
+      <p style="color:var(--amber);font-size:0.75rem;font-family:var(--mono);margin-bottom:8px;letter-spacing:0.04em;" data-i18n="inst-src-label">FROM SOURCE (Rust 1.80+)</p>
       <div class="terminal">
         <div class="terminal-bar">
           <div class="terminal-dot"></div>
@@ -482,7 +483,7 @@
     </div>
   </div>
 
-  <p style="color:var(--muted);font-size:0.875rem;margin-top:20px;line-height:1.7;">
+  <p style="color:var(--muted);font-size:0.875rem;margin-top:20px;line-height:1.7;" data-i18n="inst-note">
     Both images include a <code>HEALTHCHECK</code> and the <code>vectoria</code> CLI binary.
     The <code>/data</code> volume holds the persistent index.
     Mount <code>/root/.cache/fastembed</code> to avoid re-downloading the ONNX model on container restart.
@@ -494,9 +495,9 @@
 
 <!-- ═══════════════════════ CONFIG ═══════════════════════ -->
 <section>
-  <div class="section-tag">// configuration</div>
-  <h2>One TOML file. All optional.</h2>
-  <p class="lead">
+  <div class="section-tag" data-i18n="conf-tag">// configuration</div>
+  <h2 data-i18n="conf-h2">One TOML file. All optional.</h2>
+  <p class="lead" data-i18n="conf-lead">
     Place <code>vectoria.toml</code> in the working directory.
     Every field has a sensible default and an environment variable override.
   </p>
@@ -533,31 +534,31 @@
       </div>
     </div>
     <div>
-      <p style="color:var(--muted);font-size:0.75rem;font-family:var(--mono);letter-spacing:0.04em;margin-bottom:12px;">VECTOR BACKENDS</p>
+      <p style="color:var(--muted);font-size:0.75rem;font-family:var(--mono);letter-spacing:0.04em;margin-bottom:12px;" data-i18n="conf-backends-label">VECTOR BACKENDS</p>
       <div class="steps" style="margin-bottom:24px;">
         <div class="step">
           <div class="step-num" style="font-size:0.7rem;">MEM</div>
           <div class="step-body">
             <h4><code>memory</code></h4>
-            <p>Everything in-memory. Lost on restart. Development only.</p>
+            <p data-i18n="conf-mem-p">Everything in-memory. Lost on restart. Development only.</p>
           </div>
         </div>
         <div class="step">
           <div class="step-num" style="font-size:0.7rem;">SQL</div>
           <div class="step-body">
             <h4><code>sqlite</code></h4>
-            <p>SQLite metadata + EdgeStore flat vector scan. Light production use.</p>
+            <p data-i18n="conf-sqlite-p">SQLite metadata + EdgeStore flat vector scan. Light production use.</p>
           </div>
         </div>
         <div class="step">
           <div class="step-num" style="font-size:0.6rem;color:var(--amber);">HNSW</div>
           <div class="step-body">
             <h4><code>edgestore-hnsw</code> — recommended</h4>
-            <p>Persistent HNSW index. Activates after <code>POST /admin/reindex</code>. Recommended for production.</p>
+            <p data-i18n="conf-hnsw-p">Persistent HNSW index. Activates after <code>POST /admin/reindex</code>. Recommended for production.</p>
           </div>
         </div>
       </div>
-      <p style="color:var(--muted);font-size:0.75rem;font-family:var(--mono);letter-spacing:0.04em;margin-bottom:8px;">ENV OVERRIDES</p>
+      <p style="color:var(--muted);font-size:0.75rem;font-family:var(--mono);letter-spacing:0.04em;margin-bottom:8px;" data-i18n="conf-env-label">ENV OVERRIDES</p>
       <div class="terminal">
         <div class="terminal-body" style="font-size:0.8125rem;">
 <span class="val">VECTORIA_HOST</span>
@@ -579,9 +580,9 @@
 
 <!-- ═══════════════════════ DOCS ═══════════════════════ -->
 <section id="docs">
-  <div class="section-tag">// documentation</div>
-  <h2>API reference.</h2>
-  <p class="lead">Core endpoints. All except <code>/health</code> require <code>Authorization: Bearer &lt;api_key&gt;</code>.</p>
+  <div class="section-tag" data-i18n="docs-tag">// documentation</div>
+  <h2 data-i18n="docs-h2">API reference.</h2>
+  <p class="lead" data-i18n="docs-lead">Core endpoints. All except <code>/health</code> require <code>Authorization: Bearer &lt;api_key&gt;</code>.</p>
 
   <div class="two-col">
     <div>
@@ -676,9 +677,9 @@
 
 <!-- ═══════════════════════ EMBED ═══════════════════════ -->
 <section id="embed">
-  <div class="section-tag">// embedded library</div>
-  <h2>Use as a Rust <em>library</em>.</h2>
-  <p class="lead">
+  <div class="section-tag" data-i18n="embed-tag">// embedded library</div>
+  <h2 data-i18n="embed-h2">Use as a Rust <em>library</em>.</h2>
+  <p class="lead" data-i18n="embed-lead">
     No HTTP server needed. Add <code>vectoria-core</code> to your <code>Cargo.toml</code>
     and get the full hybrid search engine in-process.
     Available on <a href="https://crates.io/crates/vectoria-core" style="color:var(--cyan);text-decoration:none;">crates.io</a>.
@@ -750,22 +751,22 @@ engine.stats()?;
         <div class="step">
           <div class="step-num" style="font-size:0.65rem;">DEF</div>
           <div class="step-body">
-            <h4>Defaults out of the box</h4>
-            <p>In-memory storage + <code>multilingual-e5-small</code> ONNX — zero config needed for prototyping.</p>
+            <h4 data-i18n="embed-def-h4">Defaults out of the box</h4>
+            <p data-i18n="embed-def-p">In-memory storage + <code>multilingual-e5-small</code> ONNX — zero config needed for prototyping.</p>
           </div>
         </div>
         <div class="step">
           <div class="step-num" style="font-size:0.65rem;">OVR</div>
           <div class="step-body">
-            <h4>Override anything</h4>
-            <p>Swap storage (<code>Sqlite</code>, <code>EdgeStore</code>), vector index, embedding provider, or ranking weights via builder methods.</p>
+            <h4 data-i18n="embed-ovr-h4">Override anything</h4>
+            <p data-i18n="embed-ovr-p">Swap storage (<code>Sqlite</code>, <code>EdgeStore</code>), vector index, embedding provider, or ranking weights via builder methods.</p>
           </div>
         </div>
         <div class="step">
           <div class="step-num" style="font-size:0.65rem;">PUB</div>
           <div class="step-body">
-            <h4><code>make publish</code></h4>
-            <p>Publish to crates.io with <code>cargo login</code> + <code>make publish</code>. Tag release with <code>make tag</code>.</p>
+            <h4 data-i18n="embed-pub-h4"><code>make publish</code></h4>
+            <p data-i18n="embed-pub-p">Publish to crates.io with <code>cargo login</code> + <code>make publish</code>. Tag release with <code>make tag</code>.</p>
           </div>
         </div>
       </div>
@@ -777,9 +778,9 @@ engine.stats()?;
 
 <!-- ═══════════════════════ DEMO ═══════════════════════ -->
 <section>
-  <div class="section-tag">// demo</div>
-  <h2>Try the ESCI demo store.</h2>
-  <p class="lead">
+  <div class="section-tag" data-i18n="demo-tag">// demo</div>
+  <h2 data-i18n="demo-h2">Try the ESCI demo store.</h2>
+  <p class="lead" data-i18n="demo-lead">
     Five minutes to a running demo with real Amazon product data and three search modes side by side.
     Requires accepting the ESCI dataset license.
   </p>
@@ -806,7 +807,7 @@ engine.stats()?;
 <span class="ok">INFO</span> <span class="out">serving at http://localhost:8080</span>
     </div>
   </div>
-  <p style="color:var(--muted);font-size:0.875rem;margin-top:16px;">
+  <p style="color:var(--muted);font-size:0.875rem;margin-top:16px;" data-i18n="demo-note">
     ESCI data requires a separate license:
     <a href="https://github.com/amazon-science/esci-data" style="color:var(--cyan);">github.com/amazon-science/esci-data</a>
   </p>
@@ -815,9 +816,9 @@ engine.stats()?;
 <!-- ═══════════════════════ ALGOLIA COMPAT ═══════════════════════ -->
 <div id="algolia-compat">
 <section>
-  <div class="section-tag">// algolia-compatible api</div>
-  <h2>Algolia-compatible API. Drop-in demo.</h2>
-  <p class="lead">
+  <div class="section-tag" data-i18n="alg-tag">// algolia-compatible api</div>
+  <h2 data-i18n="alg-h2">Algolia-compatible API. Drop-in demo.</h2>
+  <p class="lead" data-i18n="alg-lead">
     vectoria-algolia speaks the same protocol as Algolia Search. Point any InstantSearch or algoliasearch v5
     app at <code>localhost:8108</code> — no code changes beyond the host override. Ships with a React demo
     and 550 sample products.
@@ -850,7 +851,7 @@ engine.stats()?;
 
   <div class="algolia-two-col">
     <div>
-      <p style="font-size:0.875rem;font-weight:600;color:var(--text);margin-bottom:12px;">Wire up your InstantSearch app</p>
+      <p style="font-size:0.875rem;font-weight:600;color:var(--text);margin-bottom:12px;" data-i18n="alg-compat-title">Wire up your InstantSearch app</p>
       <div class="terminal">
         <div class="terminal-bar">
           <div class="terminal-dot"></div>
@@ -869,31 +870,31 @@ engine.stats()?;
       </div>
     </div>
     <div>
-      <p style="font-size:0.875rem;font-weight:600;color:var(--text);margin-bottom:12px;">API compatibility</p>
+      <p style="font-size:0.875rem;font-weight:600;color:var(--text);margin-bottom:12px;" data-i18n="alg-api-title">API compatibility</p>
       <table class="algolia-compat-table">
         <thead>
           <tr>
-            <th>Feature</th>
-            <th>Status</th>
+            <th data-i18n="alg-th-feature">Feature</th>
+            <th data-i18n="alg-th-status">Status</th>
           </tr>
         </thead>
         <tbody>
-          <tr><td>Single-index search</td><td>✓</td></tr>
-          <tr><td>Multi-search (InstantSearch)</td><td>✓</td></tr>
-          <tr><td><code>facets</code> / <code>facetFilters</code></td><td>✓</td></tr>
-          <tr><td><code>_highlightResult</code> + AIS tags</td><td>✓</td></tr>
-          <tr><td><code>filters</code> string syntax</td><td>✓</td></tr>
-          <tr><td><code>numericFilters</code></td><td>✓</td></tr>
-          <tr><td>Batch index / delete</td><td>✓</td></tr>
-          <tr><td>React demo (InstantSearch UI)</td><td>✓</td></tr>
+          <tr><td data-i18n="alg-row-single">Single-index search</td><td>✓</td></tr>
+          <tr><td data-i18n="alg-row-multi">Multi-search (InstantSearch)</td><td>✓</td></tr>
+          <tr><td data-i18n="alg-row-facets"><code>facets</code> / <code>facetFilters</code></td><td>✓</td></tr>
+          <tr><td data-i18n="alg-row-hl"><code>_highlightResult</code> + AIS tags</td><td>✓</td></tr>
+          <tr><td data-i18n="alg-row-filters"><code>filters</code> string syntax</td><td>✓</td></tr>
+          <tr><td data-i18n="alg-row-numeric"><code>numericFilters</code></td><td>✓</td></tr>
+          <tr><td data-i18n="alg-row-batch">Batch index / delete</td><td>✓</td></tr>
+          <tr><td data-i18n="alg-row-react">React demo (InstantSearch UI)</td><td>✓</td></tr>
         </tbody>
       </table>
     </div>
   </div>
 
   <div class="algolia-link-row">
-    <a href="https://github.com/gleicon/vectoria-algolia">View on GitHub →</a>
-    <a href="#">Full API reference →</a>
+    <a href="https://github.com/gleicon/vectoria-algolia" data-i18n="alg-link-github">View on GitHub →</a>
+    <a href="#" data-i18n="alg-link-api">Full API reference →</a>
   </div>
 </section>
 </div>
@@ -901,7 +902,7 @@ engine.stats()?;
 <!-- ═══════════════════════ FOOTER ═══════════════════════ -->
 <footer>
   <p style="font-size:1.5rem;font-weight:700;color:var(--text);letter-spacing:-0.02em;margin-bottom:16px;">Vectoria</p>
-  <p>
+  <p data-i18n="footer-body">
     Embedded hybrid search engine for ecommerce. Single binary. No external services.<br>
     Built with Rust · EdgeStore HNSW · SymSpell · ONNX · Axum<br><br>
     <a href="https://github.com/gleicon/vectoria">GitHub</a> &nbsp;·&nbsp;
@@ -913,6 +914,160 @@ engine.stats()?;
     <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.8 · DESIGNED FOR CATALOGS UP TO 500K PRODUCTS</span>
   </p>
 </footer>
+
+<script>
+(function () {
+  var T = {
+    'nav-features': { en: 'Features', pt: 'Funcionalidades' },
+    'nav-install':  { en: 'Install',  pt: 'Instalar' },
+    'nav-embed':    { en: 'Embed',    pt: 'Embarcado' },
+    'hero-tag': { en: 'hybrid search engine', pt: 'motor de busca híbrido' },
+    'hero-h1':  { en: 'Search that finds what<br>\n    customers <em>mean</em>,<br>\n    not just what they type.', pt: 'Busca que encontra o que<br>\n    os clientes <em>querem dizer</em>,<br>\n    não apenas o que digitam.' },
+    'hero-p':   { en: 'Vectoria combines BM25 full-text search with vector similarity and behavioral signals.\n    Single binary. No external services. Runs on your server.\n    Zero-result elimination included.', pt: 'Vectoria combina busca full-text BM25 com similaridade vetorial e sinais comportamentais.\n    Binário único. Sem serviços externos. Roda no seu servidor.\n    Eliminação de resultados zero incluída.' },
+    'cta-start': { en: 'Get Started →', pt: 'Começar →' },
+    'cta-bench': { en: 'View Benchmark', pt: 'Ver Benchmark' },
+    'stat-coverage': { en: 'Query Coverage',  pt: 'Cobertura de Consultas' },
+    'stat-semantic': { en: 'Semantic p50',    pt: 'Semântico p50' },
+    'stat-products': { en: 'Products / Node', pt: 'Produtos / Nó' },
+    'stat-model':    { en: 'Model Size',      pt: 'Tamanho do Modelo' },
+    'qs-tag':  { en: '// quick start', pt: '// início rápido' },
+    'qs-h2':   { en: 'Up in <em>three commands</em>.', pt: 'Pronto em <em>três comandos</em>.' },
+    'qs-lead': { en: 'Clone, build, start. The embedding model downloads automatically on first run.\n        No Python, no Docker, no search cluster to provision.', pt: 'Clone, compile, inicie. O modelo de embedding é baixado automaticamente na primeira execução.\n        Sem Python, sem Docker, sem cluster de busca para provisionar.' },
+    'qs-p2':   { en: 'Works with NDJSON, CSV, and Parquet out of the box.\n        POST products to the HTTP API — they’re immediately searchable.\n        BM25, semantic, and hybrid search on the same index with a single flag.', pt: 'Funciona com NDJSON, CSV e Parquet.\n        POST produtos para a API HTTP — pesquisáveis imediatamente.\n        BM25, semântico e busca híbrida no mesmo índice com uma única flag.' },
+    'feat-tag':  { en: '// features', pt: '// funcionalidades' },
+    'feat-h2':   { en: 'Everything in one binary.', pt: 'Tudo em um único binário.' },
+    'feat-lead': { en: 'No microservices. No managed search cluster. No per-query API billing.\n    Ship search on your own infrastructure.', pt: 'Sem microsserviços. Sem cluster de busca gerenciado. Sem cobrança por consulta.\n    Implante a busca na sua própria infraestrutura.' },
+    'feat-bm25-h3': { en: 'BM25 + Vector Hybrid', pt: 'BM25 + Vetor Híbrido' },
+    'feat-bm25-p':  { en: 'Full-text precision for exact queries. Semantic fallback for concept queries\n        (“jogging footwear” finds “Nike Air Max”). Scores are fused and re-ranked in a single pass.', pt: 'Precisão full-text para consultas exatas. Fallback semântico para consultas conceituais\n        (“calçado de corrida” encontra “Nike Air Max”). Scores fundidos e reordenados em uma única passagem.' },
+    'feat-zero-h3': { en: 'Zero-Result Elimination', pt: 'Eliminação de Resultado Zero' },
+    'feat-zero-p':  { en: '<span class="accent">100% query coverage</span> on ESCI benchmark.\n        Spell correction fires on zero-result queries only — compound splits\n        (“whiteshoes” → “white shoes”), typo correction, space joining — without\n        hurting precision on well-formed queries.', pt: '<span class="accent">100% de cobertura de consultas</span> no benchmark ESCI.\n        Correção ortográfica ativa apenas em consultas sem resultado — divisão composta\n        (“sapatobranço” → “sapato branco”), correção de erros de digitação, junção de espaços — sem\n        prejudicar a precisão em consultas bem formadas.' },
+    'feat-hnsw-h3': { en: 'HNSW Vector Index', pt: 'Índice Vetorial HNSW' },
+    'feat-hnsw-p':  { en: 'EdgeStore HNSW built automatically after reindex. Activates on\n        <code>POST /admin/reindex</code>. Approximate nearest-neighbor search\n        at 2ms p50 for a 5K product catalog.', pt: 'EdgeStore HNSW construído automaticamente após reindexação. Ativa em\n        <code>POST /admin/reindex</code>. Busca por vizinho mais próximo aproximado\n        em 2ms p50 para um catálogo de 5K produtos.' },
+    'feat-behav-h3': { en: 'Behavioral Signals', pt: 'Sinais Comportamentais' },
+    'feat-behav-p':  { en: 'Record clicks, purchases, views, and cart events via\n        <code>POST /events</code>. Popularity and conversion signals are\n        aggregated and fold into ranking scores automatically.', pt: 'Registre cliques, compras, visualizações e eventos de carrinho via\n        <code>POST /events</code>. Sinais de popularidade e conversão são\n        agregados e incorporados nos scores de ranking automaticamente.' },
+    'feat-onnx-h3': { en: 'Local ONNX Embeddings', pt: 'Embeddings ONNX Locais' },
+    'feat-onnx-p':  { en: 'Ships with <code>multilingual-e5-small</code> (~40 MB, 100+ languages).\n        Swap to any OpenAI-compatible embedding provider via config —\n        no code changes required.', pt: 'Acompanha o <code>multilingual-e5-small</code> (~40 MB, 100+ idiomas incluindo Português Brasileiro).\n        Troque para qualquer provedor compatível com OpenAI via configuração —\n        sem alterações de código.' },
+    'feat-storage-h3': { en: 'Persistent Storage', pt: 'Armazenamento Persistente' },
+    'feat-storage-p':  { en: 'Three backends: in-memory (dev), SQLite + EdgeStore flat scan (light prod),\n        EdgeStore HNSW (production). Switch with one config line, no data migration.', pt: 'Três backends: em memória (dev), SQLite + EdgeStore flat scan (produção leve),\n        EdgeStore HNSW (produção). Troque com uma linha de configuração, sem migração de dados.' },
+    'feat-spell-h3': { en: 'Catalog-Seeded Spell Correction', pt: 'Correção Ortográfica Alimentada pelo Catálogo' },
+    'feat-spell-p':  { en: 'SymSpell seeded from your product catalog as items are indexed.\n        Vocabulary grows with the catalog. No dictionary files to manage.\n        Skips numeric tokens and product codes automatically.', pt: 'SymSpell alimentado pelo catálogo de produtos à medida que os itens são indexados.\n        Vocabulário cresce com o catálogo. Sem dicionários para gerenciar.\n        Ignora tokens numéricos e códigos de produtos automaticamente.' },
+    'feat-rerank-h3': { en: 'Cross-Encoder Reranking', pt: 'Reranking com Cross-Encoder' },
+    'feat-rerank-p':  { en: 'Optional <code>rerank: true</code> flag in any search request.\n        Top-50 results re-scored with a cross-encoder model.\n        Enable with <code>VECTORIA_ENABLE_RERANKER=1</code>.', pt: 'Flag opcional <code>rerank: true</code> em qualquer busca.\n        Top-50 resultados re-pontuados com um modelo cross-encoder.\n        Habilite com <code>VECTORIA_ENABLE_RERANKER=1</code>.' },
+    'feat-bulk-h3': { en: 'Bulk Import CLI', pt: 'CLI de Importação em Lote' },
+    'feat-bulk-p':  { en: '<code>vectoria import products.ndjson</code> handles NDJSON, CSV,\n        and Parquet. Batch size configurable. Progress reported per batch.\n        Re-embed all products after a model change with <code>vectoria reindex</code>.', pt: '<code>vectoria import products.ndjson</code> suporta NDJSON, CSV\n        e Parquet. Tamanho de lote configurável. Progresso reportado por lote.\n        Re-incorpore todos os produtos após mudança de modelo com <code>vectoria reindex</code>.' },
+    'how-tag':  { en: '// how it works', pt: '// como funciona' },
+    'how-h2':   { en: 'The query pipeline.', pt: 'O pipeline de consulta.' },
+    'how-lead': { en: 'Every search request goes through the same pipeline regardless of mode.', pt: 'Toda requisição de busca passa pelo mesmo pipeline independente do modo.' },
+    'how-s1-h4': { en: 'Receive query', pt: 'Receber consulta' },
+    'how-s1-p':  { en: 'The original query string is used as-is. No pre-processing that could hurt precision.', pt: 'A string de consulta original é usada como está. Sem pré-processamento que possa prejudicar a precisão.' },
+    'how-s2-h4': { en: 'BM25 search', pt: 'Busca BM25' },
+    'how-s2-p':  { en: 'Full-text search over the indexed catalog using BM25 scoring.\n          If zero results, spell correction fires: compound splits + typo correction\n          on alphabetic tokens, then BM25 retries with the corrected query.', pt: 'Busca full-text no catálogo indexado usando pontuação BM25.\n          Se zero resultados, a correção ortográfica é acionada: divisão composta + correção de erros\n          em tokens alfabéticos, depois BM25 tenta novamente com a consulta corrigida.' },
+    'how-s3-h4': { en: 'Semantic search <span class="badge badge-amber">hybrid / semantic only</span>', pt: 'Busca semântica <span class="badge badge-amber">híbrido / somente semântico</span>' },
+    'how-s3-p':  { en: 'Query embedded via <code>multilingual-e5-small</code> (or configured provider).\n          HNSW approximate nearest-neighbor search over product vectors.\n          Semantic candidates merged with BM25 candidates.', pt: 'Consulta incorporada via <code>multilingual-e5-small</code> (ou provedor configurado).\n          Busca HNSW por vizinho mais próximo aproximado sobre vetores de produtos.\n          Candidatos semânticos mesclados com candidatos BM25.' },
+    'how-s4-h4': { en: 'Query expansion <span class="badge badge-green">automatic</span>', pt: 'Expansão de consulta <span class="badge badge-green">automático</span>' },
+    'how-s4-p':  { en: 'If BM25 returns fewer than <code>limit/2</code> results, top semantic hits\n          are mined for expansion terms. BM25 retries with the enriched query.\n          Narrows the zero-result gap further without increasing latency for normal queries.', pt: 'Se BM25 retornar menos que <code>limit/2</code> resultados, os principais hits semânticos\n          são minerados para termos de expansão. BM25 tenta novamente com a consulta enriquecida.\n          Reduz ainda mais a lacuna de resultado zero sem aumentar latência para consultas normais.' },
+    'how-s5-h4': { en: 'Score fusion and ranking', pt: 'Fusão de scores e ranking' },
+    'how-s5-p':  { en: 'Final score = <code>semantic × 0.6 + bm25 × w + popularity × 0.2 + availability × 0.1 + margin × 0.1</code>.\n          All weights configurable in <code>vectoria.toml</code> or per-request.', pt: 'Score final = <code>semantic × 0.6 + bm25 × w + popularity × 0.2 + availability × 0.1 + margin × 0.1</code>.\n          Todos os pesos configuráveis em <code>vectoria.toml</code> ou por requisição.' },
+    'how-s6-h4': { en: 'Optional cross-encoder reranking', pt: 'Reranking opcional com cross-encoder' },
+    'how-s6-p':  { en: 'With <code>"rerank": true</code>, top-50 results re-scored. Adds ~20–50ms latency. Off by default.', pt: 'Com <code>"rerank": true</code>, top-50 resultados re-pontuados. Adiciona ~20–50ms de latência. Desativado por padrão.' },
+    'bench-tag':  { en: '// benchmark', pt: '// benchmark' },
+    'bench-h2':   { en: 'Measured on <em>real ecommerce data</em>.', pt: 'Medido com <em>dados reais de ecommerce</em>.' },
+    'bench-lead': { en: 'Amazon ESCI dataset — 5,000 US products, 107–119 judged queries,\n    <code>multilingual-e5-small</code> embedding.\n    ESCI labels represent three levels of query hardness.', pt: 'Dataset Amazon ESCI — 5.000 produtos americanos, 107–119 consultas avaliadas,\n    embedding <code>multilingual-e5-small</code>.\n    Os rótulos ESCI representam três níveis de dificuldade de consulta.' },
+    'bench-th-label':    { en: 'Label Set',          pt: 'Conjunto de Rótulos' },
+    'bench-th-queries':  { en: 'Queries',            pt: 'Consultas' },
+    'bench-th-coverage': { en: 'Coverage (all modes)', pt: 'Cobertura (todos os modos)' },
+    'bench-row-e':   { en: 'E — exact match',     pt: 'E — correspondência exata' },
+    'bench-row-es':  { en: 'E+S — exact + concept', pt: 'E+S — exato + conceito' },
+    'bench-row-esc': { en: 'E+S+C — all labels',   pt: 'E+S+C — todos os rótulos' },
+    'bench-note': { en: '<span>E</span> = exact product name match (BM25-optimal). &nbsp;\n    <span>S</span> = substitute/concept (keyword overlap low). &nbsp;\n    <span>C</span> = complement (e.g. “camera” → “camera bag”).\n    <br>\n    Previous BM25 coverage before spell corrector: 96.6%. All modes now reach 100%.\n    Spell correction fires only on zero-result queries — no precision loss on normal queries.\n    <br><br>\n    <strong>Reproduce:</strong>\n    <code>make esci-import &amp;&amp; make esci-judges &amp;&amp; make bench</code>', pt: '<span>E</span> = correspondência exata do nome do produto (BM25-ótimo). &nbsp;\n    <span>S</span> = substituto/conceito (sobreposição de palavras-chave baixa). &nbsp;\n    <span>C</span> = complemento (ex.: “câmera” → “bolsa de câmera”).\n    <br>\n    Cobertura anterior do BM25 antes do corretor ortográfico: 96,6%. Todos os modos agora atingem 100%.\n    A correção ortográfica é acionada apenas em consultas sem resultado — sem perda de precisão em consultas normais.\n    <br><br>\n    <strong>Reproduzir:</strong>\n    <code>make esci-import &amp;&amp; make esci-judges &amp;&amp; make bench</code>' },
+    'comp-tag':  { en: '// comparison', pt: '// comparação' },
+    'comp-h2':   { en: 'vs. the alternatives.', pt: 'vs. as alternativas.' },
+    'comp-lead': { en: 'Vectoria’s niche is the gap between “just add SQLite FTS5” and “stand up Elasticsearch.”', pt: 'O nicho do Vectoria é a lacuna entre “basta adicionar SQLite FTS5” e “montar um Elasticsearch”.' },
+    'comp-sqlite-h3':    { en: 'SQLite FTS5', pt: 'SQLite FTS5' },
+    'comp-sqlite-items': { en: '<li><span class="mark y">✓</span> Zero-dependency</li><li><span class="mark y">✓</span> Fast BM25</li><li><span class="mark n">✗</span> No semantic fallback</li><li><span class="mark n">✗</span> Zero-result gaps</li><li><span class="mark n">✗</span> No behavioral ranking</li><li><span class="mark n">✗</span> No compound spell correction</li><li><span class="mark n">✗</span> No cross-encoder reranking</li>', pt: '<li><span class="mark y">✓</span> Zero dependências</li><li><span class="mark y">✓</span> BM25 rápido</li><li><span class="mark n">✗</span> Sem fallback semântico</li><li><span class="mark n">✗</span> Lacunas de resultado zero</li><li><span class="mark n">✗</span> Sem ranking comportamental</li><li><span class="mark n">✗</span> Sem correção ortográfica composta</li><li><span class="mark n">✗</span> Sem reranking cross-encoder</li>' },
+    'comp-vec-h3':    { en: 'Vectoria ← you are here', pt: 'Vectoria ← você está aqui' },
+    'comp-vec-items': { en: '<li><span class="mark y">✓</span> Single binary, no external services</li><li><span class="mark y">✓</span> BM25 + HNSW hybrid</li><li><span class="mark y">✓</span> 100% query coverage</li><li><span class="mark y">✓</span> Behavioral signals (click, purchase)</li><li><span class="mark y">✓</span> Catalog-seeded spell correction</li><li><span class="mark y">✓</span> Local ONNX embeddings (no API key)</li><li><span class="mark y">✓</span> Cross-encoder reranking optional</li>', pt: '<li><span class="mark y">✓</span> Binário único, sem serviços externos</li><li><span class="mark y">✓</span> Híbrido BM25 + HNSW</li><li><span class="mark y">✓</span> 100% de cobertura de consultas</li><li><span class="mark y">✓</span> Sinais comportamentais (clique, compra)</li><li><span class="mark y">✓</span> Correção ortográfica alimentada pelo catálogo</li><li><span class="mark y">✓</span> Embeddings ONNX locais (sem chave de API)</li><li><span class="mark y">✓</span> Reranking cross-encoder opcional</li>' },
+    'comp-es-h3':    { en: 'Elasticsearch / Algolia', pt: 'Elasticsearch / Algolia' },
+    'comp-es-items': { en: '<li><span class="mark y">✓</span> Mature ecosystem</li><li><span class="mark y">✓</span> Multi-tenant / SaaS</li><li><span class="mark n">✗</span> External service required</li><li><span class="mark n">✗</span> Per-query billing (Algolia)</li><li><span class="mark n">✗</span> Cluster to operate (ES)</li><li><span class="mark m">~</span> Semantic: add-on / extra cost</li><li><span class="mark m">~</span> BYO embedding model complexity</li>', pt: '<li><span class="mark y">✓</span> Ecossistema maduro</li><li><span class="mark y">✓</span> Multi-tenant / SaaS</li><li><span class="mark n">✗</span> Serviço externo necessário</li><li><span class="mark n">✗</span> Cobrança por consulta (Algolia)</li><li><span class="mark n">✗</span> Cluster para operar (ES)</li><li><span class="mark m">~</span> Semântico: complemento / custo extra</li><li><span class="mark m">~</span> Complexidade para modelo de embedding próprio</li>' },
+    'inst-tag': { en: '// installation', pt: '// instalação' },
+    'inst-h2':  { en: 'Docker Compose or from source.', pt: 'Docker Compose ou do código-fonte.' },
+    'inst-docker-title': { en: 'quickest start — docker compose (no Rust required)', pt: 'início mais rápido — docker compose (sem Rust necessário)' },
+    'inst-full-label': { en: 'DOCKER — FULL IMAGE (~400 MB)', pt: 'DOCKER — IMAGEM COMPLETA (~400 MB)' },
+    'inst-full-title':  { en: 'local ONNX embeddings, model cached in volume', pt: 'embeddings ONNX locais, modelo em cache no volume' },
+    'inst-slim-label': { en: 'DOCKER — SLIM IMAGE (~50 MB)', pt: 'DOCKER — IMAGEM SLIM (~50 MB)' },
+    'inst-slim-title':  { en: 'requires external OpenAI-compatible embedding API', pt: 'requer API de embedding compatível com OpenAI externa' },
+    'inst-src-label': { en: 'FROM SOURCE (Rust 1.80+)', pt: 'DO CÓDIGO-FONTE (Rust 1.80+)' },
+    'inst-note': { en: 'Both images include a <code>HEALTHCHECK</code> and the <code>vectoria</code> CLI binary.\n    The <code>/data</code> volume holds the persistent index.\n    Mount <code>/root/.cache/fastembed</code> to avoid re-downloading the ONNX model on container restart.', pt: 'Ambas as imagens incluem um <code>HEALTHCHECK</code> e o binário CLI <code>vectoria</code>.\n    O volume <code>/data</code> contém o índice persistente.\n    Monte <code>/root/.cache/fastembed</code> para evitar o re-download do modelo ONNX ao reiniciar o container.' },
+    'conf-tag':  { en: '// configuration', pt: '// configuração' },
+    'conf-h2':   { en: 'One TOML file. All optional.', pt: 'Um arquivo TOML. Tudo opcional.' },
+    'conf-lead': { en: 'Place <code>vectoria.toml</code> in the working directory.\n    Every field has a sensible default and an environment variable override.', pt: 'Coloque <code>vectoria.toml</code> no diretório de trabalho.\n    Cada campo tem um padrão sensão e uma variável de ambiente correspondente.' },
+    'conf-backends-label': { en: 'VECTOR BACKENDS', pt: 'BACKENDS DE VETOR' },
+    'conf-mem-p':    { en: 'Everything in-memory. Lost on restart. Development only.', pt: 'Tudo em memória. Perdido ao reiniciar. Somente para desenvolvimento.' },
+    'conf-sqlite-p': { en: 'SQLite metadata + EdgeStore flat vector scan. Light production use.', pt: 'Metadados SQLite + varredura flat EdgeStore. Uso em produção leve.' },
+    'conf-hnsw-p':   { en: 'Persistent HNSW index. Activates after <code>POST /admin/reindex</code>. Recommended for production.', pt: 'Índice HNSW persistente. Ativa após <code>POST /admin/reindex</code>. Recomendado para produção.' },
+    'conf-env-label': { en: 'ENV OVERRIDES', pt: 'VARIÁVEIS DE AMBIENTE' },
+    'docs-tag':  { en: '// documentation', pt: '// documentação' },
+    'docs-h2':   { en: 'API reference.', pt: 'Referência da API.' },
+    'docs-lead': { en: 'Core endpoints. All except <code>/health</code> require <code>Authorization: Bearer &lt;api_key&gt;</code>.', pt: 'Endpoints principais. Todos exceto <code>/health</code> requerem <code>Authorization: Bearer &lt;api_key&gt;</code>.' },
+    'embed-tag':  { en: '// embedded library', pt: '// biblioteca embarcada' },
+    'embed-h2':   { en: 'Use as a Rust <em>library</em>.', pt: 'Use como uma <em>biblioteca</em> Rust.' },
+    'embed-lead': { en: 'No HTTP server needed. Add <code>vectoria-core</code> to your <code>Cargo.toml</code>\n    and get the full hybrid search engine in-process.\n    Available on <a href="https://crates.io/crates/vectoria-core" style="color:var(--cyan);text-decoration:none;">crates.io</a>.', pt: 'Sem servidor HTTP necessário. Adicione <code>vectoria-core</code> ao seu <code>Cargo.toml</code>\n    e obtenha o motor de busca híbrido completo in-process.\n    Disponível no <a href="https://crates.io/crates/vectoria-core" style="color:var(--cyan);text-decoration:none;">crates.io</a>.' },
+    'embed-def-h4': { en: 'Defaults out of the box', pt: 'Padrões prontos para uso' },
+    'embed-def-p':  { en: 'In-memory storage + <code>multilingual-e5-small</code> ONNX — zero config needed for prototyping.', pt: 'Armazenamento em memória + ONNX <code>multilingual-e5-small</code> — zero configuração para prototipagem.' },
+    'embed-ovr-h4': { en: 'Override anything', pt: 'Substitua qualquer coisa' },
+    'embed-ovr-p':  { en: 'Swap storage (<code>Sqlite</code>, <code>EdgeStore</code>), vector index, embedding provider, or ranking weights via builder methods.', pt: 'Troque armazenamento (<code>Sqlite</code>, <code>EdgeStore</code>), índice vetorial, provedor de embedding ou pesos de ranking via métodos do builder.' },
+    'embed-pub-h4': { en: '<code>make publish</code>', pt: '<code>make publish</code>' },
+    'embed-pub-p':  { en: 'Publish to crates.io with <code>cargo login</code> + <code>make publish</code>. Tag release with <code>make tag</code>.', pt: 'Publique no crates.io com <code>cargo login</code> + <code>make publish</code>. Marque o release com <code>make tag</code>.' },
+    'demo-tag':  { en: '// demo', pt: '// demonstração' },
+    'demo-h2':   { en: 'Try the ESCI demo store.', pt: 'Experimente a loja demo ESCI.' },
+    'demo-lead': { en: 'Five minutes to a running demo with real Amazon product data and three search modes side by side.\n    Requires accepting the ESCI dataset license.', pt: 'Cinco minutos para um demo funcionando com dados reais de produtos Amazon e três modos de busca lado a lado.\n    Requer aceitar a licença do dataset ESCI.' },
+    'demo-note': { en: 'ESCI data requires a separate license:\n    <a href="https://github.com/amazon-science/esci-data" style="color:var(--cyan);">github.com/amazon-science/esci-data</a>', pt: 'Dados ESCI requerem licença separada:\n    <a href="https://github.com/amazon-science/esci-data" style="color:var(--cyan);">github.com/amazon-science/esci-data</a>' },
+    'alg-tag':  { en: '// algolia-compatible api', pt: '// api compatível com algolia' },
+    'alg-h2':   { en: 'Algolia-compatible API. Drop-in demo.', pt: 'API compatível com Algolia. Demo pronta para usar.' },
+    'alg-lead': { en: 'vectoria-algolia speaks the same protocol as Algolia Search. Point any InstantSearch or algoliasearch v5\n    app at <code>localhost:8108</code> — no code changes beyond the host override. Ships with a React demo\n    and 550 sample products.', pt: 'vectoria-algolia fala o mesmo protocolo do Algolia Search. Aponte qualquer app InstantSearch ou algoliasearch v5\n    para <code>localhost:8108</code> — sem mudanças de código além da substituição do host. Acompanha um demo React\n    e 550 produtos de exemplo.<br><br><strong>Suporte ao Português Brasileiro:</strong> O modelo padrão <code>multilingual-e5-small</code> cobre 100+ idiomas incluindo o Português Brasileiro. Importe um catálogo em PT-BR e faça buscas em português sem nenhuma configuração adicional.' },
+    'alg-compat-title': { en: 'Wire up your InstantSearch app', pt: 'Conecte seu app InstantSearch' },
+    'alg-api-title':    { en: 'API compatibility', pt: 'Compatibilidade da API' },
+    'alg-th-feature':  { en: 'Feature', pt: 'Funcionalidade' },
+    'alg-th-status':   { en: 'Status',  pt: 'Status' },
+    'alg-row-single':  { en: 'Single-index search',           pt: 'Busca em índice único' },
+    'alg-row-multi':   { en: 'Multi-search (InstantSearch)',   pt: 'Multi-search (InstantSearch)' },
+    'alg-row-facets':  { en: '<code>facets</code> / <code>facetFilters</code>', pt: '<code>facets</code> / <code>facetFilters</code>' },
+    'alg-row-hl':      { en: '<code>_highlightResult</code> + AIS tags', pt: '<code>_highlightResult</code> + tags AIS' },
+    'alg-row-filters': { en: '<code>filters</code> string syntax',  pt: 'Sintaxe de filtros <code>filters</code>' },
+    'alg-row-numeric': { en: '<code>numericFilters</code>',          pt: '<code>numericFilters</code>' },
+    'alg-row-batch':   { en: 'Batch index / delete',                 pt: 'Indexação/exclusão em lote' },
+    'alg-row-react':   { en: 'React demo (InstantSearch UI)',        pt: 'Demo React (InstantSearch UI)' },
+    'alg-link-github': { en: 'View on GitHub →', pt: 'Ver no GitHub →' },
+    'alg-link-api':    { en: 'Full API reference →', pt: 'Referência completa da API →' },
+    'footer-body': { en: 'Embedded hybrid search engine for ecommerce. Single binary. No external services.<br>\n    Built with Rust · EdgeStore HNSW · SymSpell · ONNX · Axum<br><br>\n    <a href="https://github.com/gleicon/vectoria">GitHub</a> &nbsp;·&nbsp;\n    <a href="https://crates.io/crates/vectoria-core">crates.io</a> &nbsp;·&nbsp;\n    <a href="api.html">API Docs</a> &nbsp;·&nbsp;\n    <a href="quickstart.html">Quickstart</a> &nbsp;·&nbsp;\n    <a href="https://github.com/amazon-science/esci-data">ESCI Dataset</a>\n    <br><br>\n    <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.8 · DESIGNED FOR CATALOGS UP TO 500K PRODUCTS</span>', pt: 'Motor de busca híbrido embarcado para ecommerce. Binário único. Sem serviços externos.<br>\n    Construído com Rust · EdgeStore HNSW · SymSpell · ONNX · Axum<br><br>\n    <a href="https://github.com/gleicon/vectoria">GitHub</a> &nbsp;·&nbsp;\n    <a href="https://crates.io/crates/vectoria-core">crates.io</a> &nbsp;·&nbsp;\n    <a href="api.html">API Docs</a> &nbsp;·&nbsp;\n    <a href="quickstart.html">Quickstart</a> &nbsp;·&nbsp;\n    <a href="https://github.com/amazon-science/esci-data">Dataset ESCI</a>\n    <br><br>\n    <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">LICENÇA MIT · v0.1.8 · PROJETADO PARA CATÁLOGOS DE ATÉ 500K PRODUTOS</span>' }
+  };
+
+  var lang = localStorage.getItem('vectoria-lang') || 'en';
+
+  function applyLang(l) {
+    lang = l;
+    localStorage.setItem('vectoria-lang', l);
+    document.documentElement.lang = l === 'pt' ? 'pt-BR' : 'en';
+    document.querySelectorAll('[data-i18n]').forEach(function (el) {
+      var key = el.getAttribute('data-i18n');
+      if (T[key] && T[key][l] !== undefined) {
+        el.innerHTML = T[key][l];
+      }
+    });
+    var btn = document.getElementById('lang-toggle');
+    if (btn) {
+      btn.textContent = l === 'pt' ? 'EN' : 'PT';
+      btn.setAttribute('aria-label', l === 'pt' ? 'Switch to English' : 'Mudar para Português');
+    }
+  }
+
+  document.getElementById('lang-toggle').addEventListener('click', function () {
+    applyLang(lang === 'en' ? 'pt' : 'en');
+  });
+
+  if (lang !== 'en') applyLang(lang);
+})();
+</script>
 
 </body>
 </html>
