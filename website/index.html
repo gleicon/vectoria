@@ -25,7 +25,7 @@
     <a href="api.html">Docs</a>
   </nav>
   <div style="display:flex;align-items:center;gap:12px;">
-    <span style="color:var(--muted);font-size:0.8125rem;font-family:var(--mono);">v0.1.8</span>
+    <span style="color:var(--muted);font-size:0.8125rem;font-family:var(--mono);">v0.1.9</span>
     <button id="lang-toggle" class="lang-toggle" aria-label="Mudar para Português">PT</button>
   </div>
 </div>
@@ -110,12 +110,12 @@
 <span class="cmt"># clone and build (~60s)</span>
 <span class="prompt">$</span> <span class="cmd">git clone github.com/gleicon/vectoria</span>
 <span class="prompt">$</span> <span class="cmd">cargo build --release</span>
-<span class="out">   Compiling vectoria-core v0.1.8</span>
+<span class="out">   Compiling vectoria-core v0.1.9</span>
 <span class="out">   Finished release target in 58.4s</span>
 
 <span class="cmt"># start server</span>
 <span class="prompt">$</span> <span class="cmd">./target/release/vectoria-server</span>
-<span class="ok">INFO</span> <span class="out">vectoria v0.1.8</span>
+<span class="ok">INFO</span> <span class="out">vectoria v0.1.9</span>
 <span class="key">api_key:</span> <span class="val">a1b2c3d4e5f6...</span>
 <span class="ok">INFO</span> <span class="out">listening on http://0.0.0.0:7700</span>
 
@@ -432,14 +432,14 @@
 <span class="cmt"># clone and start — ONNX model downloads automatically on first run</span>
 <span class="prompt">$</span> <span class="cmd">git clone github.com/gleicon/vectoria &amp;&amp; cd vectoria</span>
 <span class="prompt">$</span> <span class="cmd">VECTORIA_API_KEY=my-secret-key docker compose up</span>
-<span class="ok">INFO</span> <span class="out">vectoria v0.1.8</span>
+<span class="ok">INFO</span> <span class="out">vectoria v0.1.9</span>
 <span class="key">api_key:</span> <span class="val">my-secret-key</span>
 <span class="ok">INFO</span> <span class="out">listening on http://0.0.0.0:7700</span>
 
 <span class="cmt"># background</span>
 <span class="prompt">$</span> <span class="cmd">VECTORIA_API_KEY=my-secret-key docker compose up -d</span>
 <span class="prompt">$</span> <span class="cmd">curl http://localhost:7700/health</span>
-<span class="val">{"status":"ok","version":"0.1.8"}</span>
+<span class="val">{"status":"ok","version":"0.1.9"}</span>
     </div>
   </div>
 
@@ -706,7 +706,7 @@
         </div>
         <div class="terminal-body" style="font-size:0.875rem;">
 <span class="key">[dependencies]</span>
-<span class="val">vectoria-core</span> = <span class="out">"0.1.8"</span>
+<span class="val">vectoria-core</span> = <span class="out">"0.1.9"</span>
         </div>
       </div>
 
@@ -924,7 +924,7 @@ engine.stats()?;
     <a href="quickstart.html">Quickstart</a> &nbsp;·&nbsp;
     <a href="https://github.com/amazon-science/esci-data">ESCI Dataset</a>
     <br><br>
-    <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.8 · DESIGNED FOR CATALOGS UP TO 500K PRODUCTS</span>
+    <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.9 · DESIGNED FOR CATALOGS UP TO 500K PRODUCTS</span>
   </p>
 </footer>
 
@@ -1052,7 +1052,7 @@ engine.stats()?;
     'alg-row-react':   { en: 'React demo (InstantSearch UI)',        pt: 'Demo React (InstantSearch UI)' },
     'alg-link-github': { en: 'View on GitHub →', pt: 'Ver no GitHub →' },
     'alg-link-api':    { en: 'Full API reference →', pt: 'Referência completa da API →' },
-    'footer-body': { en: 'Embedded hybrid search engine for ecommerce. Single binary. No external services.<br>\n    Built with Rust · EdgeStore HNSW · SymSpell · ONNX · Axum<br><br>\n    <a href="https://github.com/gleicon/vectoria">GitHub</a> &nbsp;·&nbsp;\n    <a href="https://crates.io/crates/vectoria-core">crates.io</a> &nbsp;·&nbsp;\n    <a href="api.html">API Docs</a> &nbsp;·&nbsp;\n    <a href="quickstart.html">Quickstart</a> &nbsp;·&nbsp;\n    <a href="https://github.com/amazon-science/esci-data">ESCI Dataset</a>\n    <br><br>\n    <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.8 · DESIGNED FOR CATALOGS UP TO 500K PRODUCTS</span>', pt: 'Motor de busca híbrido embarcado para ecommerce. Binário único. Sem serviços externos.<br>\n    Construído com Rust · EdgeStore HNSW · SymSpell · ONNX · Axum<br><br>\n    <a href="https://github.com/gleicon/vectoria">GitHub</a> &nbsp;·&nbsp;\n    <a href="https://crates.io/crates/vectoria-core">crates.io</a> &nbsp;·&nbsp;\n    <a href="api.html">API Docs</a> &nbsp;·&nbsp;\n    <a href="quickstart.html">Quickstart</a> &nbsp;·&nbsp;\n    <a href="https://github.com/amazon-science/esci-data">Dataset ESCI</a>\n    <br><br>\n    <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">LICENÇA MIT · v0.1.8 · PROJETADO PARA CATÁLOGOS DE ATÉ 500K PRODUTOS</span>' }
+    'footer-body': { en: 'Embedded hybrid search engine for ecommerce. Single binary. No external services.<br>\n    Built with Rust · EdgeStore HNSW · SymSpell · ONNX · Axum<br><br>\n    <a href="https://github.com/gleicon/vectoria">GitHub</a> &nbsp;·&nbsp;\n    <a href="https://crates.io/crates/vectoria-core">crates.io</a> &nbsp;·&nbsp;\n    <a href="api.html">API Docs</a> &nbsp;·&nbsp;\n    <a href="quickstart.html">Quickstart</a> &nbsp;·&nbsp;\n    <a href="https://github.com/amazon-science/esci-data">ESCI Dataset</a>\n    <br><br>\n    <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.9 · DESIGNED FOR CATALOGS UP TO 500K PRODUCTS</span>', pt: 'Motor de busca híbrido embarcado para ecommerce. Binário único. Sem serviços externos.<br>\n    Construído com Rust · EdgeStore HNSW · SymSpell · ONNX · Axum<br><br>\n    <a href="https://github.com/gleicon/vectoria">GitHub</a> &nbsp;·&nbsp;\n    <a href="https://crates.io/crates/vectoria-core">crates.io</a> &nbsp;·&nbsp;\n    <a href="api.html">API Docs</a> &nbsp;·&nbsp;\n    <a href="quickstart.html">Quickstart</a> &nbsp;·&nbsp;\n    <a href="https://github.com/amazon-science/esci-data">Dataset ESCI</a>\n    <br><br>\n    <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">LICENÇA MIT · v0.1.9 · PROJETADO PARA CATÁLOGOS DE ATÉ 500K PRODUTOS</span>' }
   };
 
   var lang = localStorage.getItem('vectoria-lang') || 'en';
