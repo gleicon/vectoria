@@ -1,13 +1,19 @@
-# Override for vectoria-algolia — binds port to loopback only.
+# Override for vectoria-algolia — host networking so DNS works on MGC cloud.
+# Service binds to 127.0.0.1:8108 only; nginx proxies it from outside.
 # Usage: docker compose -f docker-compose.yml -f /opt/apps/vectoria/deploy/docker-compose.algolia-override.yml up -d search loader
 
 services:
   search:
-    ports:
-      - "127.0.0.1:8108:8108"
+    network_mode: "host"
     restart: unless-stopped
+    environment:
+      HOST: "127.0.0.1"
     logging:
       driver: "json-file"
       options:
         max-size: "20m"
         max-file: "5"
+
+  loader:
+    network_mode: "host"
+    entrypoint: ["/scripts/load_products.sh", "http://127.0.0.1:8108", "products"]

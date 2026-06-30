@@ -55,6 +55,25 @@ if [[ "$MODE" == "full" || "$MODE" == "site" ]]; then
   "
 fi
 
+# ── Sync Rust source (needed for docker build) ─────────────────────────────
+if [[ "$MODE" == "full" ]]; then
+  echo "[sync] rust source..."
+  rsync -az --checksum --delete \
+    --exclude='.git/' \
+    --exclude='target/' \
+    --exclude='.claude/' \
+    --exclude='deploy/.env' \
+    --exclude='*.env' \
+    --exclude='webstore/' \
+    --exclude='website/' \
+    --exclude='data/' \
+    --exclude='logs/' \
+    --exclude='vectoria-algolia/' \
+    -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
+    "$REPO_ROOT/" \
+    "$REMOTE_USER@$REMOTE_HOST:$APP_DIR/"
+fi
+
 # ── Update nginx config if changed ────────────────────────────────────────
 if [[ "$MODE" == "full" || "$MODE" == "site" ]]; then
   echo "[nginx] checking config..."
@@ -122,4 +141,4 @@ echo ""
 echo "Deploy complete."
 echo "  https://vectoriasearch.com"
 echo "  https://demo.vectoriasearch.com"
-echo "  https://algolia.vectoriasearch.com"
+echo "  https://a.vectoriasearch.com"

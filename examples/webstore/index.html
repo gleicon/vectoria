@@ -68,14 +68,10 @@
 
 <script>
   const SERVER = window.location.hostname === 'localhost' ? 'http://localhost:7700' : '';
-  let apiKey = window.VECTORIA_API_KEY
-            || localStorage.getItem('vectoria_api_key')
-            || '';
-
-  if (!apiKey) {
-    apiKey = prompt('Vectoria API key (from server startup log or vectoria.toml):') || '';
-    if (apiKey) localStorage.setItem('vectoria_api_key', apiKey);
-  }
+  // config.js (injected by deploy) overrides this; falls back to bundled demo key
+  const apiKey = window.VECTORIA_API_KEY
+              || localStorage.getItem('vectoria_api_key')
+              || 'vectoria-demo';
 
   let currentMode = 'hybrid';
   let debounceTimer = null;

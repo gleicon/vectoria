@@ -4,7 +4,7 @@
 # Domains:
 #   vectoriasearch.com / www  →  marketing website (static files)
 #   demo.vectoriasearch.com   →  demo store (static) + API proxy → 127.0.0.1:7700
-#   algolia.vectoriasearch.com →  Algolia-compatible adapter → 127.0.0.1:8108
+#   a.vectoriasearch.com →  Algolia-compatible adapter → 127.0.0.1:8108
 
 # ── HTTP → HTTPS redirect for all vectoriasearch.com domains ───────────────
 server {
@@ -12,7 +12,7 @@ server {
     listen [::]:80;
     server_name vectoriasearch.com www.vectoriasearch.com
                 demo.vectoriasearch.com
-                algolia.vectoriasearch.com;
+                a.vectoriasearch.com;
 
     location /.well-known/acme-challenge/ {
         root /var/www/html;
@@ -33,7 +33,7 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/vectoriasearch.com/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers off;
-    ssl_session_cache shared:VecSSL:1m;
+    ssl_session_cache shared:VecSSL:10m;
     ssl_session_tickets off;
 
     access_log /var/log/nginx/vectoriasearch.com-access.log combined;
@@ -141,7 +141,7 @@ server {
     }
 }
 
-# ── algolia.vectoriasearch.com — Algolia-compatible adapter ────────────────
+# ── a.vectoriasearch.com — Algolia-compatible adapter ────────────────
 upstream vectoria_algolia {
     server 127.0.0.1:8108 fail_timeout=10s max_fails=3;
     keepalive 16;
@@ -150,7 +150,7 @@ upstream vectoria_algolia {
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name algolia.vectoriasearch.com;
+    server_name a.vectoriasearch.com;
 
     ssl_certificate     /etc/letsencrypt/live/vectoriasearch.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/vectoriasearch.com/privkey.pem;
@@ -165,8 +165,8 @@ server {
     ssl_stapling_verify on;
     resolver 8.8.8.8 8.8.4.4 valid=300s;
 
-    access_log /var/log/nginx/algolia.vectoriasearch.com-access.log combined;
-    error_log  /var/log/nginx/algolia.vectoriasearch.com-error.log warn;
+    access_log /var/log/nginx/a.vectoriasearch.com-access.log combined;
+    error_log  /var/log/nginx/a.vectoriasearch.com-error.log warn;
 
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
     add_header X-Frame-Options "SAMEORIGIN" always;

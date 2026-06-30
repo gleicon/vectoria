@@ -125,6 +125,49 @@ body {
 .btn-primary:hover { background: var(--primary-hover); }
 .btn-outline { background: #ffffff; color: var(--text); border: 1px solid var(--border); }
 .btn-outline:hover { border-color: var(--border2); background: var(--bg2); }
+.btn-demo { background: var(--green); color: #fff; }
+.btn-demo:hover { background: #15803d; }
+
+/* demo banner — full-width container, inner content centered */
+.demo-banner {
+  background: rgba(22,163,74,0.06);
+  border-top: 1px solid rgba(22,163,74,0.2);
+  border-bottom: 1px solid rgba(22,163,74,0.2);
+  padding: 14px 24px;
+}
+.demo-banner-inner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 860px;
+  margin: 0 auto;
+  font-size: 0.9rem;
+  color: var(--text2);
+  flex-wrap: wrap;
+}
+.demo-banner-label {
+  flex-shrink: 0;
+  background: var(--green);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 4px;
+}
+.demo-banner-links {
+  margin-left: auto;
+  display: flex;
+  gap: 20px;
+  flex-shrink: 0;
+}
+.demo-banner-link {
+  color: var(--green);
+  font-weight: 600;
+  text-decoration: none;
+}
+.demo-banner-link:hover { text-decoration: underline; }
 
 /* ── terminal / code blocks — always dark ── */
 .terminal {

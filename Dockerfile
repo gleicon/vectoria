@@ -1,5 +1,5 @@
 # ── Stage 1: Build ────────────────────────────────────────────────────────────
-FROM rust:1.80-slim-bookworm AS builder
+FROM rust:1-slim-bookworm AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev cmake g++ \
@@ -19,6 +19,12 @@ RUN mkdir -p vectoria-core/src vectoria-server/src vectoria-cli/src \
     && echo "" > vectoria-core/src/lib.rs \
     && cargo build --release -p vectoria-server -p vectoria-cli 2>/dev/null || true \
     && rm -rf vectoria-core/src vectoria-server/src vectoria-cli/src
+
+# edgestore-1.0.4: as_raw_fd() returns i32 not Result; if-let-Ok is a type error on Rust 1.88.
+RUN F=$(find /usr/local/cargo/registry/src -name fdp_backend.rs -path "*/edgestore-1.0.4/*" 2>/dev/null | head -1) && \
+    [ -n "$F" ] && \
+    sed -i 's/if let Ok(_fd) = std::os::fd::AsRawFd::as_raw_fd(/{ let _fd = std::os::fd::AsRawFd::as_raw_fd(/' "$F" && \
+    sed -E -i 's/^([[:space:]]*)\) \{$/\1);/' "$F" || true
 
 COPY vectoria-core/src/ vectoria-core/src/
 COPY vectoria-server/src/ vectoria-server/src/

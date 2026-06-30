@@ -58,28 +58,35 @@ Service(
     sudo=True,
 )
 
-# ── Website static files ───────────────────────────────────────────────────
-File(
-    path=f"{APP_DIR}/website",
-    src="website/",
+# ── Full repo sync (source required for docker build) ─────────────────────
+# Excludes build cache, git history, secrets, and server-managed dirs that
+# must NOT be deleted by --delete (webstore/website are synced separately below).
+Exec(
+    f"rsync -az --checksum --delete "
+    f"  --exclude='.git/' --exclude='target/' --exclude='.claude/' "
+    f"  --exclude='deploy/.env' --exclude='*.env' "
+    f"  --exclude='webstore/' --exclude='website/' "
+    f"  --exclude='data/' --exclude='logs/' --exclude='vectoria-algolia/' "
+    f"  -e 'ssh -i ~/.ssh/id_rsa_mgc_saas_apps -o StrictHostKeyChecking=no' "
+    f"  ./ ubuntu@169.150.1.130:{APP_DIR}/",
     plan=plan,
-    name="website-files",
+    name="source-sync",
 )
 
-# ── Webstore static files ──────────────────────────────────────────────────
-File(
-    path=f"{APP_DIR}/webstore",
-    src="examples/webstore/",
+Exec(
+    f"rsync -az --checksum --delete "
+    f"  -e 'ssh -i ~/.ssh/id_rsa_mgc_saas_apps -o StrictHostKeyChecking=no' "
+    f"  website/ ubuntu@169.150.1.130:{APP_DIR}/website/",
     plan=plan,
-    name="webstore-files",
+    name="website-sync",
 )
 
-# ── Deploy config ──────────────────────────────────────────────────────────
-File(
-    path=f"{APP_DIR}/deploy",
-    src="deploy/",
+Exec(
+    f"rsync -az --checksum --delete "
+    f"  -e 'ssh -i ~/.ssh/id_rsa_mgc_saas_apps -o StrictHostKeyChecking=no' "
+    f"  examples/webstore/ ubuntu@169.150.1.130:{APP_DIR}/webstore/",
     plan=plan,
-    name="deploy-config",
+    name="webstore-sync",
 )
 
 # ── vectoria-algolia clone ─────────────────────────────────────────────────
@@ -117,4 +124,27 @@ Exec(
     f"echo \"window.VECTORIA_API_KEY = '${{VECTORIA_API_KEY}}';\" > {APP_DIR}/webstore/config.js",
     plan=plan,
     name="webstore-config",
+)
+
+# ── Load demo products into vectoria-server ────────────────────────────────
+# Reads batch.json from vectoria-algolia (same product set) and POSTs to /products.
+# Safe to re-run — vectoria-server upserts on id.
+Exec(
+    f"python3 - <<'PYEOF'\n"
+    f"import json, urllib.request, urllib.error\n"
+    f"with open('{APP_DIR}/vectoria-algolia/scripts/batch.json') as f: data = json.load(f)\n"
+    f"SERVER = 'http://127.0.0.1:7700'\n"
+    f"API_KEY = next((l.split('=',1)[1].strip().strip('\"') for l in open('{APP_DIR}/.env').read().splitlines() if l.startswith('VECTORIA_API_KEY')), 'vectoria-demo')\n"
+    f"ok = 0\n"
+    f"for req in data['requests']:\n"
+    f"    body = req['body']\n"
+    f"    text = ' '.join(filter(None, [body.get('title',''), body.get('brand',''), body.get('category',''), body.get('description','')]))\n"
+    f"    product = json.dumps({{'id': body['objectID'], 'text': text, 'metadata': body}}).encode()\n"
+    f"    r = urllib.request.Request(f'{{SERVER}}/products', data=product, headers={{'Content-Type': 'application/json', 'Authorization': f'Bearer {{API_KEY}}'}}, method='POST')\n"
+    f"    try: urllib.request.urlopen(r); ok += 1\n"
+    f"    except: pass\n"
+    f"print(f'{{ok}} products indexed into vectoria-server.')\n"
+    f"PYEOF",
+    plan=plan,
+    name="load-products",
 )
