@@ -17,6 +17,7 @@ services:
     environment:
       VECTORIA_API_KEY: ${VECTORIA_API_KEY}
       VECTORIA_STORAGE_PATH: /data/vectoria.db
+      VECTORIA_VECTOR_BACKEND: edgestore-hnsw
       VECTORIA_EMBEDDING_PROVIDER: local
       VECTORIA_EMBEDDING_MODEL: multilingual-e5-small
       VECTORIA_SKIP_CONSENT: "1"

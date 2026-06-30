@@ -7,28 +7,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 
-# Cache dependency compilation: copy manifests first, then build deps only.
 COPY Cargo.toml Cargo.lock ./
-COPY vectoria-core/Cargo.toml vectoria-core/
-COPY vectoria-server/Cargo.toml vectoria-server/
-COPY vectoria-cli/Cargo.toml vectoria-cli/
-
-RUN mkdir -p vectoria-core/src vectoria-server/src vectoria-cli/src \
-    && echo "pub fn main() {}" > vectoria-server/src/main.rs \
-    && echo "pub fn main() {}" > vectoria-cli/src/main.rs \
-    && echo "" > vectoria-core/src/lib.rs \
-    && cargo build --release -p vectoria-server -p vectoria-cli 2>/dev/null || true \
-    && rm -rf vectoria-core/src vectoria-server/src vectoria-cli/src
-
-# edgestore-1.0.4: as_raw_fd() returns i32 not Result; if-let-Ok is a type error on Rust 1.88.
-RUN F=$(find /usr/local/cargo/registry/src -name fdp_backend.rs -path "*/edgestore-1.0.4/*" 2>/dev/null | head -1) && \
-    [ -n "$F" ] && \
-    sed -i 's/if let Ok(_fd) = std::os::fd::AsRawFd::as_raw_fd(/{ let _fd = std::os::fd::AsRawFd::as_raw_fd(/' "$F" && \
-    sed -E -i 's/^([[:space:]]*)\) \{$/\1);/' "$F" || true
-
-COPY vectoria-core/src/ vectoria-core/src/
-COPY vectoria-server/src/ vectoria-server/src/
-COPY vectoria-cli/src/ vectoria-cli/src/
+COPY vectoria-core/ vectoria-core/
+COPY vectoria-server/ vectoria-server/
+COPY vectoria-cli/ vectoria-cli/
 
 RUN cargo build --release -p vectoria-server -p vectoria-cli
 

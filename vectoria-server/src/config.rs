@@ -136,6 +136,7 @@ impl VectoriaConfig {
         if let Ok(v) = std::env::var("VECTORIA_API_KEY") { cfg.server.api_key = Some(v); }
         if std::env::var("VECTORIA_SKIP_CONSENT").as_deref() == Ok("1") { cfg.server.skip_consent = true; }
         if let Ok(v) = std::env::var("VECTORIA_STORAGE_PATH") { cfg.storage.path = v.into(); }
+        if let Ok(v) = std::env::var("VECTORIA_VECTOR_BACKEND") { cfg.index.vector_backend = v; }
         if let Ok(v) = std::env::var("VECTORIA_EMBEDDING_PROVIDER") { cfg.embedding.provider = v; }
         if let Ok(v) = std::env::var("VECTORIA_EMBEDDING_BASE_URL") { cfg.embedding.base_url = Some(v); }
         if let Ok(v) = std::env::var("VECTORIA_EMBEDDING_MODEL") { cfg.embedding.model = v; }

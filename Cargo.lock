@@ -1192,9 +1192,9 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "edgestore"
-version = "1.0.4"
+version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "043c5d1a30b2b92555aeab9338e75c7baed1499b78a3581d7572201efe2bcd2a"
+checksum = "2ace8a59ed6c43c706214e16b3b88c097023f37ac38ca3d325937d9b46f6b02a"
 dependencies = [
  "blake3",
  "byteorder",
@@ -4479,7 +4479,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "vectoria-cli"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "anyhow",
  "arrow",
@@ -4499,7 +4499,7 @@ dependencies = [
 
 [[package]]
 name = "vectoria-core"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4521,7 +4521,7 @@ dependencies = [
 
 [[package]]
 name = "vectoria-server"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "anyhow",
  "async-trait",
