@@ -123,7 +123,7 @@ server {
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
     # Vectoria API — proxy to vectoria-server container
-    location ~ ^/(search|products|events|stats|health|admin|indexes)(/.*)?$ {
+    location ~ ^/(search|products|events|stats|health|indexes)(/.*)?$ {
         proxy_pass http://vectoria_api;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

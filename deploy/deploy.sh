@@ -17,7 +17,6 @@ SSH_KEY="$HOME/.ssh/id_rsa_mgc_saas_apps"
 APP_DIR="/opt/apps/vectoria"
 
 SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST"
-RSYNC="rsync -az --checksum --delete -e 'ssh -i $SSH_KEY -o StrictHostKeyChecking=no'"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -95,8 +94,6 @@ if [[ "$MODE" == "full" ]]; then
   echo "[docker] rebuilding vectoria-server..."
   $SSH "
     cd $APP_DIR
-    # Sync source for rebuild
-    echo '  pulling latest Rust source is handled via rsync from caller...'
     sudo docker compose -f deploy/docker-compose.prod.yml --env-file .env \
       up -d --build --remove-orphans
     echo '  vectoria-server restarted.'

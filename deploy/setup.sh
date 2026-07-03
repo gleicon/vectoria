@@ -182,7 +182,8 @@ for req in data['requests']:
     r = urllib.request.Request(f'{SERVER}/products', data=product, headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {API_KEY}'}, method='POST')
     try:
         urllib.request.urlopen(r); ok += 1
-    except: pass
+    except Exception as e:
+        print(f'  error indexing {body.get("objectID","?")}: {e}')
 print(f'  {ok} products indexed into vectoria-server.')
 PYEOF
 "
