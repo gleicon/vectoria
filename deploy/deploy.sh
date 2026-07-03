@@ -116,23 +116,28 @@ fi
 
 # ── Health checks ──────────────────────────────────────────────────────────
 echo "[health] checking services..."
-$SSH "
-  # vectoria-server
-  for i in \$(seq 1 12); do
-    curl -sf http://127.0.0.1:7700/health >/dev/null 2>&1 && break
-    sleep 5
-  done
-  STATUS=\$(curl -sf http://127.0.0.1:7700/health 2>/dev/null || echo 'DOWN')
-  echo \"  vectoria-server: \$STATUS\"
+if [[ "$MODE" == "full" ]]; then
+  $SSH "
+    for i in \$(seq 1 12); do
+      curl -sf http://127.0.0.1:7700/health >/dev/null 2>&1 && break
+      sleep 5
+    done
+    STATUS=\$(curl -sf http://127.0.0.1:7700/health 2>/dev/null || echo 'DOWN')
+    echo \"  vectoria-server: \$STATUS\"
 
-  # vectoria-algolia
-  for i in \$(seq 1 6); do
-    curl -sf http://127.0.0.1:8108/health >/dev/null 2>&1 && break
-    sleep 5
-  done
-  ALG_STATUS=\$(curl -sf http://127.0.0.1:8108/health 2>/dev/null || echo 'DOWN')
-  echo \"  vectoria-algolia: \$ALG_STATUS\"
-"
+    for i in \$(seq 1 6); do
+      curl -sf http://127.0.0.1:8108/health >/dev/null 2>&1 && break
+      sleep 5
+    done
+    ALG_STATUS=\$(curl -sf http://127.0.0.1:8108/health 2>/dev/null || echo 'DOWN')
+    echo \"  vectoria-algolia: \$ALG_STATUS\"
+  "
+else
+  $SSH "
+    STATUS=\$(curl -sf http://127.0.0.1:7700/health 2>/dev/null || echo 'DOWN')
+    echo \"  vectoria-server: \$STATUS\"
+  "
+fi
 
 echo ""
 echo "Deploy complete."
