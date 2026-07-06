@@ -120,7 +120,7 @@ impl SearchEngine {
         product.status = ProductStatus::Indexed;
         self.storage.put_product(&product).await?;
 
-        self.storage.index_text(&product.id, &product_text).await?;
+        self.storage.index_text(&product.id, &product_text, &product.metadata).await?;
         self.autocomplete_bm25.upsert(&product.id, &product_text);
         self.spell.add_text(&product_text);
         Ok(())
@@ -182,7 +182,7 @@ impl SearchEngine {
         let mut spell_corrected = false;
         let mut query_expanded = false;
         if matches!(req.mode, SearchMode::Hybrid | SearchMode::Bm25) {
-            let bm25_results = self.storage.search_text(&req.q, candidate_k).await.unwrap_or_default();
+            let bm25_results = self.storage.search_text(&req.q, candidate_k, req.filters.as_ref()).await.unwrap_or_default();
 
             let base_q = if bm25_results.is_empty() {
                 let corrected = self.spell.correct(&req.q);
@@ -210,7 +210,7 @@ impl SearchEngine {
                 base_q.clone()
             };
             let final_bm25 = if expanded_q != req.q {
-                self.storage.search_text(&expanded_q, candidate_k).await.unwrap_or_default()
+                self.storage.search_text(&expanded_q, candidate_k, req.filters.as_ref()).await.unwrap_or_default()
             } else {
                 bm25_results
             };

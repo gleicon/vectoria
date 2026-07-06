@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::RwLock;
 
+
 #[derive(Default)]
 pub struct MemoryStorage {
     products: RwLock<HashMap<String, Product>>,
@@ -96,12 +97,17 @@ impl StorageEngine for MemoryStorage {
         })
     }
 
-    async fn index_text(&self, id: &str, text: &str) -> Result<()> {
+    async fn index_text(&self, id: &str, text: &str, _metadata: &serde_json::Value) -> Result<()> {
         self.bm25.upsert(id, text);
         Ok(())
     }
 
-    async fn search_text(&self, query: &str, limit: usize) -> Result<Vec<(String, f32)>> {
+    async fn search_text(
+        &self,
+        query: &str,
+        limit: usize,
+        _filters: Option<&HashMap<String, serde_json::Value>>,
+    ) -> Result<Vec<(String, f32)>> {
         Ok(self.bm25.search(query, limit))
     }
 

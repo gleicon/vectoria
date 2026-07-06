@@ -24,16 +24,23 @@ pub trait StorageEngine: Send + Sync {
         Ok(HashMap::new())
     }
 
-    /// Index a product's text for full-text search. Implementations that persist
-    /// the BM25 index (e.g. EdgeStore) override this; memory backend no-ops here
-    /// and uses its own in-process index.
-    async fn index_text(&self, _id: &str, _text: &str) -> Result<()> {
+    /// Index a product's text for full-text search. `metadata` is passed so
+    /// implementations that support faceted filtering (e.g. EdgeStore) can
+    /// extract structured fields for pre-search narrowing.
+    async fn index_text(&self, _id: &str, _text: &str, _metadata: &serde_json::Value) -> Result<()> {
         Ok(())
     }
 
-    /// Search the persistent text index. Returns scored (id, score) pairs.
-    /// Returns empty vec for backends that don't persist text (memory backend).
-    async fn search_text(&self, _query: &str, _limit: usize) -> Result<Vec<(String, f32)>> {
+    /// Search the persistent text index. `filters` is the same map from
+    /// SearchRequest; equality-capable backends apply it as facet pre-filtering.
+    /// Range filters (`price_min`/`price_max`) are handled post-search by
+    /// `matches_filters()` regardless.
+    async fn search_text(
+        &self,
+        _query: &str,
+        _limit: usize,
+        _filters: Option<&HashMap<String, serde_json::Value>>,
+    ) -> Result<Vec<(String, f32)>> {
         Ok(vec![])
     }
 

@@ -2,7 +2,7 @@ use super::{ProductSignals, StorageEngine, StorageStats};
 use crate::model::{Event, EventType, Product};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use edgestore::{EdgestoreConfig, Engine, SearchOptions, TextEngine};
+use edgestore::{EdgestoreConfig, Engine, FacetFilter, FacetValue, SearchOptions, TextEngine};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -214,29 +214,36 @@ impl StorageEngine for EdgeStoreStorage {
         Ok(result)
     }
 
-    async fn index_text(&self, id: &str, text: &str) -> Result<()> {
+    async fn index_text(&self, id: &str, text: &str, metadata: &serde_json::Value) -> Result<()> {
         let key = id.as_bytes().to_vec();
         let text = text.to_string();
+        let facets = extract_facets(metadata);
         let engine = Arc::clone(&self.engine);
         tokio::task::spawn_blocking(move || {
             engine
                 .lock()
                 .unwrap()
-                .index_text(NS_TEXT, &key, &text, HashMap::new())
+                .index_text(NS_TEXT, &key, &text, facets)
                 .context("index_text failed")
         })
         .await??;
         Ok(())
     }
 
-    async fn search_text(&self, query: &str, limit: usize) -> Result<Vec<(String, f32)>> {
+    async fn search_text(
+        &self,
+        query: &str,
+        limit: usize,
+        filters: Option<&HashMap<String, serde_json::Value>>,
+    ) -> Result<Vec<(String, f32)>> {
         let query = query.to_string();
+        let facet_filters = filters.map(to_facet_filters).unwrap_or_default();
         let engine = Arc::clone(&self.engine);
         let results = tokio::task::spawn_blocking(move || {
             engine.lock().unwrap().search_text_with_options(
                 NS_TEXT,
                 &query,
-                &SearchOptions { k: limit, typo_tolerance: false, ..Default::default() },
+                &SearchOptions { k: limit, typo_tolerance: false, facet_filters },
             )
             .context("search_text failed")
         })
@@ -260,4 +267,40 @@ impl StorageEngine for EdgeStoreStorage {
         .await??;
         Ok(())
     }
+}
+
+/// Extract simple scalar metadata fields as EdgeStore facets.
+/// Skips nested objects, arrays, and null — those can't be faceted.
+fn extract_facets(metadata: &serde_json::Value) -> HashMap<String, FacetValue> {
+    let Some(obj) = metadata.as_object() else { return HashMap::new() };
+    obj.iter()
+        .filter_map(|(k, v)| {
+            let fv = match v {
+                serde_json::Value::String(s) => FacetValue::String(s.clone()),
+                serde_json::Value::Bool(b) => FacetValue::Bool(*b),
+                serde_json::Value::Number(n) => FacetValue::Number(n.as_i64()?),
+                _ => return None,
+            };
+            Some((k.clone(), fv))
+        })
+        .collect()
+}
+
+/// Convert search-request filters to EdgeStore FacetFilters.
+/// Skips range-style keys (`price_min`, `price_max`) — those are handled
+/// post-search by `matches_filters()`. Skips non-scalar filter values.
+fn to_facet_filters(filters: &HashMap<String, serde_json::Value>) -> Vec<FacetFilter> {
+    filters
+        .iter()
+        .filter(|(k, _)| *k != "price_min" && *k != "price_max")
+        .filter_map(|(k, v)| {
+            let fv = match v {
+                serde_json::Value::String(s) => FacetValue::String(s.clone()),
+                serde_json::Value::Bool(b) => FacetValue::Bool(*b),
+                serde_json::Value::Number(n) => FacetValue::Number(n.as_i64()?),
+                _ => return None,
+            };
+            Some(FacetFilter { field: k.clone(), value: fv })
+        })
+        .collect()
 }
