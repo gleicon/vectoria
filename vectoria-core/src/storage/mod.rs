@@ -61,7 +61,10 @@ pub struct ProductSignals {
     pub conversion_rate: f32,
 }
 
+/// Stats snapshot from a storage backend. Marked non-exhaustive so adding
+/// fields in future versions does not break external StorageEngine implementors.
 #[derive(Debug, Default)]
+#[non_exhaustive]
 pub struct StorageStats {
     pub product_count: u64,
     pub event_count: u64,

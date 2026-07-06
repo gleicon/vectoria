@@ -14,6 +14,7 @@ use crate::{
     vector::VectorIndex,
 };
 use anyhow::{bail, Result};
+use bm25_index::Bm25Index;
 use query_cache::QueryResultCache;
 use reranker::CrossEncoderReranker;
 use scoring::{
@@ -36,6 +37,9 @@ pub struct SearchEngine {
     vector_index: Arc<dyn VectorIndex>,
     embedding: Arc<dyn EmbeddingProvider>,
     default_weights: RankingWeights,
+    /// In-memory word corpus for autocomplete only. Populated on every index/delete
+    /// call so word-prefix suggestions work regardless of storage backend.
+    autocomplete_bm25: Arc<Bm25Index>,
     spell: Arc<SpellCorrector>,
     reranker: Option<Arc<CrossEncoderReranker>>,
     query_cache: Option<Arc<QueryResultCache>>,
@@ -56,6 +60,7 @@ impl SearchEngine {
             vector_index,
             embedding,
             default_weights,
+            autocomplete_bm25: Arc::new(Bm25Index::new()),
             spell: Arc::new(SpellCorrector::new()),
             reranker: None,
             query_cache: None,
@@ -116,6 +121,7 @@ impl SearchEngine {
         self.storage.put_product(&product).await?;
 
         self.storage.index_text(&product.id, &product_text).await?;
+        self.autocomplete_bm25.upsert(&product.id, &product_text);
         self.spell.add_text(&product_text);
         Ok(())
     }
@@ -127,6 +133,7 @@ impl SearchEngine {
         self.storage.delete_product(id).await?;
         self.vector_index.delete(id).await?;
         self.storage.delete_text(id).await?;
+        self.autocomplete_bm25.remove(id);
         Ok(())
     }
 
@@ -349,7 +356,7 @@ impl SearchEngine {
     }
 
     pub fn autocomplete(&self, prefix: &str, limit: usize) -> Vec<String> {
-        self.storage.suggest_text(prefix, limit)
+        self.autocomplete_bm25.suggest(prefix, limit)
     }
 
     async fn expand_query_terms(
