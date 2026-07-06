@@ -1,5 +1,6 @@
 use super::{ProductSignals, StorageEngine, StorageStats};
 use crate::model::{Event, Product};
+use crate::search::bm25_index::Bm25Index;
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -10,6 +11,7 @@ pub struct MemoryStorage {
     products: RwLock<HashMap<String, Product>>,
     events: RwLock<Vec<Event>>,
     signals_cache: RwLock<HashMap<String, ProductSignals>>,
+    bm25: Bm25Index,
 }
 
 impl MemoryStorage {
@@ -90,6 +92,25 @@ impl StorageEngine for MemoryStorage {
             product_count: self.products.read().unwrap().len() as u64,
             event_count: self.events.read().unwrap().len() as u64,
             storage_bytes: 0,
+            text_document_count: self.bm25.len() as u64,
         })
+    }
+
+    async fn index_text(&self, id: &str, text: &str) -> Result<()> {
+        self.bm25.upsert(id, text);
+        Ok(())
+    }
+
+    async fn search_text(&self, query: &str, limit: usize) -> Result<Vec<(String, f32)>> {
+        Ok(self.bm25.search(query, limit))
+    }
+
+    async fn delete_text(&self, id: &str) -> Result<()> {
+        self.bm25.remove(id);
+        Ok(())
+    }
+
+    fn suggest_text(&self, prefix: &str, limit: usize) -> Vec<String> {
+        self.bm25.suggest(prefix, limit)
     }
 }

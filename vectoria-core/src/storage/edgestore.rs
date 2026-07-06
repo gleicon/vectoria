@@ -2,7 +2,7 @@ use super::{ProductSignals, StorageEngine, StorageStats};
 use crate::model::{Event, EventType, Product};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use edgestore::{EdgestoreConfig, Engine};
+use edgestore::{EdgestoreConfig, Engine, SearchOptions, TextEngine};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 const NS_PRODUCTS: &[u8] = b"products";
 const NS_EVENTS: &[u8] = b"events";
 const NS_SIGNALS: &[u8] = b"signals";
+const NS_TEXT: &[u8] = b"text";
 // Key: {query_bytes}\x00{product_id_bytes}, Value: u64 LE count.
 // Null-byte separator is safe: JSON strings never contain \x00.
 const NS_CTRS: &[u8] = b"ctrs";
@@ -105,13 +106,22 @@ impl StorageEngine for EdgeStoreStorage {
         let engine = Arc::clone(&self.engine);
         tokio::task::spawn_blocking(move || {
             let mut eng = engine.lock().unwrap();
-            eng.put(NS_EVENTS, &key, &value).context("put_event failed")?;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as i64;
             if let Some(ck) = ctr_key {
+                // Atomic: event record + CTR increment in one transaction.
                 let count = eng.get(NS_CTRS, &ck)?
                     .and_then(|b| <[u8; 8]>::try_from(b).ok())
                     .map(u64::from_le_bytes)
                     .unwrap_or(0);
-                eng.put(NS_CTRS, &ck, &(count + 1).to_le_bytes()).context("put_ctr failed")?;
+                let mut tx = eng.begin();
+                tx.put(NS_EVENTS, &key, &value, 0, now).context("tx event put failed")?;
+                tx.put(NS_CTRS, &ck, &(count + 1).to_le_bytes(), 0, now).context("tx ctr put failed")?;
+                eng.commit_transaction(tx).context("put_event transaction failed")?;
+            } else {
+                eng.put(NS_EVENTS, &key, &value).context("put_event failed")?;
             }
             Ok::<_, anyhow::Error>(())
         })
@@ -193,9 +203,61 @@ impl StorageEngine for EdgeStoreStorage {
             let eng = engine.lock().unwrap();
             let product_count = eng.prefix(NS_PRODUCTS, b"").context("stats: prefix products")?.len() as u64;
             let event_count   = eng.prefix(NS_EVENTS,   b"").context("stats: prefix events")?.len() as u64;
-            Ok(StorageStats { product_count, event_count, storage_bytes: crate::dir_bytes(eng.db_path()) })
+            Ok(StorageStats {
+                product_count,
+                event_count,
+                storage_bytes: crate::dir_bytes(eng.db_path()),
+                text_document_count: product_count,
+            })
         })
         .await??;
         Ok(result)
+    }
+
+    async fn index_text(&self, id: &str, text: &str) -> Result<()> {
+        let key = id.as_bytes().to_vec();
+        let text = text.to_string();
+        let engine = Arc::clone(&self.engine);
+        tokio::task::spawn_blocking(move || {
+            engine
+                .lock()
+                .unwrap()
+                .index_text(NS_TEXT, &key, &text, HashMap::new())
+                .context("index_text failed")
+        })
+        .await??;
+        Ok(())
+    }
+
+    async fn search_text(&self, query: &str, limit: usize) -> Result<Vec<(String, f32)>> {
+        let query = query.to_string();
+        let engine = Arc::clone(&self.engine);
+        let results = tokio::task::spawn_blocking(move || {
+            engine.lock().unwrap().search_text_with_options(
+                NS_TEXT,
+                &query,
+                &SearchOptions { k: limit, typo_tolerance: false, ..Default::default() },
+            )
+            .context("search_text failed")
+        })
+        .await??;
+        Ok(results
+            .into_iter()
+            .map(|r| (String::from_utf8_lossy(&r.doc_id).into_owned(), r.score))
+            .collect())
+    }
+
+    async fn delete_text(&self, id: &str) -> Result<()> {
+        let key = id.as_bytes().to_vec();
+        let engine = Arc::clone(&self.engine);
+        tokio::task::spawn_blocking(move || {
+            engine
+                .lock()
+                .unwrap()
+                .delete_text(NS_TEXT, &key)
+                .context("delete_text failed")
+        })
+        .await??;
+        Ok(())
     }
 }

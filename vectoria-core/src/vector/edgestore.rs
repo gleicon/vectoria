@@ -18,7 +18,10 @@ pub struct EdgeStoreVectorIndex {
 impl EdgeStoreVectorIndex {
     pub fn open(path: impl AsRef<Path>, model_id: Option<String>, dims: Option<usize>) -> Result<Self> {
         let config = EdgestoreConfig::new(path.as_ref());
-        let engine = Engine::open(config).context("failed to open EdgeStore vector index")?;
+        let mut engine = Engine::open(config).context("failed to open EdgeStore vector index")?;
+        // Warm HNSW index into RAM so the first search after startup isn't cold.
+        // Ignore error — a missing or empty index is fine (first run, no vectors yet).
+        let _ = engine.preload_vector_index(NS_VECTORS);
         // count starts at 0 and is incremented/decremented on upsert/delete.
         // It is NOT seeded from disk, so GET /stats vector_count is 0 until the
         // first write after startup. Search and ranking are unaffected.

@@ -23,6 +23,30 @@ pub trait StorageEngine: Send + Sync {
     async fn get_query_ctrs(&self, _query: &str) -> Result<HashMap<String, f32>> {
         Ok(HashMap::new())
     }
+
+    /// Index a product's text for full-text search. Implementations that persist
+    /// the BM25 index (e.g. EdgeStore) override this; memory backend no-ops here
+    /// and uses its own in-process index.
+    async fn index_text(&self, _id: &str, _text: &str) -> Result<()> {
+        Ok(())
+    }
+
+    /// Search the persistent text index. Returns scored (id, score) pairs.
+    /// Returns empty vec for backends that don't persist text (memory backend).
+    async fn search_text(&self, _query: &str, _limit: usize) -> Result<Vec<(String, f32)>> {
+        Ok(vec![])
+    }
+
+    /// Remove a product from the persistent text index.
+    async fn delete_text(&self, _id: &str) -> Result<()> {
+        Ok(())
+    }
+
+    /// Word-prefix autocomplete from the indexed corpus. Sync — no I/O needed
+    /// for memory-backed implementations; EdgeStore returns empty (no word index).
+    fn suggest_text(&self, _prefix: &str, _limit: usize) -> Vec<String> {
+        vec![]
+    }
 }
 
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize, Clone)]
@@ -42,6 +66,9 @@ pub struct StorageStats {
     pub product_count: u64,
     pub event_count: u64,
     pub storage_bytes: u64,
+    /// Number of documents in the text index. Equals product_count for EdgeStore;
+    /// tracks the in-process BM25 corpus size for the memory backend.
+    pub text_document_count: u64,
 }
 
 pub mod edgestore;

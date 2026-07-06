@@ -1192,18 +1192,20 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "edgestore"
-version = "1.0.6"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c99626fffe4dd19aae77975be13391064e75a1122010a3ce4233442d6f8869ff"
+checksum = "94095f56eff3fd068aba64ae56babaccdb1a9da50ca040a434c84ec1e9fa5eb3"
 dependencies = [
  "blake3",
  "byteorder",
  "crc32c",
  "fs2",
+ "hex",
  "lazy_static",
  "log",
  "lz4_flex 0.13.1",
  "serde",
+ "serde_bytes",
  "serde_json",
  "wide",
  "xorf",
@@ -1813,6 +1815,12 @@ name = "hermit-abi"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c"
+
+[[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hf-hub"

@@ -14,7 +14,6 @@ use crate::{
     vector::VectorIndex,
 };
 use anyhow::{bail, Result};
-use bm25_index::Bm25Index;
 use query_cache::QueryResultCache;
 use reranker::CrossEncoderReranker;
 use scoring::{
@@ -37,7 +36,6 @@ pub struct SearchEngine {
     vector_index: Arc<dyn VectorIndex>,
     embedding: Arc<dyn EmbeddingProvider>,
     default_weights: RankingWeights,
-    bm25: Arc<Bm25Index>,
     spell: Arc<SpellCorrector>,
     reranker: Option<Arc<CrossEncoderReranker>>,
     query_cache: Option<Arc<QueryResultCache>>,
@@ -58,7 +56,6 @@ impl SearchEngine {
             vector_index,
             embedding,
             default_weights,
-            bm25: Arc::new(Bm25Index::new()),
             spell: Arc::new(SpellCorrector::new()),
             reranker: None,
             query_cache: None,
@@ -118,7 +115,7 @@ impl SearchEngine {
         product.status = ProductStatus::Indexed;
         self.storage.put_product(&product).await?;
 
-        self.bm25.upsert(&product.id, &product_text);
+        self.storage.index_text(&product.id, &product_text).await?;
         self.spell.add_text(&product_text);
         Ok(())
     }
@@ -129,7 +126,7 @@ impl SearchEngine {
         // resurrect a product that was already removed from the source of truth.
         self.storage.delete_product(id).await?;
         self.vector_index.delete(id).await?;
-        self.bm25.remove(id);
+        self.storage.delete_text(id).await?;
         Ok(())
     }
 
@@ -178,7 +175,7 @@ impl SearchEngine {
         let mut spell_corrected = false;
         let mut query_expanded = false;
         if matches!(req.mode, SearchMode::Hybrid | SearchMode::Bm25) {
-            let bm25_results = self.bm25.search(&req.q, candidate_k);
+            let bm25_results = self.storage.search_text(&req.q, candidate_k).await.unwrap_or_default();
 
             let base_q = if bm25_results.is_empty() {
                 let corrected = self.spell.correct(&req.q);
@@ -206,7 +203,7 @@ impl SearchEngine {
                 base_q.clone()
             };
             let final_bm25 = if expanded_q != req.q {
-                self.bm25.search(&expanded_q, candidate_k)
+                self.storage.search_text(&expanded_q, candidate_k).await.unwrap_or_default()
             } else {
                 bm25_results
             };
@@ -352,7 +349,7 @@ impl SearchEngine {
     }
 
     pub fn autocomplete(&self, prefix: &str, limit: usize) -> Vec<String> {
-        self.bm25.suggest(prefix, limit)
+        self.storage.suggest_text(prefix, limit)
     }
 
     async fn expand_query_terms(
@@ -403,7 +400,7 @@ impl SearchEngine {
             event_count: storage_stats.event_count,
             storage_bytes: storage_stats.storage_bytes,
             vector_count: vector_stats.vector_count,
-            bm25_document_count: self.bm25.len() as u64,
+            bm25_document_count: storage_stats.text_document_count,
             model_id: self.embedding.model_id().to_string(),
             dims: self.embedding.dims(),
             query_count,
