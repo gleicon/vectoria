@@ -10,9 +10,11 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY vectoria-core/ vectoria-core/
 COPY vectoria-server/ vectoria-server/
+# CLI manifest copied for workspace resolution; not compiled (-p vectoria-server only)
+# Skipping -p vectoria-cli avoids parquet/arrow deps (~15min extra build time)
 COPY vectoria-cli/ vectoria-cli/
 
-RUN cargo build --release -p vectoria-server -p vectoria-cli
+RUN cargo build --release -p vectoria-server
 
 # ── Stage 2: Runtime (full — ONNX model downloaded at first start) ────────────
 FROM debian:bookworm-slim AS vectoria-full
@@ -22,7 +24,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/target/release/vectoria-server /usr/local/bin/vectoria-server
-COPY --from=builder /build/target/release/vectoria        /usr/local/bin/vectoria
 
 RUN mkdir -p /data /root/.cache/fastembed
 WORKDIR /data
@@ -48,7 +49,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/target/release/vectoria-server /usr/local/bin/vectoria-server
-COPY --from=builder /build/target/release/vectoria        /usr/local/bin/vectoria
 
 RUN mkdir -p /data
 WORKDIR /data
