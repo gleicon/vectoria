@@ -46,7 +46,7 @@ For a persistent index, edit `vectoria.toml`:
 vector_backend = "edgestore-hnsw"
 
 [storage]
-path = "./data/vectoria.db"
+path = "./data/vectoria"
 ```
 
 ---

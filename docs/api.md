@@ -195,7 +195,7 @@ Reading it: `bm25=1.0` means shoe1 was the top BM25 result for "running shoe" (s
   "explain": {
     "match_sources": ["bm25", "vector"],
     "factors": [
-      {"factor": "bm25",        "score": 0.363, "weight": 0.30, "contribution": 0.1.11},
+      {"factor": "bm25",        "score": 0.363, "weight": 0.30, "contribution": 0.109},
       {"factor": "query_ctr",   "score": 0.000, "weight": 0.15, "contribution": 0.000},
       {"factor": "availability","score": 1.000, "weight": 0.05, "contribution": 0.050},
       ...
@@ -444,18 +444,26 @@ engine.stats()?;     // index stats
 
 ### Preloading an existing database
 
-Both persistent backends accept a file path. Point them at an existing database and call `reindex_all()` after opening to rebuild the in-memory BM25 index and spell corrector from stored products:
+Point the engine at an existing database directory and call `reindex_all()` after opening to rebuild the in-memory BM25 index and spell corrector from stored products. Storage and vector index share one engine at one path (0.1.11+):
 
 ```rust
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use edgestore::{EdgestoreConfig, Engine};
 use vectoria_core::{
     SearchEngineBuilder,
     storage::edgestore::EdgeStoreStorage,
     vector::edgestore::EdgeStoreVectorIndex,
 };
 
-let storage = Arc::new(EdgeStoreStorage::open("./vectoria.db")?);
-let vidx = Arc::new(EdgeStoreVectorIndex::open("./vectoria.vec", None, None)?);
+// Single engine shared between storage and vector index (0.1.11+)
+let engine_handle = Arc::new(Mutex::new(
+    Engine::open(EdgestoreConfig::new("./vectoria"))?
+));
+
+let storage = Arc::new(EdgeStoreStorage::from_engine(Arc::clone(&engine_handle)));
+let vidx = Arc::new(
+    EdgeStoreVectorIndex::from_engine(Arc::clone(&engine_handle), None, None)?
+);
 
 let engine = SearchEngineBuilder::new()
     .storage(storage)

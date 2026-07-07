@@ -360,31 +360,32 @@ engine.stats()?;     // index stats</code></pre>
 
   <h3>Preloading an existing database</h3>
   <p>
-    Both persistent storage backends accept a file path. Point them at an existing database
-    and the engine loads from it at startup. Call <code>reindex_all()</code> after opening
-    to rebuild the in-memory BM25 index and spell corrector from stored products.
+    Point the engine at an existing database directory. Storage and vector index share one
+    engine at one path (0.1.11+). Call <code>reindex_all()</code> after opening to rebuild
+    the in-memory BM25 index and spell corrector from stored products.
   </p>
-  <pre><code>use std::{path::Path, sync::Arc};
+  <pre><code>use std::sync::{Arc, Mutex};
+use edgestore::{EdgestoreConfig, Engine};
 use vectoria_core::{
     SearchEngineBuilder,
-    storage::sqlite::SqliteStorage,
+    storage::edgestore::EdgeStoreStorage,
+    vector::edgestore::EdgeStoreVectorIndex,
 };
 
-let storage = Arc::new(SqliteStorage::open(Path::new("./vectoria.db"))?);
+let engine_handle = Arc::new(Mutex::new(
+    Engine::open(EdgestoreConfig::new("./vectoria"))?
+));
+
+let storage = Arc::new(EdgeStoreStorage::from_engine(Arc::clone(&engine_handle)));
+let vidx    = Arc::new(EdgeStoreVectorIndex::from_engine(Arc::clone(&engine_handle), None, None)?);
 
 let engine = SearchEngineBuilder::new()
     .storage(storage)
+    .vector_index(vidx)
     .build()
     .await?;
 
-// Rebuild BM25 + spell corrector from stored products
 engine.reindex_all().await?;</code></pre>
-  <p>
-    For HNSW persistence, use <code>EdgeStoreStorage::open(path)</code> paired with
-    <code>EdgeStoreVectorIndex::open(path, model_id, dims)</code>.
-    The HNSW graph is persisted to disk and loaded automatically — no rebuild needed unless
-    the embedding model changed.
-  </p>
 
   <h3>Bulk indexing</h3>
   <p>
@@ -423,7 +424,7 @@ engine.reindex_all().await?;</code></pre>
   <table>
     <thead><tr><th>Method</th><th>Default</th><th>Description</th></tr></thead>
     <tbody>
-      <tr><td><code>.storage(arc)</code></td><td><code>MemoryStorage</code></td><td>Persistent backends: <code>SqliteStorage</code>, <code>EdgeStoreStorage</code></td></tr>
+      <tr><td><code>.storage(arc)</code></td><td><code>MemoryStorage</code></td><td>Persistent backend: <code>EdgeStoreStorage</code></td></tr>
       <tr><td><code>.vector_index(arc)</code></td><td><code>MemoryVectorIndex</code></td><td>Persistent: <code>EdgeStoreVectorIndex</code> (HNSW)</td></tr>
       <tr><td><code>.embedding(arc)</code></td><td>Local <code>multilingual-e5-small</code></td><td>Any <code>EmbeddingProvider</code> impl, incl. OpenAI-compatible</td></tr>
       <tr><td><code>.weights(RankingWeights)</code></td><td>semantic=0.7, bm25=0.3, popularity=0.2, query_ctr=0.15, availability=0.05, margin=0.05</td><td>Score fusion weights</td></tr>

@@ -71,7 +71,7 @@ skip_consent = false           # skip model download prompt on first run
 # rate_limit_per_second = 100  # per-IP rate limit; omit to disable
 
 [storage]
-path = "./vectoria.db"         # path for persistent index files
+path = "./vectoria"            # directory for persistent index files
 
 [embedding]
 provider = "local"             # "local" | "openai-compatible"
@@ -122,7 +122,11 @@ VECTORIA_EMBEDDING_MODEL
 VECTORIA_CONFIG              # path to config file, default: vectoria.toml
 VECTORIA_SKIP_CONSENT=1      # maps to server.skip_consent
 VECTORIA_ENABLE_RERANKER=1   # maps to index.enable_reranker
+VECTORIA_REPL_BIND           # primary: bind replication server, e.g. "0.0.0.0:8900"
+VECTORIA_REPL_PRIMARY_URL    # replica: URL of primary replication server, e.g. "http://host:8900"
 ```
+
+When `VECTORIA_REPL_BIND` is set the server becomes a replication primary and exposes a pull endpoint on that address. When `VECTORIA_REPL_PRIMARY_URL` is set the server opens the index in read-only mode and pulls changes from the primary on a background interval. Both env vars are unset by default (standalone mode).
 
 **OpenAI-compatible embedding** (Ollama, llama.cpp, vLLM, LM Studio, OpenAI):
 
@@ -314,12 +318,6 @@ docker run -p 7700:7700 \
   -e VECTORIA_EMBEDDING_BASE_URL=https://api.openai.com/v1 \
   -e VECTORIA_EMBEDDING_MODEL=text-embedding-3-small \
   vectoria:slim
-```
-
-Both images include the `vectoria` CLI. Run it against the container:
-
-```sh
-docker exec vectoria-vectoria-1 vectoria --server http://localhost:7700 --api-key my-secret-key stats
 ```
 
 Volumes:
