@@ -364,6 +364,9 @@ engine.stats()?;     // index stats</code></pre>
     engine at one path (0.1.11+). Call <code>reindex_all()</code> after opening to rebuild
     the in-memory BM25 index and spell corrector from stored products.
   </p>
+  <p>Add <code>edgestore = "1.0"</code> as a direct dependency alongside <code>vectoria-core</code>:</p>
+  <pre><code>vectoria-core = "0.1.11"
+edgestore     = "1.0"</code></pre>
   <pre><code>use std::sync::{Arc, Mutex};
 use edgestore::{EdgestoreConfig, Engine};
 use vectoria_core::{

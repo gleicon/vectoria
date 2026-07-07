@@ -444,7 +444,14 @@ engine.stats()?;     // index stats
 
 ### Preloading an existing database
 
-Point the engine at an existing database directory and call `reindex_all()` after opening to rebuild the in-memory BM25 index and spell corrector from stored products. Storage and vector index share one engine at one path (0.1.11+):
+Point the engine at an existing database directory and call `reindex_all()` after opening to rebuild the in-memory BM25 index and spell corrector from stored products. Storage and vector index share one engine at one path (0.1.11+).
+
+Add `edgestore` as a direct dependency alongside `vectoria-core`:
+
+```toml
+vectoria-core = "0.1.11"
+edgestore = "1.0"
+```
 
 ```rust
 use std::sync::{Arc, Mutex};
