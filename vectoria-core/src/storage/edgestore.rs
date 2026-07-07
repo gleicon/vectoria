@@ -23,6 +23,17 @@ pub struct EdgeStoreStorage {
 }
 
 impl EdgeStoreStorage {
+    /// Create from a pre-opened shared engine.
+    ///
+    /// Both storage and vector index should share the same engine instance so they
+    /// share one WAL, one lock file, and one replication target.
+    pub fn from_engine(engine: Arc<Mutex<Engine>>) -> Self {
+        Self { engine }
+    }
+
+    /// Convenience: open a new engine at `path` and wrap it.
+    ///
+    /// Prefer `from_engine` when a vector index shares the same engine.
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let config = EdgestoreConfig::new(path.as_ref());
         let engine = Engine::open(config).context("failed to open EdgeStore")?;

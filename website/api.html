@@ -23,7 +23,7 @@
     <a href="api.html" class="active">Docs</a>
   </nav>
   <div style="color:var(--muted);font-size:0.8125rem;font-family:var(--mono);">
-    v0.1.10
+    v0.1.11
   </div>
 </div>
 
@@ -43,7 +43,7 @@
 
   <h3><span class="method get">GET</span> <span class="endpoint-path">/health</span></h3>
   <p>No authentication required. Use this to wait for the server to be ready.</p>
-  <pre><code>{"status": "ok", "version": "0.1.10"}</code></pre>
+  <pre><code>{"status": "ok", "version": "0.1.11"}</code></pre>
 
   <hr>
 
@@ -188,7 +188,7 @@
   "explain": {
     "match_sources": ["bm25", "vector"],
     "factors": [
-      {"factor": "bm25",        "score": 0.363, "weight": 0.30, "contribution": 0.1.10},
+      {"factor": "bm25",        "score": 0.363, "weight": 0.30, "contribution": 0.1.11},
       {"factor": "query_ctr",   "score": 0.000, "weight": 0.15, "contribution": 0.000},
       {"factor": "availability","score": 1.000, "weight": 0.05, "contribution": 0.050},
       ...
@@ -323,7 +323,7 @@
   </p>
 
   <pre><code>[dependencies]
-vectoria-core = "0.1.10"</code></pre>
+vectoria-core = "0.1.11"</code></pre>
 
   <h3>Async API (Tokio)</h3>
   <pre><code>use vectoria_core::{SearchEngineBuilder, model::{SearchRequest, SearchMode}};
@@ -448,7 +448,7 @@ engine.reindex_all().await?;</code></pre>
     <a href="api.html">API Docs</a> &nbsp;·&nbsp;
     <a href="quickstart.html">Quickstart</a>
     <br><br>
-    <span style="color:var(--border2);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.10</span>
+    <span style="color:var(--border2);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.11</span>
   </p>
 </footer>
 

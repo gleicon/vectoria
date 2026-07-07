@@ -7,7 +7,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.10"
+version = "0.1.11"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["Gleicon Moraes <gleicon@gmail.com>"]
@@ -32,7 +32,7 @@ tap = "gleicon/homebrew-tap"
 
 [workspace.dependencies]
 # Internal crates
-vectoria-core = { path = "vectoria-core", version = "0.1.10" }
+vectoria-core = { path = "vectoria-core", version = "0.1.11" }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -49,6 +49,7 @@ toml = "0.8"
 
 # Storage — EdgeStore: local-first embedded KV + vector + BM25
 edgestore = "1.0"
+edgestore-repl = "1.0"
 
 # Embeddings (fastembed 4.x for stable ONNX; 5.x API differs)
 fastembed = "4"

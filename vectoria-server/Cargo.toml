@@ -29,3 +29,5 @@ async-trait = { workspace = true }
 clap = { workspace = true }
 dirs-next = "2"
 governor = { workspace = true }
+edgestore = { workspace = true }
+edgestore-repl = { workspace = true }
