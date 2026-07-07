@@ -18,7 +18,7 @@ No authentication required.
 
 Response:
 ```json
-{"status": "ok", "version": "0.1.9"}
+{"status": "ok", "version": "0.1.10"}
 ```
 
 ---
@@ -195,7 +195,7 @@ Reading it: `bm25=1.0` means shoe1 was the top BM25 result for "running shoe" (s
   "explain": {
     "match_sources": ["bm25", "vector"],
     "factors": [
-      {"factor": "bm25",        "score": 0.363, "weight": 0.30, "contribution": 0.109},
+      {"factor": "bm25",        "score": 0.363, "weight": 0.30, "contribution": 0.1.10},
       {"factor": "query_ctr",   "score": 0.000, "weight": 0.15, "contribution": 0.000},
       {"factor": "availability","score": 1.000, "weight": 0.05, "contribution": 0.050},
       ...
@@ -400,7 +400,7 @@ Same body as `POST /products/similar`. Returns `404` if the index doesn't exist.
 
 ```toml
 # Cargo.toml
-vectoria-core = "0.1.9"
+vectoria-core = "0.1.10"
 ```
 
 ### Async API

@@ -23,7 +23,7 @@
     <a href="api.html">Docs</a>
   </nav>
   <div style="color:var(--muted);font-size:0.8125rem;font-family:var(--mono);">
-    v0.1.9
+    v0.1.10
   </div>
 </div>
 
@@ -107,7 +107,7 @@ INFO listening on http://0.0.0.0:7700</code></pre>
 
   <p>Verify:</p>
   <pre><code>curl http://localhost:7700/health
-# {"status":"ok","version":"0.1.9"}</code></pre>
+# {"status":"ok","version":"0.1.10"}</code></pre>
 
   <hr>
 
@@ -227,7 +227,7 @@ make clean      # delete downloaded ESCI parquet files (not the model cache)</co
   <h2 id="step-10">10. Use as an embedded Rust library</h2>
   <p>No HTTP server required. Add <code>vectoria-core</code> to your <code>Cargo.toml</code>:</p>
   <pre><code>[dependencies]
-vectoria-core = "0.1.9"</code></pre>
+vectoria-core = "0.1.10"</code></pre>
 
   <p><strong>Async (Tokio):</strong></p>
   <pre><code>use vectoria_core::{SearchEngineBuilder, model::{SearchRequest, SearchMode}};
@@ -307,7 +307,7 @@ let results = engine.search(SearchRequest {
     <a href="api.html">API Docs</a> &nbsp;·&nbsp;
     <a href="quickstart.html">Quickstart</a>
     <br><br>
-    <span style="color:var(--border2);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.9</span>
+    <span style="color:var(--border2);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.10</span>
   </p>
 </footer>
 
