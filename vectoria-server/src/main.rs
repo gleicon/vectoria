@@ -138,7 +138,8 @@ async fn main() -> Result<()> {
         limiter,
     };
 
-    let protected = Router::new()
+    // Admin-only routes: require both a valid API key AND the admin principal.
+    let admin_routes = Router::new()
         .route("/products", post(routes::products::index_product))
         .route("/products/{id}", put(routes::products::update_product))
         .route("/products/{id}", delete(routes::products::delete_product))
@@ -152,10 +153,18 @@ async fn main() -> Result<()> {
         .route("/indexes", get(routes::indexes::list_indexes))
         .route("/indexes", post(routes::indexes::create_index))
         .route("/indexes/{name}", delete(routes::indexes::delete_index))
+        .layer(middleware::from_fn(auth::require_admin));
+
+    // Tenant-accessible routes: API key auth only; handlers enforce namespace scoping.
+    let tenant_routes = Router::new()
         .route("/indexes/{name}/products", post(routes::indexes::index_product))
         .route("/indexes/{name}/search", post(routes::indexes::search))
         .route("/indexes/{name}/similar", post(routes::indexes::similar))
-        .route("/users/{id}/recommendations", get(routes::users::get_recommendations))
+        .route("/users/{id}/recommendations", get(routes::users::get_recommendations));
+
+    let protected = Router::new()
+        .merge(admin_routes)
+        .merge(tenant_routes)
         .layer(middleware::from_fn_with_state(state.clone(), auth::require_api_key));
 
     let public = Router::new()

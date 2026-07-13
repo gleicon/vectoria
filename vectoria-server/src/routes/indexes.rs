@@ -1,4 +1,5 @@
 use axum::{
+    Extension,
     extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -7,7 +8,7 @@ use axum::{
 use serde::Deserialize;
 use std::sync::Arc;
 use vectoria_core::{model::{Product, SearchRequest, SimilarRequest}, SearchEngine};
-use crate::{index_registry::CreateIndexError, routes::products::IndexProductRequest, state::AppState};
+use crate::{auth::Principal, index_registry::CreateIndexError, routes::products::IndexProductRequest, state::AppState};
 
 #[derive(Deserialize)]
 pub struct CreateIndexRequest {
@@ -54,7 +55,24 @@ pub async fn delete_index(
     }
 }
 
-fn resolve_index(state: &AppState, name: &str) -> Result<Arc<SearchEngine>, Response> {
+/// Resolve a named index, enforcing tenant namespace isolation.
+///
+/// Admin: any index by name.
+/// Tenant: only the index whose name matches their tenant name.
+///   Wrong namespace → 403 (not 404, to avoid namespace enumeration).
+fn resolve_index_for_principal(
+    state: &AppState,
+    principal: &Principal,
+    name: &str,
+) -> Result<Arc<SearchEngine>, Response> {
+    if let Principal::Tenant(tenant_name) = principal {
+        if tenant_name != name {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({"error": "access denied for this index namespace"})),
+            ).into_response());
+        }
+    }
     state.registry.get(name).ok_or_else(|| {
         (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "index not found"}))).into_response()
     })
@@ -62,10 +80,11 @@ fn resolve_index(state: &AppState, name: &str) -> Result<Arc<SearchEngine>, Resp
 
 pub async fn index_product(
     State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
     Path(name): Path<String>,
     Json(req): Json<IndexProductRequest>,
 ) -> impl IntoResponse {
-    let engine = match resolve_index(&state, &name) {
+    let engine = match resolve_index_for_principal(&state, &principal, &name) {
         Ok(e) => e,
         Err(r) => return r,
     };
@@ -80,10 +99,11 @@ pub async fn index_product(
 
 pub async fn search(
     State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
     Path(name): Path<String>,
     Json(req): Json<SearchRequest>,
 ) -> impl IntoResponse {
-    let engine = match resolve_index(&state, &name) {
+    let engine = match resolve_index_for_principal(&state, &principal, &name) {
         Ok(e) => e,
         Err(r) => return r,
     };
@@ -103,10 +123,11 @@ pub async fn search(
 
 pub async fn similar(
     State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
     Path(name): Path<String>,
     Json(req): Json<SimilarRequest>,
 ) -> impl IntoResponse {
-    let engine = match resolve_index(&state, &name) {
+    let engine = match resolve_index_for_principal(&state, &principal, &name) {
         Ok(e) => e,
         Err(r) => return r,
     };

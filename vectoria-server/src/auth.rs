@@ -6,9 +6,23 @@ use axum::{
 };
 use crate::state::AppState;
 
+/// The resolved caller identity, inserted into request extensions by `require_api_key`.
+/// Downstream handlers and middleware read this to enforce access control.
+#[derive(Clone, Debug)]
+pub enum Principal {
+    /// Holder of the global admin API key — unrestricted access.
+    Admin,
+    /// Holder of a per-tenant API key. May only access `/indexes/{name}/*`
+    /// where `name` equals the tenant name stored here.
+    Tenant(String),
+}
+
+/// Auth middleware: validates the API key and inserts a `Principal` extension.
+/// Does NOT enforce which routes are accessible — that is the job of
+/// `require_admin` (for admin-only routes) and the named-index handlers.
 pub async fn require_api_key(
     State(state): State<AppState>,
-    request: Request,
+    mut request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
     let auth = request
@@ -24,10 +38,31 @@ pub async fn require_api_key(
 
     let key = auth.or(index_key);
 
-    match key {
-        Some(k) if k == state.api_key => Ok(next.run(request).await),
-        // Tenant key: valid for auth; route-level isolation via named indexes.
-        Some(k) if state.tenant_keys.contains_key(k) => Ok(next.run(request).await),
-        _ => Err(StatusCode::UNAUTHORIZED),
+    let principal = if key.as_deref() == Some(state.api_key.as_str()) {
+        Principal::Admin
+    } else if let Some(name) = key
+        .as_deref()
+        .and_then(|k| state.tenant_keys.get(k))
+        .cloned()
+    {
+        Principal::Tenant(name)
+    } else {
+        return Err(StatusCode::UNAUTHORIZED);
+    };
+
+    request.extensions_mut().insert(principal);
+    Ok(next.run(request).await)
+}
+
+/// Middleware that rejects tenant principals with 403 Forbidden.
+/// Layer this over every route that must not be reachable by tenant API keys.
+pub async fn require_admin(
+    request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    match request.extensions().get::<Principal>() {
+        Some(Principal::Admin) => Ok(next.run(request).await),
+        Some(Principal::Tenant(_)) => Err(StatusCode::FORBIDDEN),
+        None => Err(StatusCode::UNAUTHORIZED),
     }
 }
