@@ -54,6 +54,28 @@ pub trait StorageEngine: Send + Sync {
     fn suggest_text(&self, _prefix: &str, _limit: usize) -> Vec<String> {
         vec![]
     }
+
+    // ── User recommendation support ───────────────────────────────────────────
+
+    /// Store a pre-computed per-user vector (average of interacted product vectors).
+    async fn put_user_vector(&self, _user_id: &str, _vector: &[f32]) -> Result<()> {
+        Ok(())
+    }
+
+    /// Retrieve a previously stored user vector. Returns `None` if unknown.
+    async fn get_user_vector(&self, _user_id: &str) -> Result<Option<Vec<f32>>> {
+        Ok(None)
+    }
+
+    /// Return the most-recently-interacted product IDs for a user (click or purchase).
+    async fn get_user_recent_products(&self, _user_id: &str, _limit: usize) -> Result<Vec<String>> {
+        Ok(vec![])
+    }
+
+    /// Return all user IDs that have at least one interaction event.
+    async fn list_user_ids(&self) -> Result<Vec<String>> {
+        Ok(vec![])
+    }
 }
 
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize, Clone)]

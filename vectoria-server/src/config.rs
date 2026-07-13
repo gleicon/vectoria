@@ -14,6 +14,10 @@ pub struct VectoriaConfig {
     pub ranking: RankingWeights,
     #[serde(default)]
     pub index: IndexConfig,
+    #[serde(default)]
+    pub llm: LlmConfig,
+    #[serde(default)]
+    pub tenants: Vec<TenantConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,6 +112,42 @@ impl Default for IndexConfig {
     }
 }
 
+/// Optional LLM configuration for query rewriting.
+/// Disabled by default; set `enabled = true` and provide `base_url` to activate.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    /// OpenAI-compatible base URL, e.g. "http://localhost:11434"
+    pub base_url: Option<String>,
+    #[serde(default = "default_llm_model")]
+    pub model: String,
+    pub api_key: Option<String>,
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            base_url: None,
+            model: default_llm_model(),
+            api_key: None,
+        }
+    }
+}
+
+/// Per-tenant configuration. Each tenant gets a dedicated API key and
+/// maps to a named index namespace (auto-created on first access).
+/// Tenants use `/indexes/{namespace}/*` routes for data isolation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TenantConfig {
+    /// Tenant identifier. Becomes the named index namespace.
+    pub name: String,
+    /// API key accepted on behalf of this tenant.
+    pub api_key: String,
+}
+
+fn default_llm_model() -> String { "llama3".into() }
 fn default_host() -> String { "0.0.0.0".into() }
 fn default_port() -> u16 { 7700 }
 fn default_storage_path() -> PathBuf { PathBuf::from("./vectoria.db") }

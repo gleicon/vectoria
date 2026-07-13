@@ -13,6 +13,9 @@ pub struct MemoryStorage {
     events: RwLock<Vec<Event>>,
     signals_cache: RwLock<HashMap<String, ProductSignals>>,
     bm25: Bm25Index,
+    user_vectors: RwLock<HashMap<String, Vec<f32>>>,
+    // user_id → ordered list of product_ids (click/purchase)
+    user_product_history: RwLock<HashMap<String, Vec<String>>>,
 }
 
 impl MemoryStorage {
@@ -46,6 +49,17 @@ impl StorageEngine for MemoryStorage {
     }
 
     async fn put_event(&self, event: &Event) -> Result<()> {
+        use crate::model::EventType;
+        if let (Some(uid), EventType::Click | EventType::Purchase) =
+            (&event.user_id, &event.event_type)
+        {
+            self.user_product_history
+                .write()
+                .unwrap()
+                .entry(uid.clone())
+                .or_default()
+                .push(event.product_id.clone());
+        }
         self.events.write().unwrap().push(event.clone());
         Ok(())
     }
@@ -118,5 +132,42 @@ impl StorageEngine for MemoryStorage {
 
     fn suggest_text(&self, prefix: &str, limit: usize) -> Vec<String> {
         self.bm25.suggest(prefix, limit)
+    }
+
+    async fn put_user_vector(&self, user_id: &str, vector: &[f32]) -> Result<()> {
+        self.user_vectors
+            .write()
+            .unwrap()
+            .insert(user_id.to_string(), vector.to_vec());
+        Ok(())
+    }
+
+    async fn get_user_vector(&self, user_id: &str) -> Result<Option<Vec<f32>>> {
+        Ok(self.user_vectors.read().unwrap().get(user_id).cloned())
+    }
+
+    async fn get_user_recent_products(&self, user_id: &str, limit: usize) -> Result<Vec<String>> {
+        let history = self.user_product_history.read().unwrap();
+        let products = history.get(user_id).map(|v| v.as_slice()).unwrap_or(&[]);
+        // Deduplicated most-recent `limit` products.
+        let mut seen = std::collections::HashSet::new();
+        let deduped: Vec<String> = products
+            .iter()
+            .rev()
+            .filter(|id| seen.insert((*id).clone()))
+            .take(limit)
+            .cloned()
+            .collect();
+        Ok(deduped)
+    }
+
+    async fn list_user_ids(&self) -> Result<Vec<String>> {
+        Ok(self
+            .user_product_history
+            .read()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect())
     }
 }

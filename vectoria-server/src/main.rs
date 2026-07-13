@@ -20,7 +20,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use vectoria_core::{
     aggregation::run_aggregation_loop,
     embedding::{cache::CachedEmbedding, EmbeddingProvider},
-    search::reranker::CrossEncoderReranker,
+    search::{llm_rewriter::LlmRewriter, reranker::CrossEncoderReranker},
     SearchEngineBuilder,
 };
 
@@ -94,6 +94,16 @@ async fn main() -> Result<()> {
         }
     }
 
+    if cfg.llm.enabled {
+        if let Some(base_url) = &cfg.llm.base_url {
+            let rewriter = LlmRewriter::new(base_url, &cfg.llm.model, cfg.llm.api_key.clone());
+            builder = builder.with_llm_rewriter(rewriter);
+            tracing::info!("llm rewriter: enabled ({})", cfg.llm.model);
+        } else {
+            tracing::warn!("llm.enabled = true but llm.base_url not set; rewriter disabled");
+        }
+    }
+
     let engine = Arc::new(builder.build().await?);
 
     tokio::spawn(run_aggregation_loop(Arc::clone(&storage), cfg.index.aggregation_interval_secs));
@@ -112,7 +122,21 @@ async fn main() -> Result<()> {
         cfg.embedding.fields.clone(),
     ));
 
-    let state = AppState { registry, api_key: api_key.clone(), limiter };
+    let tenant_keys: std::collections::HashMap<String, String> = cfg
+        .tenants
+        .iter()
+        .map(|t| (t.api_key.clone(), t.name.clone()))
+        .collect();
+    if !tenant_keys.is_empty() {
+        tracing::info!("multi-tenancy: {} tenant(s) configured", tenant_keys.len());
+    }
+
+    let state = AppState {
+        registry,
+        api_key: api_key.clone(),
+        tenant_keys: std::sync::Arc::new(tenant_keys),
+        limiter,
+    };
 
     let protected = Router::new()
         .route("/products", post(routes::products::index_product))
@@ -131,6 +155,7 @@ async fn main() -> Result<()> {
         .route("/indexes/{name}/products", post(routes::indexes::index_product))
         .route("/indexes/{name}/search", post(routes::indexes::search))
         .route("/indexes/{name}/similar", post(routes::indexes::similar))
+        .route("/users/{id}/recommendations", get(routes::users::get_recommendations))
         .layer(middleware::from_fn_with_state(state.clone(), auth::require_api_key));
 
     let public = Router::new()

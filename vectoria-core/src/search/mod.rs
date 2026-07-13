@@ -1,4 +1,6 @@
 pub mod bm25_index;
+pub mod clustering;
+pub mod llm_rewriter;
 pub mod query_cache;
 pub mod reranker;
 pub mod scoring;
@@ -15,6 +17,7 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use bm25_index::Bm25Index;
+use llm_rewriter::LlmRewriter;
 use query_cache::QueryResultCache;
 use reranker::CrossEncoderReranker;
 use scoring::{
@@ -42,6 +45,7 @@ pub struct SearchEngine {
     autocomplete_bm25: Arc<Bm25Index>,
     spell: Arc<SpellCorrector>,
     reranker: Option<Arc<CrossEncoderReranker>>,
+    llm_rewriter: Option<Arc<LlmRewriter>>,
     query_cache: Option<Arc<QueryResultCache>>,
     query_count: Arc<AtomicU64>,
     latency_window: Arc<Mutex<VecDeque<u32>>>,
@@ -63,6 +67,7 @@ impl SearchEngine {
             autocomplete_bm25: Arc::new(Bm25Index::new()),
             spell: Arc::new(SpellCorrector::new()),
             reranker: None,
+            llm_rewriter: None,
             query_cache: None,
             query_count: Arc::new(AtomicU64::new(0)),
             latency_window: Arc::new(Mutex::new(VecDeque::with_capacity(LATENCY_WINDOW))),
@@ -72,6 +77,11 @@ impl SearchEngine {
 
     pub fn with_reranker(mut self, reranker: CrossEncoderReranker) -> Self {
         self.reranker = Some(Arc::new(reranker));
+        self
+    }
+
+    pub fn with_llm_rewriter(mut self, rewriter: LlmRewriter) -> Self {
+        self.llm_rewriter = Some(Arc::new(rewriter));
         self
     }
 
@@ -181,6 +191,7 @@ impl SearchEngine {
         let effective_q;
         let mut spell_corrected = false;
         let mut query_expanded = false;
+        let mut llm_rewritten = false;
         if matches!(req.mode, SearchMode::Hybrid | SearchMode::Bm25) {
             let bm25_results = self.storage.search_text(&req.q, candidate_k, req.filters.as_ref()).await.unwrap_or_default();
 
@@ -194,6 +205,24 @@ impl SearchEngine {
                 }
             } else {
                 req.q.clone()
+            };
+
+            // LLM rewriting: fires when BM25 recall is low (< half the desired limit).
+            // Rewrites the query into alternative phrasings to improve retrieval.
+            // Only applies when a rewriter is configured; never blocks on errors.
+            let base_q = if bm25_results.len() < limit.max(1)
+                && !spell_corrected
+                && self.llm_rewriter.is_some()
+            {
+                let rewritten = self.llm_rewriter.as_ref().unwrap().rewrite(&base_q).await;
+                if rewritten != base_q {
+                    llm_rewritten = true;
+                    rewritten
+                } else {
+                    base_q
+                }
+            } else {
+                base_q
             };
 
             let expanded_q = if bm25_results.len() < (limit / 2).max(1)
@@ -232,9 +261,11 @@ impl SearchEngine {
             effective_query: effective_q.clone(),
             spell_corrected,
             query_expanded,
+            llm_rewritten,
         };
 
         let mut hits: Vec<Hit> = Vec::new();
+        let mut hit_vectors: Vec<Option<Vec<f32>>> = Vec::new();
         for (id, candidate) in candidate_scores {
             let Some(product) = self.storage.get_product(&id).await? else { continue };
             if let Some(filters) = &req.filters {
@@ -253,6 +284,7 @@ impl SearchEngine {
                 &weights, req.explain, &query_context,
             );
 
+            hit_vectors.push(product.vector.clone());
             hits.push(Hit {
                 id: product.id,
                 score: scored.score,
@@ -293,6 +325,12 @@ impl SearchEngine {
             let capped: Vec<String> = fields.iter().take(MAX_AGGREGATE_FIELDS).cloned().collect();
             compute_aggregations(&hits, &capped)
         });
+        let clusters = if req.cluster && hits.len() >= 2 {
+            let cs = clustering::cluster_hits(&hits, &hit_vectors, 5);
+            if cs.is_empty() { None } else { Some(cs) }
+        } else {
+            None
+        };
         let page_hits: Vec<Hit> = hits.into_iter().skip(offset).take(limit).collect();
 
         let response = SearchResponse {
@@ -303,6 +341,7 @@ impl SearchEngine {
             query: req.q,
             hits: page_hits,
             aggregations,
+            clusters,
         };
 
         if let (Some(key), Some(cache)) = (cache_key, &self.query_cache) {
@@ -353,6 +392,67 @@ impl SearchEngine {
 
     pub async fn record_event(&self, event: Event) -> Result<()> {
         self.storage.put_event(&event).await
+    }
+
+    /// Return product recommendations for a user based on their click/purchase history.
+    ///
+    /// The user vector is loaded from cache (written by the aggregation loop) or computed
+    /// on-demand by averaging the stored vectors of the user's recently interacted products.
+    /// Returns an empty list for unknown users (no events recorded).
+    pub async fn recommend(&self, user_id: &str, limit: usize) -> Result<Vec<Hit>> {
+        const MAX_USER_ID: usize = 256;
+        if user_id.is_empty() || user_id.len() > MAX_USER_ID {
+            bail!("user_id must be 1–{} bytes", MAX_USER_ID);
+        }
+
+        let limit = limit.min(MAX_LIMIT);
+
+        // Prefer the pre-computed vector from the aggregation loop.
+        let user_vec = if let Some(v) = self.storage.get_user_vector(user_id).await? {
+            v
+        } else {
+            // On-demand fallback: average vectors of recently interacted products.
+            let product_ids = self.storage.get_user_recent_products(user_id, 50).await?;
+            if product_ids.is_empty() {
+                return Ok(vec![]);
+            }
+
+            let mut sum: Vec<f64> = Vec::new();
+            let mut count = 0usize;
+            for pid in &product_ids {
+                if let Ok(Some(product)) = self.storage.get_product(pid).await {
+                    if let Some(vector) = &product.vector {
+                        if sum.is_empty() {
+                            sum = vec![0.0f64; vector.len()];
+                        }
+                        if vector.len() == sum.len() {
+                            for (s, v) in sum.iter_mut().zip(vector.iter()) {
+                                *s += *v as f64;
+                            }
+                            count += 1;
+                        }
+                    }
+                }
+            }
+
+            if count == 0 {
+                return Ok(vec![]);
+            }
+
+            let computed: Vec<f32> = sum.iter().map(|s| (*s / count as f64) as f32).collect();
+            // Cache for the next request (best-effort; ignore write errors).
+            let _ = self.storage.put_user_vector(user_id, &computed).await;
+            computed
+        };
+
+        let candidates = self.vector_index.search(&user_vec, limit * 5).await?;
+        let mut hits = Vec::new();
+        for (id, score) in candidates {
+            let Some(product) = self.storage.get_product(&id).await? else { continue };
+            hits.push(Hit { id: product.id, score, metadata: product.metadata, explain: None });
+            if hits.len() >= limit { break; }
+        }
+        Ok(hits)
     }
 
     pub fn autocomplete(&self, prefix: &str, limit: usize) -> Vec<String> {

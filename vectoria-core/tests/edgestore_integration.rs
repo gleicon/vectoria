@@ -51,7 +51,7 @@ async fn test_edgestore_index_and_search() {
         ranking_weights: None,
         aggregate: None,
         explain: false,
-        rerank: false,
+        rerank: false, cluster: false,
     }).await.unwrap();
 
     assert!(resp.total > 0, "should find results for 'running shoe'");
@@ -76,7 +76,7 @@ async fn test_edgestore_delete_persists() {
         ranking_weights: None,
         aggregate: None,
         explain: false,
-        rerank: false,
+        rerank: false, cluster: false,
     }).await.unwrap();
 
     assert!(!resp.hits.iter().any(|h| h.id == "del1"),
@@ -100,7 +100,7 @@ async fn test_edgestore_bm25_search() {
         ranking_weights: None,
         aggregate: None,
         explain: false,
-        rerank: false,
+        rerank: false, cluster: false,
     }).await.unwrap();
 
     assert!(resp.hits.iter().any(|h| h.id == "bm1"),
@@ -127,7 +127,7 @@ async fn test_edgestore_vector_search() {
         ranking_weights: None,
         aggregate: None,
         explain: false,
-        rerank: false,
+        rerank: false, cluster: false,
     }).await.unwrap();
 
     assert!(resp.total > 0, "semantic search should return results");
@@ -157,7 +157,7 @@ async fn test_edgestore_query_ctr_boosts_clicked_product() {
         ranking_weights: None,
         aggregate: None,
         explain: false,
-        rerank: false,
+        rerank: false, cluster: false,
     }).await.unwrap();
 
     let ids: Vec<&str> = resp.hits.iter().map(|h| h.id.as_str()).collect();

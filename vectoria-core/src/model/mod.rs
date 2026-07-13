@@ -139,10 +139,13 @@ pub struct ScoreFactor {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct QueryContext {
     pub original_query: String,
-    /// Query actually used for BM25 (may differ if spell-corrected or expanded).
+    /// Query actually used for BM25 (may differ if spell-corrected, expanded, or LLM-rewritten).
     pub effective_query: String,
     pub spell_corrected: bool,
     pub query_expanded: bool,
+    /// `true` if an LLM rewrote the query to improve low-recall results.
+    #[serde(default)]
+    pub llm_rewritten: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -161,6 +164,9 @@ pub struct SearchRequest {
     pub explain: bool,
     #[serde(default)]
     pub rerank: bool,
+    /// If `true`, group results into semantic clusters and return `clusters` in the response.
+    #[serde(default)]
+    pub cluster: bool,
 }
 
 pub const DEFAULT_LIMIT: usize = 20;
@@ -179,6 +185,7 @@ impl Default for SearchRequest {
             aggregate: None,
             explain: false,
             rerank: false,
+            cluster: false,
         }
     }
 }
@@ -201,6 +208,9 @@ pub struct SearchResponse {
     pub processing_time_ms: u64,
     pub query: String,
     pub aggregations: Option<HashMap<String, HashMap<String, usize>>>,
+    /// Semantic clusters of the result set. Only present when `cluster: true` in the request.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clusters: Option<Vec<crate::search::clustering::Cluster>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

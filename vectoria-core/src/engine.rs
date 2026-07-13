@@ -7,7 +7,7 @@ use crate::{
     model::{
         Hit, RankingWeights, SearchRequest, SearchResponse, SimilarRequest,
     },
-    search::{reranker::CrossEncoderReranker, SearchEngine},
+    search::{llm_rewriter::LlmRewriter, reranker::CrossEncoderReranker, SearchEngine},
     storage::{memory::MemoryStorage, StorageEngine},
     vector::{memory::MemoryVectorIndex, VectorIndex},
 };
@@ -40,6 +40,7 @@ pub struct SearchEngineBuilder {
     query_cache_max: Option<usize>,
     reranker: bool,
     reranker_instance: Option<CrossEncoderReranker>,
+    llm_rewriter: Option<LlmRewriter>,
     field_weights: Option<HashMap<String, usize>>,
 }
 
@@ -60,6 +61,7 @@ impl SearchEngineBuilder {
             query_cache_max: None,
             reranker: false,
             reranker_instance: None,
+            llm_rewriter: None,
             field_weights: None,
         }
     }
@@ -101,6 +103,12 @@ impl SearchEngineBuilder {
     /// needs to check for init errors before building the engine.
     pub fn with_reranker_instance(mut self, r: CrossEncoderReranker) -> Self {
         self.reranker_instance = Some(r);
+        self
+    }
+
+    /// Enable LLM query rewriting. Fires on low-recall BM25 results.
+    pub fn with_llm_rewriter(mut self, rewriter: LlmRewriter) -> Self {
+        self.llm_rewriter = Some(rewriter);
         self
     }
 
@@ -150,6 +158,10 @@ impl SearchEngineBuilder {
 
         if let Some(fw) = self.field_weights {
             engine = engine.with_field_weights(fw);
+        }
+
+        if let Some(rw) = self.llm_rewriter {
+            engine = engine.with_llm_rewriter(rw);
         }
 
         Ok(engine)
@@ -214,5 +226,9 @@ impl SearchEngineSync {
 
     pub fn stats(&self) -> Result<crate::search::EngineStats> {
         self.rt.block_on(self.inner.stats())
+    }
+
+    pub fn recommend(&self, user_id: &str, limit: usize) -> Result<Vec<crate::model::Hit>> {
+        self.rt.block_on(self.inner.recommend(user_id, limit))
     }
 }

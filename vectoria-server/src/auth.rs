@@ -26,6 +26,8 @@ pub async fn require_api_key(
 
     match key {
         Some(k) if k == state.api_key => Ok(next.run(request).await),
+        // Tenant key: valid for auth; route-level isolation via named indexes.
+        Some(k) if state.tenant_keys.contains_key(k) => Ok(next.run(request).await),
         _ => Err(StatusCode::UNAUTHORIZED),
     }
 }

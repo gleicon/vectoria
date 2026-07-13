@@ -14,9 +14,14 @@ const NS_TEXT: &[u8] = b"text";
 // Key: {query_bytes}\x00{product_id_bytes}, Value: u64 LE count.
 // Null-byte separator is safe: JSON strings never contain \x00.
 const NS_CTRS: &[u8] = b"ctrs";
-// Queries longer than this are not written to NS_CTRS; reads return empty immediately.
-// Prevents storage amplification from oversized client-supplied query strings.
+const NS_USERS: &[u8] = b"users";
+// Key: {user_id}\x00{event_id}, Value: product_id bytes.
+// Enables O(user_events) scan without scanning all events.
+const NS_USER_EVENTS: &[u8] = b"userevents";
+
 const MAX_QUERY_BYTES: usize = 512;
+// user_id is caller-supplied; cap it to prevent storage key amplification.
+const MAX_USER_ID_BYTES: usize = 256;
 
 pub struct EdgeStoreStorage {
     engine: Arc<Mutex<Engine>>,
@@ -114,6 +119,19 @@ impl StorageEngine for EdgeStoreStorage {
             }
             _ => None,
         };
+        // Dual-write: index event under user_id for fast per-user lookups.
+        let user_event_key: Option<Vec<u8>> = match (&event.user_id, &event.event_type) {
+            (Some(uid), EventType::Click | EventType::Purchase)
+                if uid.len() <= MAX_USER_ID_BYTES =>
+            {
+                let mut k = uid.as_bytes().to_vec();
+                k.push(0);
+                k.extend_from_slice(event.id.as_bytes());
+                Some(k)
+            }
+            _ => None,
+        };
+        let product_id_bytes = event.product_id.as_bytes().to_vec();
         let engine = Arc::clone(&self.engine);
         tokio::task::spawn_blocking(move || {
             let mut eng = engine.lock().unwrap();
@@ -130,9 +148,15 @@ impl StorageEngine for EdgeStoreStorage {
                 let mut tx = eng.begin();
                 tx.put(NS_EVENTS, &key, &value, 0, now).context("tx event put failed")?;
                 tx.put(NS_CTRS, &ck, &(count + 1).to_le_bytes(), 0, now).context("tx ctr put failed")?;
+                if let Some(uek) = user_event_key {
+                    tx.put(NS_USER_EVENTS, &uek, &product_id_bytes, 0, now).context("tx user-event put failed")?;
+                }
                 eng.commit_transaction(tx).context("put_event transaction failed")?;
             } else {
                 eng.put(NS_EVENTS, &key, &value).context("put_event failed")?;
+                if let Some(uek) = user_event_key {
+                    eng.put(NS_USER_EVENTS, &uek, &product_id_bytes).context("user-event put failed")?;
+                }
             }
             Ok::<_, anyhow::Error>(())
         })
@@ -277,6 +301,79 @@ impl StorageEngine for EdgeStoreStorage {
         })
         .await??;
         Ok(())
+    }
+
+    async fn put_user_vector(&self, user_id: &str, vector: &[f32]) -> Result<()> {
+        if user_id.len() > MAX_USER_ID_BYTES {
+            anyhow::bail!("user_id exceeds maximum length of {} bytes", MAX_USER_ID_BYTES);
+        }
+        let key = user_id.as_bytes().to_vec();
+        let owned: Vec<f32> = vector.to_vec();
+        let value = encode(&owned)?;
+        let engine = Arc::clone(&self.engine);
+        tokio::task::spawn_blocking(move || {
+            engine.lock().unwrap().put(NS_USERS, &key, &value)
+        })
+        .await?
+        .context("put_user_vector failed")?;
+        Ok(())
+    }
+
+    async fn get_user_vector(&self, user_id: &str) -> Result<Option<Vec<f32>>> {
+        if user_id.len() > MAX_USER_ID_BYTES {
+            return Ok(None);
+        }
+        let key = user_id.as_bytes().to_vec();
+        let engine = Arc::clone(&self.engine);
+        let bytes = tokio::task::spawn_blocking(move || {
+            engine.lock().unwrap().get(NS_USERS, &key)
+        })
+        .await??;
+        match bytes {
+            None => Ok(None),
+            Some(b) => Ok(Some(decode(&b)?)),
+        }
+    }
+
+    async fn get_user_recent_products(&self, user_id: &str, limit: usize) -> Result<Vec<String>> {
+        if user_id.len() > MAX_USER_ID_BYTES {
+            return Ok(vec![]);
+        }
+        let mut prefix = user_id.as_bytes().to_vec();
+        prefix.push(0);
+        let engine = Arc::clone(&self.engine);
+        let pairs = tokio::task::spawn_blocking(move || {
+            engine.lock().unwrap().prefix(NS_USER_EVENTS, &prefix)
+        })
+        .await??;
+        // Deduplicate while preserving recency (pairs are insertion-ordered).
+        let mut seen = std::collections::HashSet::new();
+        let products: Vec<String> = pairs
+            .into_iter()
+            .rev()
+            .filter_map(|(_, v)| String::from_utf8(v).ok())
+            .filter(|id| seen.insert(id.clone()))
+            .take(limit)
+            .collect();
+        Ok(products)
+    }
+
+    async fn list_user_ids(&self) -> Result<Vec<String>> {
+        let engine = Arc::clone(&self.engine);
+        let pairs = tokio::task::spawn_blocking(move || {
+            engine.lock().unwrap().prefix(NS_USER_EVENTS, b"")
+        })
+        .await??;
+        let mut seen = std::collections::HashSet::new();
+        for (k, _) in pairs {
+            // Key format: {user_id}\x00{event_id}
+            if let Some(sep) = k.iter().position(|&b| b == 0) {
+                if let Ok(uid) = String::from_utf8(k[..sep].to_vec()) {
+                    seen.insert(uid);
+                }
+            }
+        }
+        Ok(seen.into_iter().collect())
     }
 }
 

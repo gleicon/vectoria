@@ -56,7 +56,7 @@ async fn builder_with_query_cache_indexes_and_searches() {
         ranking_weights: None,
         aggregate: None,
         explain: false,
-        rerank: false,
+        rerank: false, cluster: false,
     }).await.unwrap();
 
     assert!(resp.hits.iter().any(|h| h.id == "b1"));
@@ -89,7 +89,7 @@ async fn builder_custom_weights_applied() {
         ranking_weights: None,
         aggregate: None,
         explain: false,
-        rerank: false,
+        rerank: false, cluster: false,
     }).await.unwrap();
 
     assert!(resp.hits.iter().any(|h| h.id == "w1"));
@@ -124,7 +124,7 @@ fn sync_index_and_search() {
         ranking_weights: None,
         aggregate: None,
         explain: false,
-        rerank: false,
+        rerank: false, cluster: false,
     }).unwrap();
 
     assert!(resp.hits.iter().any(|h| h.id == "s1"));
@@ -145,7 +145,7 @@ fn sync_delete() {
         ranking_weights: None,
         aggregate: None,
         explain: false,
-        rerank: false,
+        rerank: false, cluster: false,
     }).unwrap();
 
     assert!(!resp.hits.iter().any(|h| h.id == "d1"), "deleted product must not appear");
