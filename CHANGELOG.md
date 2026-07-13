@@ -4,6 +4,22 @@ All notable changes to Vectoria. Follows [Keep a Changelog](https://keepachangel
 
 ---
 
+## [0.1.12] — 2026-07-13
+
+### Added
+- **User recommendations** (`GET /users/{id}/recommendations?limit=N`): user vectors built from click/purchase embeddings, cached after first call; unknown users return empty.
+- **LLM query rewriting**: optional OpenAI-compatible endpoint (`[llm]` config block); fires only when BM25 is sparse and spell correction didn't trigger; fails silently to original query.
+- **Semantic clustering**: `SearchRequest.cluster: bool` (default `false`) groups hits by k-means on stored vectors; response includes labelled `clusters` array.
+- **Multi-tenancy**: `[[tenants]]` config block maps per-tenant API keys to named index namespaces.
+- `NS_USERS` / `NS_USER_EVENTS` EdgeStore namespaces; click/purchase events dual-written for O(user\_events) lookup.
+- `aggregate_user_vectors()` in the aggregation loop recomputes and caches user vectors.
+
+### Security
+- **Auth bypass fix** (CRITICAL): tenant API keys previously had unrestricted route access. Introduced `Principal` enum (`Admin` / `Tenant(name)`) set by `require_api_key` middleware; `require_admin` gates all admin routes; named-index handlers enforce namespace match.
+- Tenant recommendation requests are scoped to the tenant's named index, preventing cross-tenant user data exposure.
+
+---
+
 ## [0.1.11] — 2026-07-07
 
 ### Changed

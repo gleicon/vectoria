@@ -111,12 +111,12 @@ Priority: P0 (blocker) → P1 (v1 required) → P2 (v1 nice-to-have) → P3 (Pha
 
 ## P3 — Phase 2
 
-- [ ] LLM provider abstraction (`[llm]` config, openai-compatible)
-- [ ] LLM-based query rewriting (Phase 2 query pipeline)
-- [ ] User embeddings (built from events)
-- [ ] `GET /users/{id}/recommendations`
+- [x] LLM provider abstraction (`[llm]` config, openai-compatible)
+- [x] LLM-based query rewriting (zero-result fallback after spell correction)
+- [x] User embeddings (built from click/purchase events, cached in NS_USERS)
+- [x] `GET /users/{id}/recommendations`
+- [x] Semantic result clustering (`cluster: true` in SearchRequest, k-means on stored vectors)
+- [x] Multi-tenancy (`[[tenants]]` config, per-tenant API keys, named index scoping, auth bypass fix)
 - [ ] Product relationship graph (product→product, brand→product)
 - [ ] Two-tower retrieval model
-- [ ] Semantic result clustering (natural facets from embedding space)
-- [ ] Multi-tenancy (separate API keys per tenant, data isolation)
 - [ ] Server-side WASI build target (edge compute)
