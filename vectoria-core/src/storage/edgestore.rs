@@ -18,6 +18,8 @@ const NS_USERS: &[u8] = b"users";
 // Key: {user_id}\x00{event_id}, Value: product_id bytes.
 // Enables O(user_events) scan without scanning all events.
 const NS_USER_EVENTS: &[u8] = b"userevents";
+// Key: {from_id}\x00{rel_type}\x00{to_id}, Value: u64 LE co-occurrence count.
+const NS_RELATIONS: &[u8] = b"relations";
 
 const MAX_QUERY_BYTES: usize = 512;
 // user_id is caller-supplied; cap it to prevent storage key amplification.
@@ -374,6 +376,92 @@ impl StorageEngine for EdgeStoreStorage {
             }
         }
         Ok(seen.into_iter().collect())
+    }
+
+    async fn put_relation(&self, from: &str, to: &str, rel_type: &str, score: u64) -> Result<()> {
+        // Key: {from_id}\x00{rel_type}\x00{to_id}
+        let mut key = from.as_bytes().to_vec();
+        key.push(0);
+        key.extend_from_slice(rel_type.as_bytes());
+        key.push(0);
+        key.extend_from_slice(to.as_bytes());
+        let existing_score = {
+            let k2 = key.clone();
+            let engine = Arc::clone(&self.engine);
+            tokio::task::spawn_blocking(move || engine.lock().unwrap().get(NS_RELATIONS, &k2))
+                .await??
+                .and_then(|b| <[u8; 8]>::try_from(b).ok())
+                .map(u64::from_le_bytes)
+                .unwrap_or(0)
+        };
+        let new_score = existing_score.saturating_add(score);
+        let engine = Arc::clone(&self.engine);
+        tokio::task::spawn_blocking(move || {
+            engine.lock().unwrap().put(NS_RELATIONS, &key, &new_score.to_le_bytes())
+        })
+        .await??;
+        Ok(())
+    }
+
+    async fn get_related(
+        &self,
+        product_id: &str,
+        rel_type_filter: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<(String, String, u64)>> {
+        let mut prefix = product_id.as_bytes().to_vec();
+        prefix.push(0);
+        let engine = Arc::clone(&self.engine);
+        let pairs = tokio::task::spawn_blocking(move || {
+            engine.lock().unwrap().prefix(NS_RELATIONS, &prefix)
+        })
+        .await??;
+
+        let prefix_len = product_id.len() + 1; // skip "{from}\x00"
+        let mut results: Vec<(String, String, u64)> = pairs
+            .into_iter()
+            .filter_map(|(k, v)| {
+                let rest = k.get(prefix_len..)?;
+                // rest = {rel_type}\x00{to_id}
+                let sep = rest.iter().position(|&b| b == 0)?;
+                let rel_type = String::from_utf8(rest[..sep].to_vec()).ok()?;
+                let to_id = String::from_utf8(rest[sep + 1..].to_vec()).ok()?;
+                let count = <[u8; 8]>::try_from(v).ok().map(u64::from_le_bytes)?;
+                Some((to_id, rel_type, count))
+            })
+            .filter(|(_, rt, _)| rel_type_filter.is_none_or(|f| f == rt))
+            .collect();
+
+        results.sort_by(|a, b| b.2.cmp(&a.2));
+        results.truncate(limit);
+        Ok(results)
+    }
+
+    async fn delete_product_relations(&self, product_id: &str) -> Result<()> {
+        let mut prefix = product_id.as_bytes().to_vec();
+        prefix.push(0);
+        let engine = Arc::clone(&self.engine);
+        let keys: Vec<Vec<u8>> = tokio::task::spawn_blocking(move || {
+            engine.lock().unwrap().prefix(NS_RELATIONS, &prefix)
+        })
+        .await??
+        .into_iter()
+        .map(|(k, _)| k)
+        .collect();
+
+        if keys.is_empty() {
+            return Ok(());
+        }
+        let engine = Arc::clone(&self.engine);
+        tokio::task::spawn_blocking(move || {
+            let mut eng = engine.lock().unwrap();
+            for k in keys {
+                eng.delete(NS_RELATIONS, &k)?;
+            }
+            Ok::<_, anyhow::Error>(())
+        })
+        .await??;
+        Ok(())
     }
 }
 

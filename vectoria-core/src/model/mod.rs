@@ -260,3 +260,40 @@ pub struct SimilarRequest {
     pub limit: usize,
     pub filters: Option<HashMap<String, serde_json::Value>>,
 }
+
+/// Relationship type between two products.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RelationType {
+    /// Products from the same brand (populated at aggregation time).
+    Brand,
+    /// Products frequently purchased or clicked together (co-occurrence signal).
+    CoPurchased,
+}
+
+impl RelationType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            RelationType::Brand => "brand",
+            RelationType::CoPurchased => "co_purchased",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "brand" => Some(RelationType::Brand),
+            "co_purchased" => Some(RelationType::CoPurchased),
+            _ => None,
+        }
+    }
+}
+
+/// A related product hit returned by `GET /products/{id}/related`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RelatedHit {
+    pub id: String,
+    pub relation_type: RelationType,
+    /// Normalized relevance score for this relation (0.0–1.0).
+    pub score: f32,
+    pub metadata: serde_json::Value,
+}

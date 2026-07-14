@@ -1,0 +1,35 @@
+[package]
+name = "vectoria-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Vectoria search engine for WebAssembly / edge compute (Cloudflare Workers, Deno Deploy, browsers)"
+keywords = ["search", "wasm", "edge", "vector", "bm25"]
+categories = ["wasm", "web-programming"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Pure-Rust BM25 — no native deps, WASM-compatible
+bm25 = "2"
+
+[dependencies.web-sys]
+version = "0.3"
+features = ["console"]
+
+[dependencies.reqwest]
+version = "0.12"
+default-features = false
+features = ["json"]
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

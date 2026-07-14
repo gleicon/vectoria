@@ -35,6 +35,7 @@ pub struct SearchEngineBuilder {
     storage: Option<Arc<dyn StorageEngine>>,
     vector_index: Option<Arc<dyn VectorIndex>>,
     embedding: Option<Arc<dyn EmbeddingProvider>>,
+    query_embedder: Option<Arc<dyn EmbeddingProvider>>,
     weights: Option<RankingWeights>,
     query_cache_ttl: Option<u64>,
     query_cache_max: Option<usize>,
@@ -56,6 +57,7 @@ impl SearchEngineBuilder {
             storage: None,
             vector_index: None,
             embedding: None,
+            query_embedder: None,
             weights: None,
             query_cache_ttl: None,
             query_cache_max: None,
@@ -78,6 +80,13 @@ impl SearchEngineBuilder {
 
     pub fn embedding(mut self, provider: Arc<dyn EmbeddingProvider>) -> Self {
         self.embedding = Some(provider);
+        self
+    }
+
+    /// Set a separate query-side embedding provider (two-tower retrieval).
+    /// Products are embedded with `embedding()`; queries use this provider.
+    pub fn with_query_embedder(mut self, provider: Arc<dyn EmbeddingProvider>) -> Self {
+        self.query_embedder = Some(provider);
         self
     }
 
@@ -164,6 +173,10 @@ impl SearchEngineBuilder {
             engine = engine.with_llm_rewriter(rw);
         }
 
+        if let Some(qe) = self.query_embedder {
+            engine = engine.with_query_embedder(qe);
+        }
+
         Ok(engine)
     }
 }
@@ -230,5 +243,14 @@ impl SearchEngineSync {
 
     pub fn recommend(&self, user_id: &str, limit: usize) -> Result<Vec<crate::model::Hit>> {
         self.rt.block_on(self.inner.recommend(user_id, limit))
+    }
+
+    pub fn related_products(
+        &self,
+        product_id: &str,
+        rel_type: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<crate::model::RelatedHit>> {
+        self.rt.block_on(self.inner.related_products(product_id, rel_type, limit))
     }
 }

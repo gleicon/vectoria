@@ -94,6 +94,35 @@ async fn main() -> Result<()> {
         }
     }
 
+    if let Some(qe_provider) = &cfg.query_embedding.provider {
+        let query_embedder: Option<Arc<dyn EmbeddingProvider>> = match qe_provider.as_str() {
+            "openai-compatible" => {
+                use vectoria_core::embedding::openai::OpenAIEmbedding;
+                if let Some(base_url) = &cfg.query_embedding.base_url {
+                    let model = cfg.query_embedding.model.as_deref().unwrap_or("text-embedding-3-small");
+                    let dims = cfg.query_embedding.dims.unwrap_or(384);
+                    tracing::info!("query tower: openai-compatible '{}' at {}", model, base_url);
+                    Some(Arc::new(OpenAIEmbedding::new(
+                        base_url.clone(),
+                        model,
+                        cfg.query_embedding.api_key.clone(),
+                        dims,
+                    )))
+                } else {
+                    tracing::warn!("query_embedding.provider=openai-compatible but no base_url set; skipped");
+                    None
+                }
+            }
+            other => {
+                tracing::warn!("unknown query_embedding.provider '{}'; skipped", other);
+                None
+            }
+        };
+        if let Some(qe) = query_embedder {
+            builder = builder.with_query_embedder(qe);
+        }
+    }
+
     if cfg.llm.enabled {
         if let Some(base_url) = &cfg.llm.base_url {
             let rewriter = LlmRewriter::new(base_url, &cfg.llm.model, cfg.llm.api_key.clone());
@@ -153,6 +182,7 @@ async fn main() -> Result<()> {
         .route("/indexes", get(routes::indexes::list_indexes))
         .route("/indexes", post(routes::indexes::create_index))
         .route("/indexes/{name}", delete(routes::indexes::delete_index))
+        .route("/products/{id}/related", get(routes::products::related_products))
         .layer(middleware::from_fn(auth::require_admin));
 
     // Tenant-accessible routes: API key auth only; handlers enforce namespace scoping.

@@ -17,6 +17,8 @@ pub struct VectoriaConfig {
     #[serde(default)]
     pub llm: LlmConfig,
     #[serde(default)]
+    pub query_embedding: QueryEmbeddingConfig,
+    #[serde(default)]
     pub tenants: Vec<TenantConfig>,
 }
 
@@ -110,6 +112,18 @@ impl Default for IndexConfig {
             enable_reranker: false,
         }
     }
+}
+
+/// Optional separate query-tower embedding configuration (two-tower retrieval).
+/// When set, queries are embedded with this provider; products use `[embedding]`.
+/// Enables asymmetric retrieval with different model sizes or fine-tuned query towers.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct QueryEmbeddingConfig {
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub base_url: Option<String>,
+    pub api_key: Option<String>,
+    pub dims: Option<usize>,
 }
 
 /// Optional LLM configuration for query rewriting.

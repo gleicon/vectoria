@@ -76,6 +76,32 @@ pub trait StorageEngine: Send + Sync {
     async fn list_user_ids(&self) -> Result<Vec<String>> {
         Ok(vec![])
     }
+
+    // ── Product relationship graph ────────────────────────────────────────────
+
+    /// Record or increment a directional relationship from `from_id` to `to_id`.
+    /// `rel_type` is one of `"brand"` or `"co_purchased"`.
+    /// `score` is an additive co-occurrence count (u64 semantics stored as f64).
+    async fn put_relation(&self, _from: &str, _to: &str, _rel_type: &str, _score: u64) -> Result<()> {
+        Ok(())
+    }
+
+    /// Return related products for `product_id`.
+    /// `rel_type_filter`: if `Some`, only return relations of that type.
+    /// Returns `(to_id, rel_type, raw_count)` triples sorted by count descending.
+    async fn get_related(
+        &self,
+        _product_id: &str,
+        _rel_type_filter: Option<&str>,
+        _limit: usize,
+    ) -> Result<Vec<(String, String, u64)>> {
+        Ok(vec![])
+    }
+
+    /// Remove all outgoing relations for `product_id` (called on product delete).
+    async fn delete_product_relations(&self, _product_id: &str) -> Result<()> {
+        Ok(())
+    }
 }
 
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize, Clone)]

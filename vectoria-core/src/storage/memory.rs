@@ -16,6 +16,8 @@ pub struct MemoryStorage {
     user_vectors: RwLock<HashMap<String, Vec<f32>>>,
     // user_id → ordered list of product_ids (click/purchase)
     user_product_history: RwLock<HashMap<String, Vec<String>>>,
+    // (from_id, rel_type, to_id) → count
+    relations: RwLock<HashMap<(String, String, String), u64>>,
 }
 
 impl MemoryStorage {
@@ -169,5 +171,37 @@ impl StorageEngine for MemoryStorage {
             .keys()
             .cloned()
             .collect())
+    }
+
+    async fn put_relation(&self, from: &str, to: &str, rel_type: &str, score: u64) -> Result<()> {
+        let key = (from.to_string(), rel_type.to_string(), to.to_string());
+        let mut relations = self.relations.write().unwrap();
+        *relations.entry(key).or_insert(0) += score;
+        Ok(())
+    }
+
+    async fn get_related(
+        &self,
+        product_id: &str,
+        rel_type_filter: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<(String, String, u64)>> {
+        let relations = self.relations.read().unwrap();
+        let mut results: Vec<(String, String, u64)> = relations
+            .iter()
+            .filter(|((from, rt, _), _)| {
+                from == product_id && rel_type_filter.is_none_or(|f| f == rt)
+            })
+            .map(|((_, rt, to), &count)| (to.clone(), rt.clone(), count))
+            .collect();
+        results.sort_by(|a, b| b.2.cmp(&a.2));
+        results.truncate(limit);
+        Ok(results)
+    }
+
+    async fn delete_product_relations(&self, product_id: &str) -> Result<()> {
+        let mut relations = self.relations.write().unwrap();
+        relations.retain(|(from, _, _), _| from != product_id);
+        Ok(())
     }
 }

@@ -20,7 +20,8 @@ WANDS_MAX       := 42994
 
 .PHONY: help build test server server-bg kill esci-download esci-import esci-judges bench webstore clean \
         publish publish-dry-run tag version \
-        wands-download wands-import wands-judges wands-bench
+        wands-download wands-import wands-judges wands-bench \
+        wasm-build wasm-pack
 
 VERSION       := $(shell cargo metadata --no-deps --format-version 1 | python3 -c "import sys,json; print(json.load(sys.stdin)['packages'][0]['version'])" 2>/dev/null || grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
 
@@ -80,12 +81,21 @@ help:
 # Uses a hash-based stub embedder — no model download, no running server required.
 # 57 tests covering search, persistence, behavioral signals, caching, and spell correction.
 test:
-	cargo test --workspace
+	cargo test --workspace --exclude vectoria-wasm
 
 # Compile release binaries for vectoria-server and vectoria-cli.
 # Skips vectoria-core (library only, no binary).
 build:
 	cargo build --release -p vectoria-server -p vectoria-cli
+
+# Build the WASM package using wasm-pack (install: cargo install wasm-pack).
+# Outputs to vectoria-wasm/pkg/ — ready to publish to npm or load in a Worker.
+wasm-pack:
+	wasm-pack build vectoria-wasm --target web --out-dir pkg
+
+# Compile-check the WASM crate without wasm-pack (faster, no npm artifact).
+wasm-build:
+	cargo check -p vectoria-wasm --target wasm32-unknown-unknown
 
 # ── Server ─────────────────────────────────────────────────────────────────
 

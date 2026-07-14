@@ -3,6 +3,7 @@ members = [
     "vectoria-core",
     "vectoria-server",
     "vectoria-cli",
+    "vectoria-wasm",
 ]
 resolver = "2"
 

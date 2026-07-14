@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
@@ -84,6 +84,29 @@ pub async fn similar_flexible(
     let engine = state.registry.default_engine();
     match engine.similar(req).await {
         Ok(hits) => Json(serde_json::json!({"hits": hits})).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct RelatedParams {
+    #[serde(rename = "type")]
+    pub rel_type: Option<String>,
+    #[serde(default = "default_related_limit")]
+    pub limit: usize,
+}
+
+fn default_related_limit() -> usize { 10 }
+
+pub async fn related_products(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Query(params): Query<RelatedParams>,
+) -> impl IntoResponse {
+    let engine = state.registry.default_engine();
+    let rel_type = params.rel_type.as_deref();
+    match engine.related_products(&id, rel_type, params.limit).await {
+        Ok(hits) => Json(serde_json::json!({"product_id": id, "related": hits})).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
     }
 }

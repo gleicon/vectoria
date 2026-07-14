@@ -38,7 +38,12 @@ const MAX_AGGREGATE_FIELDS: usize = 20;
 pub struct SearchEngine {
     storage: Arc<dyn StorageEngine>,
     vector_index: Arc<dyn VectorIndex>,
+    /// Product embedding: used at index time and as the default query embedder.
     embedding: Arc<dyn EmbeddingProvider>,
+    /// Optional separate query tower (two-tower retrieval).
+    /// When set, query text is embedded with this provider instead of `embedding`.
+    /// Product vectors remain embedded with `embedding`, enabling asymmetric retrieval.
+    query_embedder: Option<Arc<dyn EmbeddingProvider>>,
     default_weights: RankingWeights,
     /// In-memory word corpus for autocomplete only. Populated on every index/delete
     /// call so word-prefix suggestions work regardless of storage backend.
@@ -63,6 +68,7 @@ impl SearchEngine {
             storage,
             vector_index,
             embedding,
+            query_embedder: None,
             default_weights,
             autocomplete_bm25: Arc::new(Bm25Index::new()),
             spell: Arc::new(SpellCorrector::new()),
@@ -73,6 +79,11 @@ impl SearchEngine {
             latency_window: Arc::new(Mutex::new(VecDeque::with_capacity(LATENCY_WINDOW))),
             field_weights: None,
         }
+    }
+
+    pub fn with_query_embedder(mut self, provider: Arc<dyn EmbeddingProvider>) -> Self {
+        self.query_embedder = Some(provider);
+        self
     }
 
     pub fn with_reranker(mut self, reranker: CrossEncoderReranker) -> Self {
@@ -170,9 +181,10 @@ impl SearchEngine {
         let offset = req.offset.min(MAX_OFFSET);
         let candidate_k = (limit + offset) * 5;
 
+        let query_embedder = self.query_embedder.as_deref().unwrap_or(self.embedding.as_ref());
         let query_vector = match req.mode {
             SearchMode::Bm25 => None,
-            _ => Some(self.embedding.embed(&req.q).await?),
+            _ => Some(query_embedder.embed(&req.q).await?),
         };
 
         let mut candidate_scores: HashMap<String, CandidateScore> = HashMap::new();
@@ -365,7 +377,8 @@ impl SearchEngine {
         let query_vector = if let Some(v) = req.vector {
             v
         } else if let Some(text) = req.text {
-            self.embedding.embed(&text).await?
+            let embedder = self.query_embedder.as_deref().unwrap_or(self.embedding.as_ref());
+            embedder.embed(&text).await?
         } else if let Some(id) = req.product_id {
             let product = self.storage.get_product(&id).await?;
             match product.and_then(|p| p.vector) {
@@ -457,6 +470,38 @@ impl SearchEngine {
 
     pub fn autocomplete(&self, prefix: &str, limit: usize) -> Vec<String> {
         self.autocomplete_bm25.suggest(prefix, limit)
+    }
+
+    /// Return related products for `product_id`.
+    ///
+    /// `rel_type`: optional filter — `"brand"` or `"co_purchased"`.
+    /// Relations are populated by the aggregation loop.
+    pub async fn related_products(
+        &self,
+        product_id: &str,
+        rel_type: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<crate::model::RelatedHit>> {
+        use crate::model::{RelatedHit, RelationType};
+
+        let limit = limit.min(MAX_LIMIT);
+        let raw = self.storage.get_related(product_id, rel_type, limit).await?;
+        // Normalize scores within the result set (divide by max count).
+        let max_count = raw.iter().map(|(_, _, c)| *c).max().unwrap_or(1) as f32;
+
+        let mut hits = Vec::with_capacity(raw.len());
+        for (to_id, rt_str, count) in raw {
+            let Some(product) = self.storage.get_product(&to_id).await? else { continue };
+            let relation_type = RelationType::from_str(&rt_str)
+                .unwrap_or(RelationType::CoPurchased);
+            hits.push(RelatedHit {
+                id: product.id,
+                relation_type,
+                score: (count as f32 / max_count).min(1.0),
+                metadata: product.metadata,
+            });
+        }
+        Ok(hits)
     }
 
     async fn expand_query_terms(
