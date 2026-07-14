@@ -4,6 +4,16 @@ All notable changes to Vectoria. Follows [Keep a Changelog](https://keepachangel
 
 ---
 
+## [0.1.13] — 2026-07-13
+
+### Added
+- **Product relationship graph**: `GET /products/{id}/related?type=brand|co_purchased&limit=N`. Brand relations (same `metadata.brand`) and co-purchased relations (shared user click/purchase history) populated by the aggregation loop. Storage: `NS_RELATIONS` EdgeStore namespace, key `{from}\x00{rel_type}\x00{to}`.
+- **Two-tower retrieval**: optional `[query_embedding]` config block (`provider`, `model`, `base_url`, `api_key`, `dims`). When set, query text is embedded with this provider; products keep the main `[embedding]` provider. Enables asymmetric retrieval (e.g. fine-tuned query tower + large product tower). `SearchEngineBuilder::with_query_embedder()`.
+- **WASM / edge build target** (`vectoria-wasm` crate, `wasm32-unknown-unknown`): in-memory BM25 + brute-force cosine + OpenAI-compatible remote embedding via JS fetch. `VectoriaWasm::new(config_json)`, `.index(product_json)`, `.search(request_json)`. Deploy on Cloudflare Workers, Deno Deploy, or in browsers. Build with `make wasm-pack` (requires `wasm-pack`).
+- `aggregate_once_for_test()` public export for integration tests that need to trigger an aggregation cycle.
+
+---
+
 ## [0.1.12] — 2026-07-13
 
 ### Added

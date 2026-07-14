@@ -117,6 +117,6 @@ Priority: P0 (blocker) → P1 (v1 required) → P2 (v1 nice-to-have) → P3 (Pha
 - [x] `GET /users/{id}/recommendations`
 - [x] Semantic result clustering (`cluster: true` in SearchRequest, k-means on stored vectors)
 - [x] Multi-tenancy (`[[tenants]]` config, per-tenant API keys, named index scoping, auth bypass fix)
-- [ ] Product relationship graph (product→product, brand→product)
-- [ ] Two-tower retrieval model
-- [ ] Server-side WASI build target (edge compute)
+- [x] Product relationship graph (`NS_RELATIONS`, `GET /products/{id}/related`, brand + co-purchased, aggregation loop)
+- [x] Two-tower retrieval (`[query_embedding]` config, `with_query_embedder()` builder)
+- [x] Edge / WASM build target (`vectoria-wasm`, wasm32-unknown-unknown, Cloudflare Workers / Deno)
