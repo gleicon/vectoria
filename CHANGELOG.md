@@ -4,6 +4,22 @@ All notable changes to Vectoria. Follows [Keep a Changelog](https://keepachangel
 
 ---
 
+## [0.1.14] — 2026-07-15
+
+### Added
+- **Search widget** (`search-widget/vectoria-search.js`): zero-dependency UMD JavaScript widget for embedding Vectoria search in any web page or framework. Client-side synonym expansion and Unicode normalization for `en-US` and `pt-BR` with no extra roundtrips. Works as a Web Component (`<vectoria-search>`), ES module, and plain `<script>` tag. Configurable via attributes or `VectoriaSearch.init()`. Events: `vs-results`, `vs-select`, `vs-error`. Published at `vectoriasearch.com/search-widget/vectoria-search.js`.
+- **Widget live demo** at `vectoriasearch.com/search-widget.html`: enhancement inspector showing original vs enhanced query, code panels for HTML / Web Component / React / Vue.
+- **`/autocomplete` proxied** in nginx `demo.vectoriasearch.com`: route was missing from the API location regex, causing 404 on OPTIONS preflight. Also added `users` and `admin` to the proxy block to cover all server routes.
+
+### Fixed
+- **CORS double-header**: nginx was adding `Access-Control-Allow-Origin: https://vectoriasearch.com` while `CorsLayer::permissive()` in Axum already returns `*`. Browsers reject responses with duplicate ACAO headers. Removed the nginx CORS layer; Axum handles it.
+
+### Docs
+- Rustdoc added to `RelationType::as_str/from_str`, `SearchEngine::with_query_embedder`, `aggregate_once_for_test`, and all `WasmConfig` / `WasmProduct` / `WasmSearchRequest` fields.
+- README: version references updated to 0.1.14, search widget section added.
+
+---
+
 ## [0.1.13] — 2026-07-13
 
 ### Added

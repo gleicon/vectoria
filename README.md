@@ -35,7 +35,7 @@ Start the server:
 On first run, it downloads the `multilingual-e5-small` embedding model (~40 MB) and prints an API key:
 
 ```
-INFO vectoria v0.1.11
+INFO vectoria v0.1.14
 INFO api_key: a1b2c3d4e5f6...
 INFO listening on http://0.0.0.0:7700
 ```
@@ -187,10 +187,33 @@ vectoria bench judges.ndjson --mode all --server http://localhost:7700 --api-key
 `vectoria-core` can be embedded directly — no HTTP server required. See [docs/api.md — Embedded library](docs/api.md#embedded-library-rust) for the full API, builder options, and examples.
 
 ```toml
-vectoria-core = "0.1.11"
+vectoria-core = "0.1.14"
 ```
 
 Publish target: `make publish` (requires `cargo login` or `CARGO_REGISTRY_TOKEN`). See [crates.io/crates/vectoria-core](https://crates.io/crates/vectoria-core).
+
+## Search widget
+
+`vectoria-search` is a zero-dependency JavaScript widget that connects any web page to a Vectoria server. Query enhancement (synonym expansion, Unicode normalization) runs client-side before the single `fetch()` call — no extra roundtrips.
+
+```html
+<script src="https://vectoriasearch.com/search-widget/vectoria-search.js"></script>
+<div id="search"></div>
+<script>
+VectoriaSearch.init({
+  container: '#search',
+  url: 'https://your-vectoria-server.com',
+  apiKey: 'your-api-key',
+  locale: 'pt-BR',   // or 'en-US'
+  mode: 'hybrid',
+});
+</script>
+```
+
+Works as a Web Component (`<vectoria-search>`) in React, Vue, Svelte, Angular, and plain HTML. Built-in synonym dictionaries for Brazilian Portuguese and US English; extend with your own domain terms.
+
+- [Live demo](https://vectoriasearch.com/search-widget.html)
+- [Widget README](search-widget/README.md)
 
 ## Demo webstore
 
