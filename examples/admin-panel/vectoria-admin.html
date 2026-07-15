@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vectoria Admin — Training Panel</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-h: #1d4ed8;
+      --green: #16a34a;
+      --red: #dc2626;
+      --text: #0f172a;
+      --text2: #334155;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --border2: #cbd5e1;
+      --bg: #ffffff;
+      --bg2: #f8fafc;
+      --shadow: 0 1px 3px rgba(0,0,0,0.07);
+      --mono: 'SF Mono','Fira Code','Cascadia Code',monospace;
+      --sans: 'Inter',system-ui,sans-serif;
+      --r: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--sans); background: var(--bg2); color: var(--text); min-height: 100vh; }
+
+    /* ── topbar ── */
+    #topbar {
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      padding: 12px 24px; display: flex; align-items: center; gap: 12px;
+    }
+    .logo { font-weight: 700; font-size: 0.9375rem; color: var(--text); letter-spacing: -0.01em; }
+    .logo span { color: var(--primary); }
+    .badge {
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.07em;
+      padding: 2px 8px; border-radius: 4px;
+      background: rgba(220,38,38,0.08); color: var(--red);
+      border: 1px solid rgba(220,38,38,0.2);
+    }
+    #topbar .spacer { flex: 1; }
+    #conn-status { font-size: 0.75rem; font-family: var(--mono); color: var(--muted); }
+
+    /* ── config bar ── */
+    #config-bar {
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      padding: 9px 24px; display: flex; gap: 10px; align-items: center;
+      font-size: 0.8125rem;
+    }
+    .cfg-label { color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
+    #cfg-url { width: 250px; }
+    #cfg-key { width: 200px; }
+    #config-bar input {
+      padding: 6px 10px; border: 1px solid var(--border2); border-radius: 6px;
+      font-size: 0.8125rem; font-family: var(--mono); color: var(--text);
+      background: var(--bg); outline: none; transition: border-color 0.12s;
+    }
+    #config-bar input:focus { border-color: var(--primary); }
+
+    /* ── layout ── */
+    main { max-width: 940px; margin: 28px auto; padding: 0 24px; display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start; }
+
+    /* ── panel ── */
+    .panel { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; box-shadow: var(--shadow); }
+    .panel-hd {
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      font-size: 0.8125rem; font-weight: 600; color: var(--text2);
+      display: flex; align-items: center; gap: 7px;
+    }
+
+    /* ── buttons ── */
+    .btn {
+      padding: 7px 14px; border-radius: 6px; font-weight: 500;
+      font-size: 0.8125rem; cursor: pointer; border: 1px solid transparent;
+      font-family: var(--sans); transition: all 0.12s; white-space: nowrap;
+    }
+    .btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .btn-primary:hover { background: var(--primary-h); border-color: var(--primary-h); }
+    .btn-outline { background: var(--bg); color: var(--text2); border-color: var(--border2); }
+    .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+    .btn-green { background: var(--green); color: #fff; border-color: var(--green); }
+    .btn-green:hover { background: #15803d; }
+    .btn-green:disabled { background: var(--border); color: var(--muted); border-color: var(--border); cursor: not-allowed; }
+
+    /* ── search row ── */
+    .search-row { padding: 14px 16px; display: flex; gap: 8px; border-bottom: 1px solid var(--border); }
+    #search-input {
+      flex: 1; padding: 8px 12px; border: 1.5px solid var(--border2); border-radius: 6px;
+      font-size: 0.9375rem; font-family: var(--sans); color: var(--text); outline: none;
+      transition: border-color 0.12s;
+    }
+    #search-input:focus { border-color: var(--primary); }
+
+    /* ── mode pills ── */
+    .mode-row { padding: 8px 16px; display: flex; gap: 5px; border-bottom: 1px solid var(--border); }
+    .mode-btn {
+      padding: 3px 11px; border-radius: 12px; font-size: 0.75rem; font-weight: 500;
+      cursor: pointer; border: 1px solid var(--border); background: var(--bg);
+      color: var(--muted); font-family: var(--sans); transition: all 0.12s;
+    }
+    .mode-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    /* ── results ── */
+    #results-list { list-style: none; min-height: 60px; }
+    #results-list.empty::after {
+      content: 'Run a search to see results.';
+      display: block; text-align: center; color: var(--muted);
+      font-size: 0.875rem; padding: 36px 0;
+    }
+
+    .result-item {
+      display: flex; align-items: flex-start; padding: 11px 16px; gap: 10px;
+      border-bottom: 1px solid var(--border); cursor: grab; transition: background 0.1s;
+      user-select: none;
+    }
+    .result-item:last-child { border-bottom: none; }
+    .result-item:hover { background: var(--bg2); }
+    .result-item.dragging { opacity: 0.35; }
+    .result-item.drag-over { border-top: 2px solid var(--primary); padding-top: 9px; }
+
+    .drag-handle { color: var(--border2); font-size: 1.1rem; flex-shrink: 0; padding-top: 1px; line-height: 1; }
+    .result-pos {
+      font-size: 0.68rem; font-weight: 700; color: var(--muted);
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 4px; padding: 2px 6px; flex-shrink: 0; margin-top: 1px;
+      font-family: var(--mono); min-width: 28px; text-align: center;
+    }
+    .result-pos.up   { background: rgba(22,163,74,0.08); color: var(--green); border-color: rgba(22,163,74,0.3); }
+    .result-pos.down { background: rgba(220,38,38,0.06); color: var(--red); border-color: rgba(220,38,38,0.2); }
+
+    .result-body { flex: 1; min-width: 0; }
+    .result-title { font-weight: 600; font-size: 0.9375rem; color: var(--text); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .result-meta  { font-size: 0.78rem; color: var(--muted); margin-bottom: 3px; }
+    .result-desc  { font-size: 0.8125rem; color: var(--text2); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+    .result-score {
+      font-size: 0.72rem; font-weight: 700; color: var(--primary);
+      background: rgba(37,99,235,0.07); border: 1px solid rgba(37,99,235,0.15);
+      border-radius: 4px; padding: 2px 7px; flex-shrink: 0; margin-top: 1px;
+      font-family: var(--mono);
+    }
+
+    /* ── action bar ── */
+    .action-bar {
+      padding: 10px 16px; border-top: 1px solid var(--border);
+      display: flex; gap: 8px; align-items: center;
+    }
+    #action-status { flex: 1; font-size: 0.8rem; color: var(--muted); }
+
+    /* ── event log ── */
+    #event-log {
+      font-family: var(--mono); font-size: 0.73rem; color: var(--text2);
+      padding: 10px 12px; min-height: 200px; max-height: 420px; overflow-y: auto;
+      line-height: 1.75;
+    }
+    #event-log.empty::after { content: 'Events appear here.'; color: var(--muted); }
+    .log-ok   { color: var(--green); }
+    .log-err  { color: var(--red); }
+    .log-info { color: var(--muted); }
+    .log-ts   { color: var(--border2); margin-right: 6px; }
+
+    /* ── phase 2 card ── */
+    .phase2-card {
+      margin-top: 14px;
+      background: var(--bg); border: 1px solid var(--border); border-radius: var(--r);
+      padding: 16px; font-size: 0.8rem; color: var(--text2); line-height: 1.7;
+      box-shadow: var(--shadow);
+    }
+    .phase2-card h3 {
+      font-size: 0.8125rem; font-weight: 700; color: var(--text);
+      margin-bottom: 10px; display: flex; align-items: center; gap: 7px;
+    }
+    .phase2-card .p2-tag {
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em;
+      padding: 1px 7px; border-radius: 4px;
+      background: rgba(37,99,235,0.08); color: var(--primary);
+      border: 1px solid rgba(37,99,235,0.2);
+    }
+    .phase2-card ul { padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
+    .phase2-card li { display: flex; gap: 8px; align-items: flex-start; }
+    .phase2-card li::before { content: '○'; color: var(--border2); flex-shrink: 0; margin-top: 1px; }
+    .phase2-card b { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<!-- ═══ TOPBAR ═══ -->
+<div id="topbar">
+  <span class="logo">vectoria<span>.</span></span>
+  <span class="badge">ADMIN</span>
+  <div class="spacer"></div>
+  <span id="conn-status">not connected</span>
+</div>
+
+<!-- ═══ CONFIG ═══ -->
+<div id="config-bar">
+  <span class="cfg-label">Server</span>
+  <input id="cfg-url" type="text" value="http://localhost:7700" spellcheck="false">
+  <span class="cfg-label">API key</span>
+  <input id="cfg-key" type="password" placeholder="your-api-key">
+  <button class="btn btn-outline" id="btn-connect">Connect</button>
+</div>
+
+<!-- ═══ MAIN ═══ -->
+<main>
+
+  <!-- left: search + results -->
+  <div class="panel">
+    <div class="panel-hd">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      Search &amp; Train
+    </div>
+
+    <div class="search-row">
+      <input id="search-input" type="text" placeholder="Enter a query to train…" autocomplete="off" spellcheck="false">
+      <button class="btn btn-primary" id="btn-search">Search</button>
+      <button class="btn btn-outline" id="btn-reset" title="Reset to original order">↺ Reset</button>
+    </div>
+
+    <div class="mode-row">
+      <button class="mode-btn active" data-mode="hybrid">Hybrid</button>
+      <button class="mode-btn" data-mode="bm25">BM25</button>
+      <button class="mode-btn" data-mode="semantic">Semantic</button>
+    </div>
+
+    <ul id="results-list" class="empty"></ul>
+
+    <div class="action-bar">
+      <span id="action-status">Search for a query, drag results to your preferred order, then train.</span>
+      <button class="btn btn-green" id="btn-train" disabled>Apply training</button>
+    </div>
+  </div>
+
+  <!-- right: log + phase 2 -->
+  <div>
+    <div class="panel">
+      <div class="panel-hd">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        Event log
+      </div>
+      <div id="event-log" class="empty"></div>
+    </div>
+
+    <div class="phase2-card">
+      <h3><span class="p2-tag">PHASE 2</span> Not yet built</h3>
+      <ul>
+        <li><b>Hard pins</b> — <code>POST /admin/pins {query, product_id, position}</code>. Force absolute position, bypasses scoring. Current training is probabilistic (synthetic events); pins are deterministic.</li>
+        <li><b>Sponsored slots</b> — <code>POST /admin/sponsored {query_pattern, product_id, position, start, end, label}</code>. Injected before organic results, returned with <code>"sponsored": true</code>. Enables selling search positions per query.</li>
+        <li><b>Negative training</b> — suppress a product for a specific query entirely, not just demote it.</li>
+        <li><b>Export / import</b> — dump trained overrides and sponsored slots to JSON for backup, review, and replay across environments.</li>
+      </ul>
+    </div>
+  </div>
+
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  // clicks sent per position gained (e.g. +3 positions = 15 clicks)
+  const CLICKS_PER_POSITION = 5;
+  // purchase events sent for the product placed at position 1
+  const PURCHASE_BONUS_TOP = 5;
+
+  let currentQuery = '';
+  let currentMode  = 'hybrid';
+  let originalOrder = [];
+  let currentOrder  = [];
+
+  const cfgUrl = () => document.getElementById('cfg-url').value.trim().replace(/\/$/, '');
+  const cfgKey = () => document.getElementById('cfg-key').value.trim();
+
+  const connEl    = document.getElementById('conn-status');
+  const searchEl  = document.getElementById('search-input');
+  const listEl    = document.getElementById('results-list');
+  const trainBtn  = document.getElementById('btn-train');
+  const actionEl  = document.getElementById('action-status');
+  const logEl     = document.getElementById('event-log');
+
+  // ── logging ──────────────────────────────────────────────────────────────
+  function log(msg, cls) {
+    logEl.classList.remove('empty');
+    const row = document.createElement('div');
+    const ts  = document.createElement('span');
+    ts.className = 'log-ts';
+    ts.textContent = new Date().toLocaleTimeString('en', { hour12: false });
+    const body = document.createElement('span');
+    if (cls) body.className = cls;
+    body.textContent = msg;
+    row.appendChild(ts);
+    row.appendChild(body);
+    logEl.appendChild(row);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function authHdr() {
+    const k = cfgKey();
+    return { 'Content-Type': 'application/json', ...(k ? { 'Authorization': 'Bearer ' + k } : {}) };
+  }
+
+  // ── connect ───────────────────────────────────────────────────────────────
+  document.getElementById('btn-connect').addEventListener('click', async () => {
+    connEl.style.color = 'var(--muted)';
+    connEl.textContent = 'connecting…';
+    try {
+      const r = await fetch(cfgUrl() + '/health', { headers: authHdr() });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const j = await r.json();
+      connEl.style.color = 'var(--green)';
+      connEl.textContent = '✓ ' + (j.version || 'connected');
+      log('Connected — ' + cfgUrl(), 'log-ok');
+    } catch (e) {
+      connEl.style.color = 'var(--red)';
+      connEl.textContent = '✗ ' + e.message;
+      log('Connection failed: ' + e.message, 'log-err');
+    }
+  });
+
+  // ── mode ──────────────────────────────────────────────────────────────────
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentMode = btn.dataset.mode;
+    });
+  });
+
+  // ── search ────────────────────────────────────────────────────────────────
+  document.getElementById('btn-search').addEventListener('click', runSearch);
+  searchEl.addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(); });
+
+  async function runSearch() {
+    const q = searchEl.value.trim();
+    if (!q) return;
+    currentQuery = q;
+    log('Search: "' + q + '" [' + currentMode + ']', 'log-info');
+    try {
+      const r = await fetch(cfgUrl() + '/search', {
+        method: 'POST', headers: authHdr(),
+        body: JSON.stringify({ q, limit: 15, mode: currentMode }),
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const data = await r.json();
+      const hits = data.hits || data.results || [];
+      originalOrder = hits.slice();
+      currentOrder  = hits.slice();
+      render();
+      trainBtn.disabled = true;
+      actionEl.textContent = hits.length + ' results — drag to reorder, then apply training.';
+      log(hits.length + ' results.', 'log-ok');
+    } catch (e) {
+      log('Search error: ' + e.message, 'log-err');
+      actionEl.textContent = 'Search failed — ' + e.message;
+    }
+  }
+
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    currentOrder = originalOrder.slice();
+    render();
+    trainBtn.disabled = true;
+    actionEl.textContent = 'Reset to original order.';
+    log('Order reset.', 'log-info');
+  });
+
+  // ── render ────────────────────────────────────────────────────────────────
+  function render() {
+    listEl.replaceChildren();
+    listEl.classList.remove('empty');
+
+    currentOrder.forEach((hit, idx) => {
+      const origIdx = originalOrder.findIndex(h => h.id === hit.id);
+      const delta   = origIdx - idx; // positive = moved up
+
+      const li = document.createElement('li');
+      li.className = 'result-item';
+      li.draggable = true;
+      li.dataset.id = hit.id;
+
+      const posClass = delta > 0 ? 'up' : delta < 0 ? 'down' : '';
+      const posLabel = (idx + 1) + (delta > 0 ? ' ↑' : delta < 0 ? ' ↓' : '');
+
+      const m     = hit.metadata || {};
+      const title = m.title || m.name || hit.id;
+      const meta  = [m.brand, m.category, m.price != null ? '$' + Number(m.price).toFixed(2) : null].filter(Boolean).join(' · ');
+      const desc  = String(m.description || m.text || '').slice(0, 140);
+      const score = hit.score != null ? Math.round(hit.score * 100) + '%' : '';
+
+      // Build DOM safely
+      const handle = document.createElement('span');
+      handle.className = 'drag-handle';
+      handle.textContent = '⠿';
+
+      const pos = document.createElement('span');
+      pos.className = 'result-pos' + (posClass ? ' ' + posClass : '');
+      pos.textContent = posLabel;
+
+      const body = document.createElement('div');
+      body.className = 'result-body';
+
+      const titleEl = document.createElement('div');
+      titleEl.className = 'result-title';
+      titleEl.textContent = title;
+      body.appendChild(titleEl);
+
+      if (meta) {
+        const metaEl = document.createElement('div');
+        metaEl.className = 'result-meta';
+        metaEl.textContent = meta;
+        body.appendChild(metaEl);
+      }
+      if (desc) {
+        const descEl = document.createElement('div');
+        descEl.className = 'result-desc';
+        descEl.textContent = desc;
+        body.appendChild(descEl);
+      }
+
+      li.appendChild(handle);
+      li.appendChild(pos);
+      li.appendChild(body);
+
+      if (score) {
+        const scoreEl = document.createElement('span');
+        scoreEl.className = 'result-score';
+        scoreEl.textContent = score;
+        li.appendChild(scoreEl);
+      }
+
+      attachDrag(li);
+      listEl.appendChild(li);
+    });
+  }
+
+  // ── drag and drop ─────────────────────────────────────────────────────────
+  let dragSrc = null;
+
+  function attachDrag(li) {
+    li.addEventListener('dragstart', e => {
+      dragSrc = li;
+      li.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    li.addEventListener('dragend', () => {
+      li.classList.remove('dragging');
+      listEl.querySelectorAll('.result-item').forEach(el => el.classList.remove('drag-over'));
+    });
+    li.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (li !== dragSrc) {
+        listEl.querySelectorAll('.result-item').forEach(el => el.classList.remove('drag-over'));
+        li.classList.add('drag-over');
+      }
+    });
+    li.addEventListener('drop', e => {
+      e.preventDefault();
+      li.classList.remove('drag-over');
+      if (!dragSrc || dragSrc === li) return;
+      const srcId  = dragSrc.dataset.id;
+      const tgtId  = li.dataset.id;
+      const si = currentOrder.findIndex(h => h.id === srcId);
+      const ti = currentOrder.findIndex(h => h.id === tgtId);
+      const [moved] = currentOrder.splice(si, 1);
+      currentOrder.splice(ti, 0, moved);
+      render();
+      syncTrainButton();
+    });
+  }
+
+  function syncTrainButton() {
+    const changed = currentOrder.some((h, i) => h.id !== originalOrder[i]?.id);
+    trainBtn.disabled = !changed;
+    if (changed) {
+      const movedUp = currentOrder.filter((h, i) => {
+        const o = originalOrder.findIndex(x => x.id === h.id);
+        return o > i;
+      }).length;
+      actionEl.textContent = movedUp + ' product' + (movedUp !== 1 ? 's' : '') + ' promoted — click "Apply training" to submit.';
+    }
+  }
+
+  // ── training ──────────────────────────────────────────────────────────────
+  trainBtn.addEventListener('click', applyTraining);
+
+  async function applyTraining() {
+    if (!currentQuery) return;
+    trainBtn.disabled = true;
+    trainBtn.textContent = 'Sending…';
+    log('Applying training for "' + currentQuery + '"…', 'log-info');
+
+    let totalSent = 0, totalErr = 0;
+
+    for (let i = 0; i < currentOrder.length; i++) {
+      const hit     = currentOrder[i];
+      const origIdx = originalOrder.findIndex(h => h.id === hit.id);
+      const delta   = origIdx - i; // positive = promoted
+
+      if (delta <= 0) continue; // only send events for promoted products
+
+      const clickCount    = Math.min(30, delta * CLICKS_PER_POSITION);
+      const purchaseCount = i === 0 ? PURCHASE_BONUS_TOP : 0;
+
+      const events = [
+        ...Array(clickCount).fill({ type: 'click',    product_id: hit.id, query: currentQuery }),
+        ...Array(purchaseCount).fill({ type: 'purchase', product_id: hit.id, query: currentQuery }),
+      ];
+
+      let sent = 0, errs = 0;
+      for (const ev of events) {
+        try {
+          const r = await fetch(cfgUrl() + '/events', {
+            method: 'POST', headers: authHdr(), body: JSON.stringify(ev),
+          });
+          r.ok ? sent++ : errs++;
+        } catch { errs++; }
+      }
+
+      totalSent += sent; totalErr += errs;
+      const m    = hit.metadata || {};
+      const name = m.title || m.name || hit.id;
+      log('↑ ' + name + ' (pos ' + (origIdx + 1) + '→' + (i + 1) + '): ' + sent + ' events' + (errs ? ', ' + errs + ' err' : ''), errs ? 'log-err' : 'log-ok');
+    }
+
+    trainBtn.textContent = 'Apply training';
+    originalOrder = currentOrder.slice();
+    render();
+
+    const summary = totalErr === 0
+      ? totalSent + ' events sent. Rankings update after the next aggregation cycle (~5 min).'
+      : totalSent + ' sent, ' + totalErr + ' failed.';
+    actionEl.textContent = summary;
+    log('Done — ' + summary, totalErr ? 'log-err' : 'log-ok');
+  }
+
+})();
+</script>
+</body>
+</html>

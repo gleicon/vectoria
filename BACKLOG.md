@@ -109,6 +109,18 @@ Priority: P0 (blocker) → P1 (v1 required) → P2 (v1 nice-to-have) → P3 (Pha
 
 ---
 
+## P3 — Admin Panel (Phase 2)
+
+These extend the training panel in `examples/admin-panel/vectoria-admin.html`.
+Phase 1 (drag-to-train via synthetic events) is done. Phase 2 requires new server endpoints.
+
+- [ ] **Hard pins** — `POST /admin/pins {query, product_id, position}` + `DELETE /admin/pins/{id}`. Store in `NS_PINS` EdgeStore namespace. Search handler injects pinned products at their absolute position before returning the scored list. Phase 1 training is probabilistic (synthetic events + aggregation); pins are deterministic and instant.
+- [ ] **Sponsored slots** — `POST /admin/sponsored {query_pattern, product_id, position, start_at, end_at, label}` + management endpoints. Injected before organic results; response includes `"sponsored": true` flag. Enables selling search positions per query or query pattern.
+- [ ] **Negative training** — suppress a specific product for a query entirely (`type: "negative"` in events or a dedicated `POST /admin/suppressions`), not just demote it.
+- [ ] **Override export / import** — `GET /admin/training-export` dumps all pins, sponsored slots, and high-weight synthetic events to JSON. `POST /admin/training-import` replays them. Enables backup, review, and environment migration.
+- [ ] **Admin panel: pins UI** — extend `vectoria-admin.html` to manage hard pins (list, add, remove) once the server endpoint exists.
+- [ ] **Admin panel: sponsored UI** — campaign management view: create slots, set date ranges, preview injected position.
+
 ## P3 — Phase 2
 
 - [x] LLM provider abstraction (`[llm]` config, openai-compatible)
