@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vectoria — Browser Search Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=2">
+  <style>
+    .demo-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(124,58,237,0.07); border: 1px solid rgba(124,58,237,0.2);
+      color: var(--magenta); padding: 4px 14px; font-size: 0.75rem;
+      letter-spacing: 0.04em; border-radius: 20px; margin-bottom: 32px;
+      font-family: var(--sans); font-weight: 500;
+    }
+    .demo-badge .dot {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--magenta);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+
+    #search-section {
+      max-width: 760px; margin: 0 auto; padding: 48px 24px 0;
+    }
+    .search-wrap {
+      position: relative; margin-bottom: 16px;
+    }
+    #search-input {
+      width: 100%; padding: 14px 52px 14px 18px;
+      font-family: var(--sans); font-size: 1rem; color: var(--text);
+      background: var(--bg); border: 1.5px solid var(--border2);
+      border-radius: 10px; outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    #search-input:focus {
+      border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+    }
+    #search-input::placeholder { color: var(--muted); }
+    .search-icon {
+      position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+      color: var(--muted); pointer-events: none;
+    }
+
+    .mode-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .mode-label { font-size: 0.8125rem; color: var(--muted); margin-right: 4px; }
+    .mode-chip {
+      padding: 5px 14px; border-radius: 20px; font-size: 0.8125rem; font-weight: 500;
+      cursor: pointer; border: 1.5px solid var(--border2); background: var(--bg);
+      color: var(--muted); transition: all 0.15s; font-family: var(--sans);
+    }
+    .mode-chip:hover { border-color: var(--primary); color: var(--primary); }
+    .mode-chip.active {
+      background: var(--primary); border-color: var(--primary); color: #fff;
+    }
+    .mode-chip.active.semantic-mode {
+      background: var(--magenta); border-color: var(--magenta);
+    }
+    .mode-chip.active.bm25-mode {
+      background: var(--green); border-color: var(--green);
+    }
+
+    .suggest-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 32px; flex-wrap: wrap;
+    }
+    .suggest-label { font-size: 0.8125rem; color: var(--muted); }
+    .suggest-chip {
+      padding: 4px 12px; border-radius: 16px; font-size: 0.8rem;
+      cursor: pointer; border: 1px solid var(--border); background: var(--bg2);
+      color: var(--text2); transition: all 0.12s; font-family: var(--sans);
+    }
+    .suggest-chip:hover {
+      border-color: var(--primary); color: var(--primary); background: rgba(37,99,235,0.05);
+    }
+
+    .mode-explainer {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px 16px; margin-bottom: 28px; font-size: 0.85rem; color: var(--text2);
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .mode-explainer .icon { flex-shrink: 0; margin-top: 1px; }
+
+    #status-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px; font-size: 0.8125rem; color: var(--muted);
+    }
+    #status-bar .stat-chips { display: flex; gap: 12px; flex-wrap: wrap; }
+    #status-bar .stat-chip {
+      background: var(--bg2); border: 1px solid var(--border);
+      padding: 3px 10px; border-radius: 12px; font-size: 0.75rem;
+      font-family: var(--mono);
+    }
+
+    #results-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px; margin-bottom: 60px;
+    }
+    .product-card {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+      padding: 18px; transition: box-shadow 0.15s, border-color 0.15s;
+      display: flex; flex-direction: column;
+    }
+    .product-card:hover { box-shadow: var(--shadow-hover); border-color: var(--border2); }
+    .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .card-category {
+      font-size: 0.7rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+      color: var(--muted);
+    }
+    .card-price {
+      font-size: 0.875rem; font-weight: 600; color: var(--text);
+    }
+    .card-name {
+      font-size: 0.9375rem; font-weight: 600; color: var(--text); margin-bottom: 4px; line-height: 1.35;
+    }
+    .card-brand { font-size: 0.8125rem; color: var(--muted); margin-bottom: 12px; }
+    .card-desc { font-size: 0.8rem; color: var(--text2); line-height: 1.5; margin-bottom: 14px; flex: 1; }
+
+    .score-bars { margin-bottom: 10px; }
+    .score-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 5px;
+    }
+    .score-label { font-size: 0.7rem; color: var(--muted); width: 56px; flex-shrink: 0; font-family: var(--mono); }
+    .score-track {
+      flex: 1; height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden;
+    }
+    .score-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+    .fill-bm25 { background: var(--green); }
+    .fill-semantic { background: var(--magenta); }
+    .fill-total { background: var(--primary); }
+    .score-val { font-size: 0.7rem; color: var(--muted); width: 28px; text-align: right; font-family: var(--mono); }
+
+    .match-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.7rem; font-weight: 600; padding: 2px 8px;
+      border-radius: 4px; letter-spacing: 0.03em;
+    }
+    .badge-bm25   { background: rgba(22,163,74,0.1);  color: var(--green); }
+    .badge-semantic { background: rgba(124,58,237,0.1); color: var(--magenta); }
+    .badge-hybrid { background: rgba(37,99,235,0.1);  color: var(--primary); }
+
+    #empty-state {
+      text-align: center; padding: 60px 24px; color: var(--muted);
+      max-width: 400px; margin: 0 auto;
+    }
+    #empty-state .empty-icon { font-size: 2.5rem; margin-bottom: 16px; }
+    #empty-state p { font-size: 0.9375rem; line-height: 1.6; }
+    #empty-state code { font-family: var(--mono); background: var(--bg2); padding: 1px 6px; border-radius: 4px; }
+
+    .demo-footer {
+      text-align: center; padding: 40px 24px 60px;
+      border-top: 1px solid var(--border); color: var(--muted); font-size: 0.85rem;
+    }
+    .demo-footer code { font-family: var(--mono); background: var(--bg2); padding: 2px 7px; border-radius: 4px; color: var(--text2); }
+
+    @media (max-width: 600px) {
+      #results-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════ TOPBAR ═══════════════════════ -->
+<div id="topbar">
+  <a class="logo" href="index.html">vectoria<span>.</span></a>
+  <nav>
+    <a href="index.html#features">Features</a>
+    <a href="index.html#benchmark">Benchmark</a>
+    <a href="index.html#install">Install</a>
+    <a href="api.html">Docs</a>
+    <a href="wasm-demo.html" class="active" style="color:var(--text);">Browser Demo</a>
+  </nav>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span style="color:var(--muted);font-size:0.8125rem;font-family:var(--mono);">v0.1.13</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════ HERO ═══════════════════════ -->
+<section id="hero" style="padding-bottom:32px;">
+  <div class="demo-badge">
+    <span class="dot"></span>
+    runs in your browser — no server required
+  </div>
+  <h1>Search that <em>runs anywhere</em><br>— including here.</h1>
+  <p>
+    Vectoria compiles to a ~200KB WebAssembly module. Pre-load a catalog,
+    get BM25 + semantic hybrid search at the edge. This demo runs the
+    same algorithm live in your browser.
+  </p>
+  <div class="cta-row">
+    <a href="index.html#install" class="btn btn-primary">Deploy on a server →</a>
+    <a href="https://github.com/gleicon/vectoria" class="btn btn-outline">View on GitHub</a>
+  </div>
+</section>
+
+<!-- ═══════════════════════ SEARCH UI ═══════════════════════ -->
+<div id="search-section">
+  <div class="search-wrap">
+    <input id="search-input" type="text" autocomplete="off" spellcheck="false"
+           placeholder="Try 'wireless headphones', 'comfortable seating', 'outdoor running gear'…">
+    <svg class="search-icon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+    </svg>
+  </div>
+
+  <div class="mode-row">
+    <span class="mode-label">Mode:</span>
+    <button class="mode-chip active" data-mode="hybrid">Hybrid</button>
+    <button class="mode-chip bm25-mode" data-mode="bm25">BM25 only</button>
+    <button class="mode-chip semantic-mode" data-mode="semantic">Semantic only</button>
+  </div>
+
+  <div class="suggest-row">
+    <span class="suggest-label">Try:</span>
+    <button class="suggest-chip" data-q="wireless headphones">wireless headphones</button>
+    <button class="suggest-chip" data-q="comfortable seating">comfortable seating</button>
+    <button class="suggest-chip" data-q="outdoor running gear">outdoor running gear</button>
+    <button class="suggest-chip" data-q="ergonomic work setup">ergonomic work setup</button>
+    <button class="suggest-chip" data-q="winter weather protection">winter weather protection</button>
+    <button class="suggest-chip" data-q="Nike running shoes">Nike running shoes</button>
+  </div>
+
+  <div id="mode-explainer" class="mode-explainer">
+    <span class="icon">⚡</span>
+    <span id="explainer-text">
+      <strong>Hybrid:</strong> BM25 handles keyword precision, vectors handle semantic meaning.
+      Both scores combine for the final ranking. Best for most ecommerce queries.
+    </span>
+  </div>
+
+  <div id="status-bar">
+    <span id="result-count">46 products loaded — start typing to search</span>
+    <div class="stat-chips">
+      <span class="stat-chip">46 products</span>
+      <span class="stat-chip">BM25 + 8-dim semantic</span>
+      <span class="stat-chip">vectoria-wasm algorithm</span>
+    </div>
+  </div>
+
+  <div id="results-grid"></div>
+
+  <div id="empty-state">
+    <div class="empty-icon">🔍</div>
+    <p>Type a query above — or click a suggestion chip.<br>
+    Try <code>comfortable seating</code> to see semantic mode rescue a query that BM25 can't answer.</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════ FOOTER ═══════════════════════ -->
+<div class="demo-footer">
+  <p>This demo implements the <strong>vectoria-wasm</strong> search algorithm in JavaScript —
+  identical to the Rust/WASM build.<br>
+  To build the real WASM module: <code>make wasm-pack</code> (requires
+  <code>cargo install wasm-pack</code>).<br>
+  <a href="index.html" style="color:var(--primary);">← Back to vectoriasearch.com</a>
+  </p>
+</div>
+
+<script>
+// ──────────────────────────────────────────────────────────────────────────────
+// Product catalog (46 items)
+// Each product has: id, name, brand, category, price, description
+// _vec: 8-dim semantic vector — dimensions:
+//   [0] footwear  [1] electronics  [2] furniture  [3] clothing
+//   [4] sports    [5] audio/wireless  [6] ergonomic/comfort  [7] outdoor/adventure
+// ──────────────────────────────────────────────────────────────────────────────
+const PRODUCTS = [
+  // ── Footwear ──────────────────────────────────────────────────────────────
+  {id:'f01',name:'Nike Air Max 270',brand:'Nike',category:'Footwear',price:150,
+   description:'Lightweight running-inspired sneaker with Max Air heel unit for all-day cushioning.',
+   _vec:[0.9,0,0,0.1,0.35,0,0.25,0]},
+  {id:'f02',name:'Adidas Ultraboost 22',brand:'Adidas',category:'Footwear',price:190,
+   description:'Premium running shoe with responsive Boost midsole and Primeknit upper for marathon performance.',
+   _vec:[0.9,0,0,0,0.9,0,0.2,0.15]},
+  {id:'f03',name:'New Balance 990v5',brand:'New Balance',category:'Footwear',price:175,
+   description:'Heritage performance sneaker with ENCAP midsole for everyday comfort and support.',
+   _vec:[0.9,0,0,0,0.3,0,0.75,0]},
+  {id:'f04',name:'Converse Chuck Taylor All Star',brand:'Converse',category:'Footwear',price:65,
+   description:'Classic canvas sneaker with vulcanized rubber sole. The original street shoe since 1917.',
+   _vec:[0.85,0,0,0.45,0,0,0,0]},
+  {id:'f05',name:'Vans Old Skool',brand:'Vans',category:'Footwear',price:70,
+   description:'Iconic low-top skate shoe with signature side stripe. Suede and canvas upper.',
+   _vec:[0.85,0,0,0.4,0.2,0,0,0]},
+  {id:'f06',name:'Salomon Speedcross 5 Trail Shoe',brand:'Salomon',category:'Footwear',price:135,
+   description:'Aggressive trail running shoe with Contagrip outsole for maximum grip on technical terrain.',
+   _vec:[0.9,0,0,0,0.85,0,0,0.97]},
+  {id:'f07',name:'Timberland 6-Inch Premium Waterproof Boot',brand:'Timberland',category:'Footwear',price:200,
+   description:'Waterproof nubuck leather boot with rustproof hardware. Built for harsh weather and hard work.',
+   _vec:[0.85,0,0,0.2,0,0,0,0.85]},
+  {id:'f08',name:'Birkenstock Arizona Sandal',brand:'Birkenstock',category:'Footwear',price:100,
+   description:'Two-strap cork-footbed sandal with contoured arch support for all-day orthopedic comfort.',
+   _vec:[0.75,0,0,0,0,0,0.97,0]},
+  {id:'f09',name:'Skechers Go Walk 6',brand:'Skechers',category:'Footwear',price:75,
+   description:'Ultra-lightweight walking shoe with ULTRA GO cushioning and ULTRA PILLARS comfort support.',
+   _vec:[0.85,0,0,0,0.35,0,0.97,0]},
+  {id:'f10',name:'Dr. Martens 1460 Leather Boot',brand:'Dr. Martens',category:'Footwear',price:155,
+   description:'Iconic 8-eye leather boot with air-cushioned sole. Symbol of counterculture since 1960.',
+   _vec:[0.85,0,0,0.55,0,0,0.2,0.3]},
+
+  // ── Electronics ───────────────────────────────────────────────────────────
+  {id:'e01',name:'Sony WH-1000XM5 Wireless Headphones',brand:'Sony',category:'Electronics',price:380,
+   description:'Industry-leading noise canceling wireless headphones with 30-hour battery and crystal-clear audio.',
+   _vec:[0,0.9,0,0,0,0.99,0,0]},
+  {id:'e02',name:'Apple AirPods Pro (2nd Gen)',brand:'Apple',category:'Electronics',price:249,
+   description:'Active noise cancellation earbuds with Adaptive Audio, Transparency mode, and USB-C case.',
+   _vec:[0,0.9,0,0,0,0.99,0,0]},
+  {id:'e03',name:'Bose QuietComfort 45 Headphones',brand:'Bose',category:'Electronics',price:279,
+   description:'Wireless Bluetooth headphones with Quiet and Aware modes, 24-hour battery life.',
+   _vec:[0,0.9,0,0,0,0.98,0,0]},
+  {id:'e04',name:'JBL Charge 5 Portable Speaker',brand:'JBL',category:'Electronics',price:180,
+   description:'Portable Bluetooth speaker with 20-hour playtime and IP67 waterproof rating. Charges devices.',
+   _vec:[0,0.8,0,0,0,0.92,0,0.5]},
+  {id:'e05',name:'Samsung 55" QLED 4K Smart TV',brand:'Samsung',category:'Electronics',price:797,
+   description:'Quantum Dot technology with 4K UHD resolution, Alexa built-in, and 120Hz refresh rate.',
+   _vec:[0,0.95,0,0,0,0.2,0,0]},
+  {id:'e06',name:'Apple MacBook Pro 14"',brand:'Apple',category:'Electronics',price:1999,
+   description:'M3 Pro chip with 18-hour battery, Liquid Retina XDR display, designed for professionals.',
+   _vec:[0,0.97,0,0,0,0.1,0.2,0]},
+  {id:'e07',name:'Logitech MX Master 3S Mouse',brand:'Logitech',category:'Electronics',price:100,
+   description:'Advanced wireless mouse with 8K DPI sensor, MagSpeed scroll wheel, and 70-day battery life.',
+   _vec:[0,0.85,0,0,0,0.72,0.35,0]},
+  {id:'e08',name:'Sony A7 IV Mirrorless Camera',brand:'Sony',category:'Electronics',price:2498,
+   description:'33MP full-frame mirrorless camera with 4K60 video and real-time eye tracking autofocus.',
+   _vec:[0,0.9,0,0,0,0,0,0.3]},
+  {id:'e09',name:'Kindle Paperwhite',brand:'Amazon',category:'Electronics',price:150,
+   description:'Waterproof e-reader with 300 ppi glare-free display and six-week battery life.',
+   _vec:[0,0.8,0,0,0,0.1,0.2,0.2]},
+  {id:'e10',name:'iPad Air (M2, 11-inch)',brand:'Apple',category:'Electronics',price:599,
+   description:'Powerful M2 chip with 11" Liquid Retina display and Apple Pencil Pro support.',
+   _vec:[0,0.97,0,0,0,0.35,0.2,0]},
+  {id:'e11',name:'Anker 737 Power Bank 24000mAh',brand:'Anker',category:'Electronics',price:100,
+   description:'24,000mAh portable charger with 140W fast charging. Powers laptops, phones, and tablets.',
+   _vec:[0,0.7,0,0,0,0.3,0,0.35]},
+  {id:'e12',name:'Garmin Forerunner 955 GPS Watch',brand:'Garmin',category:'Electronics',price:499,
+   description:'GPS running watch with training readiness, HRV status, multi-sport, and 20-day battery.',
+   _vec:[0.1,0.85,0,0,0.85,0.45,0,0.5]},
+
+  // ── Furniture ─────────────────────────────────────────────────────────────
+  {id:'u01',name:'Herman Miller Aeron Ergonomic Chair',brand:'Herman Miller',category:'Furniture',price:1395,
+   description:'Iconic ergonomic office chair with PostureFit SL lumbar support and 8Z Pellicle suspension.',
+   _vec:[0,0.1,0.9,0,0,0,0.99,0]},
+  {id:'u02',name:'Autonomous SmartDesk Pro Standing Desk',brand:'Autonomous',category:'Furniture',price:499,
+   description:'Electric height-adjustable standing desk with dual motor and 4-position memory presets.',
+   _vec:[0,0.2,0.9,0,0,0,0.95,0]},
+  {id:'u03',name:'Flexispot E7 Electric Standing Desk',brand:'Flexispot',category:'Furniture',price:499,
+   description:'Heavy-duty electric adjustable desk with anti-collision protection and 355 lb capacity.',
+   _vec:[0,0.2,0.9,0,0,0,0.95,0]},
+  {id:'u04',name:'West Elm Mid-Century Office Desk',brand:'West Elm',category:'Furniture',price:599,
+   description:'Solid walnut wood home office desk with two open cubbies and center drawer.',
+   _vec:[0,0,0.97,0,0,0,0.4,0]},
+  {id:'u05',name:'Casper Wave Hybrid Mattress',brand:'Casper',category:'Furniture',price:1595,
+   description:'Memory foam and zoned support coils for pressure-relieving comfort and spinal alignment.',
+   _vec:[0,0,0.85,0,0,0,0.97,0]},
+  {id:'u06',name:'Article Sven Sofa',brand:'Article',category:'Furniture',price:1799,
+   description:'Mid-century modern sofa with kiln-dried hardwood frame and down-filled cushions.',
+   _vec:[0,0,0.99,0,0,0,0.75,0]},
+  {id:'u07',name:'IKEA KALLAX Shelf Unit 4x4',brand:'IKEA',category:'Furniture',price:115,
+   description:'Versatile bookcase and room divider with 16 compartments, compatible with KALLAX inserts.',
+   _vec:[0,0,0.97,0,0,0,0.1,0]},
+  {id:'u08',name:'Secretlab TITAN Evo 2022 Chair',brand:'Secretlab',category:'Furniture',price:449,
+   description:'Award-winning ergonomic gaming and office chair with magnetic memory foam headrest.',
+   _vec:[0,0.2,0.85,0,0,0,0.92,0]},
+
+  // ── Clothing ──────────────────────────────────────────────────────────────
+  {id:'c01',name:'Patagonia Better Sweater Fleece',brand:'Patagonia',category:'Clothing',price:139,
+   description:'Classic full-zip fleece made from 100% recycled polyester. Lightweight everyday warmth.',
+   _vec:[0,0,0,0.9,0,0,0.35,0.45]},
+  {id:'c02',name:"Levi's 501 Original Straight Jeans",brand:"Levi's",category:'Clothing',price:79,
+   description:'The original straight leg jeans with button fly. Iconic denim since 1873.',
+   _vec:[0,0,0,0.97,0,0,0,0]},
+  {id:'c03',name:'Uniqlo HEATTECH Extra Warm Top',brand:'Uniqlo',category:'Clothing',price:30,
+   description:'Thermal base layer using heat-generating fibers. Ultra-warm version for cold conditions.',
+   _vec:[0,0,0,0.9,0,0,0.45,0.6]},
+  {id:'c04',name:'The North Face Resolve Waterproof Jacket',brand:'The North Face',category:'Clothing',price:99,
+   description:'DryVent waterproof rain jacket with fully taped seams. Packable into its own pocket.',
+   _vec:[0,0,0,0.9,0.2,0,0,0.95]},
+  {id:'c05',name:'Champion Reverse Weave Hoodie',brand:'Champion',category:'Clothing',price:65,
+   description:'Classic heavyweight fleece hoodie in reverse weave construction to prevent shrinkage and distortion.',
+   _vec:[0,0,0,0.9,0.35,0,0.3,0]},
+  {id:'c06',name:'Columbia Bugaboo II Fleece Jacket',brand:'Columbia',category:'Clothing',price:120,
+   description:'Water-repellent fleece jacket with Thermarator insulation and Omni-Heat thermal reflective lining.',
+   _vec:[0,0,0,0.9,0.2,0,0.3,0.85]},
+  {id:'c07',name:'Vuori Performance Jogger',brand:'Vuori',category:'Clothing',price:89,
+   description:'Versatile four-way stretch training jogger for workouts and everyday wear. Moisture wicking.',
+   _vec:[0,0,0,0.75,0.85,0,0.4,0.2]},
+  {id:'c08',name:"Arc'teryx Beta LT Waterproof Jacket",brand:"Arc'teryx",category:'Clothing',price:349,
+   description:'Lightweight GORE-TEX hiking jacket with StormHood and trim athletic fit. 340g.',
+   _vec:[0,0,0,0.85,0.4,0,0,0.99]},
+
+  // ── Sports & Outdoor ──────────────────────────────────────────────────────
+  {id:'sp01',name:'Peloton Bike+ Indoor Cycling',brand:'Peloton',category:'Sports',price:2495,
+   description:'Connected indoor cycling bike with 23.8" rotating touchscreen and Auto-Follow resistance.',
+   _vec:[0,0.35,0,0,0.98,0.3,0,0]},
+  {id:'sp02',name:'TRX GO Suspension Training Kit',brand:'TRX',category:'Sports',price:200,
+   description:'Suspension trainer for 300+ bodyweight exercises. Anchor in any doorframe or outdoors.',
+   _vec:[0,0,0,0,0.98,0,0,0.4]},
+  {id:'sp03',name:'Bowflex SelectTech 552 Adjustable Dumbbells',brand:'Bowflex',category:'Sports',price:549,
+   description:'Adjustable dumbbell set replacing 15 pairs of weights. Dial from 5 to 52.5 lbs per hand.',
+   _vec:[0,0,0,0,0.98,0,0,0]},
+  {id:'sp04',name:'Manduka PRO Yoga Mat',brand:'Manduka',category:'Sports',price:120,
+   description:'6mm closed-cell surface yoga mat with lifetime guarantee. Superior grip, durability, and cushioning.',
+   _vec:[0,0,0,0,0.97,0,0.35,0]},
+  {id:'sp05',name:'Osprey Atmos AG 65 Hiking Backpack',brand:'Osprey',category:'Sports',price:290,
+   description:'Anti-Gravity suspension hiking backpack with 65L capacity and integrated rain cover.',
+   _vec:[0.1,0,0,0.1,0.5,0,0,0.99]},
+  {id:'sp06',name:'Hydro Flask 32oz Wide Mouth Bottle',brand:'Hydro Flask',category:'Sports',price:45,
+   description:'TempShield double-wall vacuum insulation keeps drinks cold 24 hours or hot 12 hours.',
+   _vec:[0,0,0,0,0.5,0,0,0.72]},
+  {id:'sp07',name:'Wilson Pro Staff 97 Tennis Racket',brand:'Wilson',category:'Sports',price:249,
+   description:'97 sq in head size with braided graphite construction for precise ball control and spin.',
+   _vec:[0,0,0,0,0.97,0,0,0.2]},
+  {id:'sp08',name:'Wahoo KICKR Smart Bike Trainer',brand:'Wahoo',category:'Sports',price:1200,
+   description:'Direct drive smart trainer with 2400W resistance and Zwift/TrainerRoad compatibility.',
+   _vec:[0,0.4,0,0,0.98,0.3,0,0]},
+];
+
+// ──────────────────────────────────────────────────────────────────────────────
+// BM25 index
+// ──────────────────────────────────────────────────────────────────────────────
+const K1 = 1.5, B_PARAM = 0.75;
+let _idf = {}, _tf = [], _avgdl = 0;
+
+function tokenize(text) {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 1);
+}
+
+function buildBM25() {
+  const N = PRODUCTS.length;
+  const df = {};
+  _tf = PRODUCTS.map(p => {
+    const tokens = tokenize([p.name, p.brand, p.category, p.description].join(' '));
+    const freq = {};
+    tokens.forEach(t => { freq[t] = (freq[t] || 0) + 1; });
+    Object.keys(freq).forEach(t => { df[t] = (df[t] || 0) + 1; });
+    _avgdl += tokens.length;
+    return { freq, len: tokens.length };
+  });
+  _avgdl /= N;
+  Object.keys(df).forEach(t => {
+    _idf[t] = Math.log((N - df[t] + 0.5) / (df[t] + 0.5) + 1);
+  });
+}
+
+function bm25Score(docIdx, queryTokens) {
+  const { freq, len } = _tf[docIdx];
+  return queryTokens.reduce((s, t) => {
+    if (!_idf[t]) return s;
+    const f = freq[t] || 0;
+    return s + _idf[t] * (f * (K1 + 1)) / (f + K1 * (1 - B_PARAM + B_PARAM * len / _avgdl));
+  }, 0);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Semantic index
+// Dimensions: footwear / electronics / furniture / clothing / sports
+//             audio_wireless / ergonomic_comfort / outdoor_adventure
+// ──────────────────────────────────────────────────────────────────────────────
+const QUERY_KW = [
+  ['shoe','boot','sneaker','sandal','footwear','loafer','sole','trainer','heel','kick'],
+  ['electronic','tech','device','laptop','computer','tablet','phone','camera','screen','display','gadget','tv'],
+  ['furniture','chair','desk','sofa','couch','table','mattress','shelf','lamp','seat','seating','office'],
+  ['clothing','clothes','jacket','jeans','shirt','hoodie','fleece','coat','apparel','wear','outfit','fashion','top','pants'],
+  ['sport','fitness','gym','workout','exercise','training','cycling','yoga','athletic','performance','bike','run'],
+  ['audio','sound','headphone','speaker','wireless','bluetooth','earphone','earbud','noise','music','listen'],
+  ['ergonomic','comfort','comfortable','adjustable','standing','posture','lumbar','support','cushion','sitting','rest'],
+  ['outdoor','trail','hiking','hike','waterproof','weather','camp','backpack','adventure','mountain','rain','terrain'],
+];
+
+function vecNorm(v) { return Math.sqrt(v.reduce((s,x) => s+x*x, 0)); }
+function cosine(a, b) {
+  let dot = 0;
+  for (let i=0; i<a.length; i++) dot += a[i]*b[i];
+  const n = vecNorm(a)*vecNorm(b);
+  return n === 0 ? 0 : dot/n;
+}
+
+function queryVector(query) {
+  const words = tokenize(query);
+  const v = new Array(8).fill(0);
+  for (let d = 0; d < 8; d++) {
+    for (const w of words) {
+      if (QUERY_KW[d].some(kw => kw.startsWith(w.slice(0,4)) || w.startsWith(kw.slice(0,4)))) {
+        v[d] += 1;
+      }
+    }
+  }
+  const n = vecNorm(v);
+  // If no dimensions matched, apply a gentle uniform signal so semantic finds something
+  return n === 0 ? v.map(() => 1/Math.sqrt(8)) : v.map(x => x/n);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Hybrid search
+// ──────────────────────────────────────────────────────────────────────────────
+function hybridSearch(query, mode, limit = 30) {
+  if (!query.trim()) return [];
+
+  const qtokens = [...new Set(tokenize(query))];
+  const qvec    = queryVector(query);
+
+  // Score every product
+  const scored = PRODUCTS.map((p, i) => {
+    const bm25 = (mode !== 'semantic') ? bm25Score(i, qtokens) : 0;
+    const sem  = (mode !== 'bm25')     ? Math.max(0, cosine(qvec, p._vec)) : 0;
+    return { p, bm25, sem, i };
+  });
+
+  // Normalize BM25 across this result set
+  const maxBM25 = scored.reduce((m, s) => Math.max(m, s.bm25), 0) || 1;
+  scored.forEach(s => { s.bm25n = s.bm25 / maxBM25; });
+
+  // Combine
+  const W_BM25 = mode === 'semantic' ? 0 : (mode === 'bm25' ? 1 : 0.35);
+  const W_SEM  = mode === 'bm25'     ? 0 : (mode === 'semantic' ? 1 : 0.65);
+  scored.forEach(s => { s.total = s.bm25n * W_BM25 + s.sem * W_SEM; });
+
+  // Filter and sort
+  const threshold = mode === 'bm25' ? 0.01 : 0.08;
+  return scored
+    .filter(s => s.total > threshold)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, limit);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// UI
+// ──────────────────────────────────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+let currentMode = 'hybrid';
+
+const EXPLAINERS = {
+  hybrid: '<strong>Hybrid:</strong> BM25 handles keyword precision, vectors handle semantic meaning. Both scores combine for the final ranking. Best for most ecommerce queries.',
+  bm25:   '<strong>BM25 only:</strong> Pure keyword frequency matching — fastest, most precise when exact terms are present. Try <em>Nike running shoes</em> to see it win.',
+  semantic: '<strong>Semantic only:</strong> Finds meaning over keywords. Try <em>comfortable seating</em> — no product contains those exact words, but semantic scores find chairs, sofas, and mattresses.',
+};
+
+function matchBadge(bm25n, sem, mode) {
+  if (mode === 'bm25') return `<span class="match-badge badge-bm25">keyword match</span>`;
+  if (mode === 'semantic') return `<span class="match-badge badge-semantic">semantic match</span>`;
+  if (bm25n > 0.3 && sem > 0.3) return `<span class="match-badge badge-hybrid">hybrid match</span>`;
+  if (sem > bm25n)               return `<span class="match-badge badge-semantic">semantic match</span>`;
+  return `<span class="match-badge badge-bm25">keyword match</span>`;
+}
+
+function renderResults(results, mode) {
+  const grid  = document.getElementById('results-grid');
+  const empty = document.getElementById('empty-state');
+  const count = document.getElementById('result-count');
+
+  if (results.length === 0) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    count.textContent = 'No results — try switching to Semantic or Hybrid mode';
+    return;
+  }
+
+  empty.style.display = 'none';
+  count.textContent = `${results.length} result${results.length !== 1 ? 's' : ''}`;
+
+  grid.innerHTML = results.map(({ p, bm25n, sem, total }) => {
+    const bm25Pct  = Math.round(bm25n * 100);
+    const semPct   = Math.round(sem   * 100);
+    const totPct   = Math.round(total * 100);
+    const showBM25 = mode !== 'semantic';
+    const showSem  = mode !== 'bm25';
+
+    return `
+    <div class="product-card">
+      <div class="card-header">
+        <span class="card-category">${escHtml(p.category)}</span>
+        <span class="card-price">$${Number(p.price).toLocaleString()}</span>
+      </div>
+      <div class="card-name">${escHtml(p.name)}</div>
+      <div class="card-brand">${escHtml(p.brand)}</div>
+      <div class="card-desc">${escHtml(p.description)}</div>
+      <div class="score-bars">
+        ${showBM25 ? `
+        <div class="score-row">
+          <span class="score-label">BM25</span>
+          <div class="score-track"><div class="score-fill fill-bm25" style="width:${bm25Pct}%"></div></div>
+          <span class="score-val">${bm25Pct}%</span>
+        </div>` : ''}
+        ${showSem ? `
+        <div class="score-row">
+          <span class="score-label">Semantic</span>
+          <div class="score-track"><div class="score-fill fill-semantic" style="width:${semPct}%"></div></div>
+          <span class="score-val">${semPct}%</span>
+        </div>` : ''}
+        <div class="score-row">
+          <span class="score-label">Score</span>
+          <div class="score-track"><div class="score-fill fill-total" style="width:${totPct}%"></div></div>
+          <span class="score-val">${totPct}%</span>
+        </div>
+      </div>
+      ${matchBadge(bm25n, sem, mode)}
+    </div>`;
+  }).join('');
+}
+
+function doSearch() {
+  const q       = document.getElementById('search-input').value;
+  const results = hybridSearch(q, currentMode);
+  renderResults(results, currentMode);
+}
+
+// mode chips
+document.querySelectorAll('.mode-chip').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentMode = btn.dataset.mode;
+    document.querySelectorAll('.mode-chip').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('explainer-text').innerHTML = EXPLAINERS[currentMode];
+    doSearch();
+  });
+});
+
+// suggestion chips
+document.querySelectorAll('.suggest-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.getElementById('search-input').value = chip.dataset.q;
+    doSearch();
+  });
+});
+
+// live search
+document.getElementById('search-input').addEventListener('input', doSearch);
+document.getElementById('search-input').addEventListener('keydown', e => {
+  if (e.key === 'Escape') { e.target.value = ''; doSearch(); }
+});
+
+// init
+buildBM25();
+</script>
+</body>
+</html>

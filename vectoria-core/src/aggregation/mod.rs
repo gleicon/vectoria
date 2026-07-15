@@ -2,7 +2,10 @@ use crate::storage::StorageEngine;
 use std::sync::Arc;
 use std::time::Duration;
 
-/// Run one full aggregation cycle. Exposed for integration tests.
+/// Run one full aggregation cycle (product signals → user vectors → product relations).
+///
+/// Exposed for integration tests that need to trigger aggregation synchronously.
+/// Production code uses [`run_aggregation_loop`] instead.
 pub async fn aggregate_once_for_test(storage: Arc<dyn StorageEngine>) -> anyhow::Result<()> {
     aggregate_once(storage).await
 }

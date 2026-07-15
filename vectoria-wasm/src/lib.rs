@@ -30,12 +30,22 @@ use serde::{Deserialize, Serialize};
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
+/// Configuration passed to [`VectoriaWasm::new`] as JSON.
+///
+/// All fields are optional except that vector search requires either
+/// `embedding_base_url` (remote embedding) or pre-computed vectors in each
+/// indexed product.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WasmConfig {
+    /// Base URL of an OpenAI-compatible embedding endpoint (e.g. `"https://api.openai.com"`).
+    /// Required for automatic embedding; omit if you supply vectors directly.
     pub embedding_base_url: Option<String>,
+    /// Embedding model name passed in the request body. Default: `"text-embedding-3-small"`.
     #[serde(default = "default_model")]
     pub embedding_model: String,
+    /// Bearer token sent as `Authorization: Bearer <key>`. Optional for private endpoints.
     pub embedding_api_key: Option<String>,
+    /// Expected vector dimension. Must match the model. Default: `384`.
     #[serde(default = "default_dims")]
     pub dims: usize,
 }
@@ -56,20 +66,33 @@ impl Default for WasmConfig {
 
 // ── Request / Response types ─────────────────────────────────────────────────
 
+/// A product to index. Pass as JSON to [`VectoriaWasm::index`].
+///
+/// Either `text` or `vector` (or both) should be provided.
+/// When only `text` is given, the vector is fetched from `embedding_base_url`.
+/// When only `vector` is given, BM25 falls back to the product `id`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WasmProduct {
+    /// Stable product identifier. Must be unique within this engine instance.
     pub id: String,
+    /// Human-readable text used for BM25 indexing and (optionally) auto-embedding.
     pub text: Option<String>,
+    /// Pre-computed embedding. Skips the remote embedding call when provided.
     pub vector: Option<Vec<f32>>,
+    /// Arbitrary JSON returned verbatim in search hits.
     #[serde(default)]
     pub metadata: serde_json::Value,
 }
 
+/// Search request. Pass as JSON to [`VectoriaWasm::search`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WasmSearchRequest {
+    /// Query string.
     pub q: String,
+    /// Maximum number of hits to return. Default: 20, capped at 200.
     #[serde(default = "default_limit")]
     pub limit: usize,
+    /// Search mode. Default: `hybrid` (0.7 × semantic + 0.3 × BM25).
     #[serde(default)]
     pub mode: WasmSearchMode,
 }

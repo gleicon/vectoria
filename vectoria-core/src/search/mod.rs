@@ -81,6 +81,12 @@ impl SearchEngine {
         }
     }
 
+    /// Set a separate query-side embedding provider (two-tower retrieval).
+    ///
+    /// When set, query text is embedded with `provider`; product vectors continue
+    /// to use the main `embedding` provider set at construction time. This enables
+    /// asymmetric retrieval: for example, a fine-tuned query tower paired with a
+    /// larger product-side model. Falls back to the product embedder when unset.
     pub fn with_query_embedder(mut self, provider: Arc<dyn EmbeddingProvider>) -> Self {
         self.query_embedder = Some(provider);
         self

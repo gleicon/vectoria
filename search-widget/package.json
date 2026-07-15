@@ -1,0 +1,28 @@
+{
+  "name": "vectoria-search",
+  "version": "0.1.14",
+  "description": "Smart search widget for Vectoria — client-side query enhancement (synonyms, normalization) with zero extra roundtrips. Supports en-US and pt-BR.",
+  "main": "vectoria-search.js",
+  "module": "vectoria-search.js",
+  "browser": "vectoria-search.js",
+  "files": [
+    "vectoria-search.js",
+    "README.md"
+  ],
+  "keywords": [
+    "search",
+    "vectoria",
+    "hybrid-search",
+    "ecommerce",
+    "pt-BR",
+    "web-component",
+    "search-widget"
+  ],
+  "author": "Vectoria Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gleicon/vectoria"
+  },
+  "homepage": "https://vectoriasearch.com"
+}

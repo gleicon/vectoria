@@ -8,7 +8,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.12"
+version = "0.1.14"
 edition = "2024"
 license = "Apache-2.0"
 authors = ["Gleicon Moraes <gleicon@gmail.com>"]
@@ -33,7 +33,7 @@ tap = "gleicon/homebrew-tap"
 
 [workspace.dependencies]
 # Internal crates
-vectoria-core = { path = "vectoria-core", version = "0.1.12" }
+vectoria-core = { path = "vectoria-core", version = "0.1.14" }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }

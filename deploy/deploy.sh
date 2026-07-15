@@ -35,6 +35,13 @@ if [[ "$MODE" == "full" || "$MODE" == "site" ]]; then
     "$REPO_ROOT/website/" \
     "$REMOTE_USER@$REMOTE_HOST:$APP_DIR/website/"
 
+  echo "[sync] search-widget..."
+  $SSH "mkdir -p $APP_DIR/website/search-widget"
+  rsync -az --checksum \
+    -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
+    "$REPO_ROOT/search-widget/vectoria-search.js" \
+    "$REMOTE_USER@$REMOTE_HOST:$APP_DIR/website/search-widget/vectoria-search.js"
+
   echo "[sync] webstore..."
   rsync -az --checksum --delete \
     -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \

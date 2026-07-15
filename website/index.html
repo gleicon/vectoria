@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
 
@@ -22,10 +22,11 @@
     <a href="#install" data-i18n="nav-install">Install</a>
     <a href="#embed" data-i18n="nav-embed">Embed</a>
     <a href="#algolia-compat">Algolia API</a>
+    <a href="search-widget.html">Widget</a>
     <a href="api.html">Docs</a>
   </nav>
   <div style="display:flex;align-items:center;gap:12px;">
-    <span style="color:var(--muted);font-size:0.8125rem;font-family:var(--mono);">v0.1.11</span>
+    <span style="color:var(--muted);font-size:0.8125rem;font-family:var(--mono);">v0.1.14</span>
     <button id="lang-toggle" class="lang-toggle" aria-label="Mudar para Português">PT</button>
   </div>
 </div>
@@ -45,45 +46,19 @@
   </p>
   <div class="cta-row">
     <a href="#install" class="btn btn-primary" data-i18n="cta-start">Get Started →</a>
-    <a href="https://demo.vectoriasearch.com" class="btn btn-demo">Try Live Demo →</a>
     <a href="#benchmark" class="btn btn-outline" data-i18n="cta-bench">View Benchmark</a>
+  </div>
+  <div class="demo-links-row">
+    <span class="demo-links-caption" data-i18n="demo-label">or try a live demo</span>
+    <div class="demo-pills">
+      <a href="https://demo.vectoriasearch.com" class="demo-pill">Demo store →</a>
+      <a href="https://a.vectoriasearch.com" class="demo-pill">Algolia API →</a>
+      <a href="search-widget.html" class="demo-pill">Search widget →</a>
+    </div>
   </div>
 </section>
 
-<div class="demo-banner">
-  <div class="demo-banner-inner">
-    <span class="demo-banner-label">Live demos</span>
-    <span>Search 550 real products — single VPS, no external services.</span>
-    <div class="demo-banner-links">
-      <a href="https://demo.vectoriasearch.com" class="demo-banner-link">Demo store →</a>
-      <a href="https://a.vectoriasearch.com" class="demo-banner-link">Algolia API →</a>
-    </div>
-  </div>
-</div>
-
-<hr class="divider">
-
-<!-- ═══════════════════════ STATS ═══════════════════════ -->
 <section>
-  <div class="stat-strip">
-    <div class="stat">
-      <span class="num">100%</span>
-      <span class="desc" data-i18n="stat-coverage">Query Coverage</span>
-    </div>
-    <div class="stat">
-      <span class="num">2ms</span>
-      <span class="desc" data-i18n="stat-semantic">Semantic p50</span>
-    </div>
-    <div class="stat">
-      <span class="num">500K</span>
-      <span class="desc" data-i18n="stat-products">Products / Node</span>
-    </div>
-    <div class="stat">
-      <span class="num">40MB</span>
-      <span class="desc" data-i18n="stat-model">Model Size</span>
-    </div>
-  </div>
-
   <!-- terminal demo -->
   <div class="two-col">
     <div>
@@ -110,12 +85,12 @@
 <span class="cmt"># clone and build (~60s)</span>
 <span class="prompt">$</span> <span class="cmd">git clone github.com/gleicon/vectoria</span>
 <span class="prompt">$</span> <span class="cmd">cargo build --release</span>
-<span class="out">   Compiling vectoria-core v0.1.11</span>
+<span class="out">   Compiling vectoria-core v0.1.14</span>
 <span class="out">   Finished release target in 58.4s</span>
 
 <span class="cmt"># start server</span>
 <span class="prompt">$</span> <span class="cmd">./target/release/vectoria-server</span>
-<span class="ok">INFO</span> <span class="out">vectoria v0.1.11</span>
+<span class="ok">INFO</span> <span class="out">vectoria v0.1.14</span>
 <span class="key">api_key:</span> <span class="val">a1b2c3d4e5f6...</span>
 <span class="ok">INFO</span> <span class="out">listening on http://0.0.0.0:7700</span>
 
@@ -432,14 +407,14 @@
 <span class="cmt"># clone and start — ONNX model downloads automatically on first run</span>
 <span class="prompt">$</span> <span class="cmd">git clone github.com/gleicon/vectoria &amp;&amp; cd vectoria</span>
 <span class="prompt">$</span> <span class="cmd">VECTORIA_API_KEY=my-secret-key docker compose up</span>
-<span class="ok">INFO</span> <span class="out">vectoria v0.1.11</span>
+<span class="ok">INFO</span> <span class="out">vectoria v0.1.14</span>
 <span class="key">api_key:</span> <span class="val">my-secret-key</span>
 <span class="ok">INFO</span> <span class="out">listening on http://0.0.0.0:7700</span>
 
 <span class="cmt"># background</span>
 <span class="prompt">$</span> <span class="cmd">VECTORIA_API_KEY=my-secret-key docker compose up -d</span>
 <span class="prompt">$</span> <span class="cmd">curl http://localhost:7700/health</span>
-<span class="val">{"status":"ok","version":"0.1.11"}</span>
+<span class="val">{"status":"ok","version":"0.1.14"}</span>
     </div>
   </div>
 
@@ -706,7 +681,7 @@
         </div>
         <div class="terminal-body" style="font-size:0.875rem;">
 <span class="key">[dependencies]</span>
-<span class="val">vectoria-core</span> = <span class="out">"0.1.11"</span>
+<span class="val">vectoria-core</span> = <span class="out">"0.1.14"</span>
         </div>
       </div>
 
@@ -924,7 +899,7 @@ engine.stats()?;
     <a href="quickstart.html">Quickstart</a> &nbsp;·&nbsp;
     <a href="https://github.com/amazon-science/esci-data">ESCI Dataset</a>
     <br><br>
-    <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.11 · DESIGNED FOR CATALOGS UP TO 500K PRODUCTS</span>
+    <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.14 · DESIGNED FOR CATALOGS UP TO 500K PRODUCTS</span>
   </p>
 </footer>
 
@@ -937,12 +912,9 @@ engine.stats()?;
     'hero-tag': { en: 'hybrid search engine', pt: 'motor de busca híbrido' },
     'hero-h1':  { en: 'Search that finds what<br>\n    customers <em>mean</em>,<br>\n    not just what they type.', pt: 'Busca que encontra o que<br>\n    os clientes <em>querem dizer</em>,<br>\n    não apenas o que digitam.' },
     'hero-p':   { en: 'Vectoria combines BM25 full-text search with vector similarity and behavioral signals.\n    Single binary. No external services. Runs on your server.\n    Zero-result elimination included.', pt: 'Vectoria combina busca full-text BM25 com similaridade vetorial e sinais comportamentais.\n    Binário único. Sem serviços externos. Roda no seu servidor.\n    Eliminação de resultados zero incluída.' },
-    'cta-start': { en: 'Get Started →', pt: 'Começar →' },
-    'cta-bench': { en: 'View Benchmark', pt: 'Ver Benchmark' },
-    'stat-coverage': { en: 'Query Coverage',  pt: 'Cobertura de Consultas' },
-    'stat-semantic': { en: 'Semantic p50',    pt: 'Semântico p50' },
-    'stat-products': { en: 'Products / Node', pt: 'Produtos / Nó' },
-    'stat-model':    { en: 'Model Size',      pt: 'Tamanho do Modelo' },
+    'cta-start':   { en: 'Get Started →', pt: 'Começar →' },
+    'cta-bench':   { en: 'View Benchmark', pt: 'Ver Benchmark' },
+    'demo-label':  { en: 'or try a live demo', pt: 'ou experimente ao vivo' },
     'qs-tag':  { en: '// quick start', pt: '// início rápido' },
     'qs-h2':   { en: 'Up in <em>three commands</em>.', pt: 'Pronto em <em>três comandos</em>.' },
     'qs-lead': { en: 'Clone, build, start. The embedding model downloads automatically on first run.\n        No Python, no Docker, no search cluster to provision.', pt: 'Clone, compile, inicie. O modelo de embedding é baixado automaticamente na primeira execução.\n        Sem Python, sem Docker, sem cluster de busca para provisionar.' },
@@ -1052,7 +1024,7 @@ engine.stats()?;
     'alg-row-react':   { en: 'React demo (InstantSearch UI)',        pt: 'Demo React (InstantSearch UI)' },
     'alg-link-github': { en: 'View on GitHub →', pt: 'Ver no GitHub →' },
     'alg-link-api':    { en: 'Full API reference →', pt: 'Referência completa da API →' },
-    'footer-body': { en: 'Embedded hybrid search engine for ecommerce. Single binary. No external services.<br>\n    Built with Rust · EdgeStore HNSW · SymSpell · ONNX · Axum<br><br>\n    <a href="https://github.com/gleicon/vectoria">GitHub</a> &nbsp;·&nbsp;\n    <a href="https://crates.io/crates/vectoria-core">crates.io</a> &nbsp;·&nbsp;\n    <a href="api.html">API Docs</a> &nbsp;·&nbsp;\n    <a href="quickstart.html">Quickstart</a> &nbsp;·&nbsp;\n    <a href="https://github.com/amazon-science/esci-data">ESCI Dataset</a>\n    <br><br>\n    <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.11 · DESIGNED FOR CATALOGS UP TO 500K PRODUCTS</span>', pt: 'Motor de busca híbrido embarcado para ecommerce. Binário único. Sem serviços externos.<br>\n    Construído com Rust · EdgeStore HNSW · SymSpell · ONNX · Axum<br><br>\n    <a href="https://github.com/gleicon/vectoria">GitHub</a> &nbsp;·&nbsp;\n    <a href="https://crates.io/crates/vectoria-core">crates.io</a> &nbsp;·&nbsp;\n    <a href="api.html">API Docs</a> &nbsp;·&nbsp;\n    <a href="quickstart.html">Quickstart</a> &nbsp;·&nbsp;\n    <a href="https://github.com/amazon-science/esci-data">Dataset ESCI</a>\n    <br><br>\n    <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">LICENÇA MIT · v0.1.11 · PROJETADO PARA CATÁLOGOS DE ATÉ 500K PRODUTOS</span>' }
+    'footer-body': { en: 'Embedded hybrid search engine for ecommerce. Single binary. No external services.<br>\n    Built with Rust · EdgeStore HNSW · SymSpell · ONNX · Axum<br><br>\n    <a href="https://github.com/gleicon/vectoria">GitHub</a> &nbsp;·&nbsp;\n    <a href="https://crates.io/crates/vectoria-core">crates.io</a> &nbsp;·&nbsp;\n    <a href="api.html">API Docs</a> &nbsp;·&nbsp;\n    <a href="quickstart.html">Quickstart</a> &nbsp;·&nbsp;\n    <a href="https://github.com/amazon-science/esci-data">ESCI Dataset</a>\n    <br><br>\n    <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">MIT LICENSE · v0.1.14 · DESIGNED FOR CATALOGS UP TO 500K PRODUCTS</span>', pt: 'Motor de busca híbrido embarcado para ecommerce. Binário único. Sem serviços externos.<br>\n    Construído com Rust · EdgeStore HNSW · SymSpell · ONNX · Axum<br><br>\n    <a href="https://github.com/gleicon/vectoria">GitHub</a> &nbsp;·&nbsp;\n    <a href="https://crates.io/crates/vectoria-core">crates.io</a> &nbsp;·&nbsp;\n    <a href="api.html">API Docs</a> &nbsp;·&nbsp;\n    <a href="quickstart.html">Quickstart</a> &nbsp;·&nbsp;\n    <a href="https://github.com/amazon-science/esci-data">Dataset ESCI</a>\n    <br><br>\n    <span style="color:var(--muted);font-family:var(--mono);font-size:0.75rem;">LICENÇA MIT · v0.1.14 · PROJETADO PARA CATÁLOGOS DE ATÉ 500K PRODUTOS</span>' }
   };
 
   var lang = localStorage.getItem('vectoria-lang') || 'en';

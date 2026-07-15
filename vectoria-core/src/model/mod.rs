@@ -272,6 +272,7 @@ pub enum RelationType {
 }
 
 impl RelationType {
+    /// Canonical string key used in storage and the REST API (`"brand"` or `"co_purchased"`).
     pub fn as_str(&self) -> &'static str {
         match self {
             RelationType::Brand => "brand",
@@ -279,6 +280,7 @@ impl RelationType {
         }
     }
 
+    /// Parse a relation type from its storage key. Returns `None` for unknown strings.
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "brand" => Some(RelationType::Brand),
