@@ -1,11 +1,10 @@
 use super::{ProductSignals, StorageEngine, StorageStats};
-use crate::model::{Event, Product};
+use crate::model::{Event, Pin, Product, SponsoredSlot, Suppression};
 use crate::search::bm25_index::Bm25Index;
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::RwLock;
-
 
 #[derive(Default)]
 pub struct MemoryStorage {
@@ -14,10 +13,11 @@ pub struct MemoryStorage {
     signals_cache: RwLock<HashMap<String, ProductSignals>>,
     bm25: Bm25Index,
     user_vectors: RwLock<HashMap<String, Vec<f32>>>,
-    // user_id → ordered list of product_ids (click/purchase)
     user_product_history: RwLock<HashMap<String, Vec<String>>>,
-    // (from_id, rel_type, to_id) → count
     relations: RwLock<HashMap<(String, String, String), u64>>,
+    pins: RwLock<HashMap<String, Pin>>,
+    sponsored: RwLock<HashMap<String, SponsoredSlot>>,
+    suppressions: RwLock<HashMap<String, Suppression>>,
 }
 
 impl MemoryStorage {
@@ -203,5 +203,41 @@ impl StorageEngine for MemoryStorage {
         let mut relations = self.relations.write().unwrap();
         relations.retain(|(from, _, _), _| from != product_id);
         Ok(())
+    }
+
+    async fn put_pin(&self, pin: &Pin) -> Result<()> {
+        self.pins.write().unwrap().insert(pin.id.clone(), pin.clone());
+        Ok(())
+    }
+    async fn delete_pin(&self, id: &str) -> Result<()> {
+        self.pins.write().unwrap().remove(id);
+        Ok(())
+    }
+    async fn list_pins(&self) -> Result<Vec<Pin>> {
+        Ok(self.pins.read().unwrap().values().cloned().collect())
+    }
+
+    async fn put_sponsored(&self, slot: &SponsoredSlot) -> Result<()> {
+        self.sponsored.write().unwrap().insert(slot.id.clone(), slot.clone());
+        Ok(())
+    }
+    async fn delete_sponsored(&self, id: &str) -> Result<()> {
+        self.sponsored.write().unwrap().remove(id);
+        Ok(())
+    }
+    async fn list_sponsored(&self) -> Result<Vec<SponsoredSlot>> {
+        Ok(self.sponsored.read().unwrap().values().cloned().collect())
+    }
+
+    async fn put_suppression(&self, sup: &Suppression) -> Result<()> {
+        self.suppressions.write().unwrap().insert(sup.id.clone(), sup.clone());
+        Ok(())
+    }
+    async fn delete_suppression(&self, id: &str) -> Result<()> {
+        self.suppressions.write().unwrap().remove(id);
+        Ok(())
+    }
+    async fn list_suppressions(&self) -> Result<Vec<Suppression>> {
+        Ok(self.suppressions.read().unwrap().values().cloned().collect())
     }
 }

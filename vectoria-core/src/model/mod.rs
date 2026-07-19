@@ -299,3 +299,93 @@ pub struct RelatedHit {
     pub score: f32,
     pub metadata: serde_json::Value,
 }
+
+/// Hard pin: forces a specific product to a fixed position for a query.
+/// Deterministic, instant — bypasses scoring entirely.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Pin {
+    pub id: String,
+    pub query: String,
+    pub product_id: String,
+    /// 1-indexed target position in the result list.
+    pub position: usize,
+    pub created_at: DateTime<Utc>,
+}
+
+impl Pin {
+    pub fn new(query: impl Into<String>, product_id: impl Into<String>, position: usize) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            query: query.into(),
+            product_id: product_id.into(),
+            position,
+            created_at: Utc::now(),
+        }
+    }
+}
+
+/// Sponsored slot: injects an advertiser product at a fixed position for a query pattern.
+/// Injected before organic results; marked with `sponsored: true` in metadata.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SponsoredSlot {
+    pub id: String,
+    /// Exact query or prefix pattern to match against.
+    pub query_pattern: String,
+    pub product_id: String,
+    /// 1-indexed position in the final result list.
+    pub position: usize,
+    pub start_at: Option<DateTime<Utc>>,
+    pub end_at: Option<DateTime<Utc>>,
+    /// Display label shown in UI (e.g. "Sponsored", "Ad").
+    pub label: String,
+    pub created_at: DateTime<Utc>,
+}
+
+impl SponsoredSlot {
+    pub fn new(
+        query_pattern: impl Into<String>,
+        product_id: impl Into<String>,
+        position: usize,
+        label: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            query_pattern: query_pattern.into(),
+            product_id: product_id.into(),
+            position,
+            start_at: None,
+            end_at: None,
+            label: label.into(),
+            created_at: Utc::now(),
+        }
+    }
+}
+
+/// Suppression: hides a product entirely for a specific query.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Suppression {
+    pub id: String,
+    pub query: String,
+    pub product_id: String,
+    pub created_at: DateTime<Utc>,
+}
+
+impl Suppression {
+    pub fn new(query: impl Into<String>, product_id: impl Into<String>) -> Self {
+        Self {
+            id: Uuid::new_v4().to_string(),
+            query: query.into(),
+            product_id: product_id.into(),
+            created_at: Utc::now(),
+        }
+    }
+}
+
+/// Full export of all Phase 2 admin overrides. Used by GET/POST /admin/training-export.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OverrideExport {
+    pub pins: Vec<Pin>,
+    pub sponsored: Vec<SponsoredSlot>,
+    pub suppressions: Vec<Suppression>,
+    pub exported_at: DateTime<Utc>,
+}

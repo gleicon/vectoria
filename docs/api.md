@@ -44,9 +44,37 @@ Body:
 }
 ```
 
-- `id` — required, must be unique
-- `text` — used for embedding generation and full-text search
-- `metadata` — arbitrary JSON object stored and returned with search results
+- `id` — required, must be unique within the index. Re-posting the same ID replaces (upserts) the product.
+- `text` — the search corpus: used for BM25 full-text indexing and vector embedding. If omitted, the server derives it automatically from metadata (see below).
+- `metadata` — arbitrary JSON object. Stored and returned in search hits. Some fields are also indexed for search.
+
+#### How the search corpus is built
+
+If `text` is present it is used as-is — metadata fields play no role in ranking.
+
+If `text` is **omitted**, the server derives the corpus from these metadata fields in order:
+
+| Field | Indexed for search |
+|---|---|
+| `title` | Yes — repeated by field weight (default 1×) |
+| `name` | Yes |
+| `brand` | Yes |
+| `category` | Yes |
+| `description` | Yes |
+| `attributes` | Yes — each key/value pair appended as `"key: value"` |
+| Everything else (`price`, `sku`, `color`, `in_stock`, …) | No — stored and returned, usable in `filters`, not searched |
+
+Field weights (how many times a field's value repeats in the BM25 corpus) are configurable per index.
+
+#### Special metadata fields
+
+| Field | Effect |
+|---|---|
+| `margin` | Float 0.0–1.0. Feeds the `margin` ranking signal if `ranking_weights.margin > 0`. Absent = 0.0. |
+| `in_stock` | Boolean. Can be used in `filters: {"in_stock": true}` to exclude out-of-stock products. |
+| `price` | Numeric. Supports `filters: {"price_min": 10, "price_max": 100}` range filter. |
+
+All other metadata fields are stored verbatim and returned in hits. They are filterable via exact-match in `filters` if indexed at search time.
 
 Response: `201 Created`
 
@@ -301,6 +329,8 @@ Pass `"explain": true` in the search request to see per-factor scores in each hi
 
 ## Admin
 
+Admin routes require the global admin API key. See [Admin Overrides](#admin-overrides) for pins, sponsored slots, suppressions, and aggregation. See [Tenants](#tenants) for multi-tenant SaaS management.
+
 ### Stats
 
 ```
@@ -323,7 +353,9 @@ Re-embeds all products using the current embedding model. Use after changing mod
 
 Named indexes let you run multiple isolated catalogs in a single server instance. Common use cases: A/B testing different catalogs, multi-tenant isolation, experimental product sets alongside production.
 
-The `"default"` index is always present — it is the persistent index configured at startup (`[index] vector_backend` setting). Named indexes created via the API use in-memory storage and are lost on restart.
+The `"default"` index is always present — it is the persistent index configured at startup. When the server runs with `VECTORIA_VECTOR_BACKEND=edgestore-hnsw`, named indexes are also persisted to disk (`indexes/{name}/` alongside the main database) and survive restarts. In memory-only mode they are lost on restart.
+
+Prefer creating named indexes through the [Tenants API](#tenants) when building multi-tenant SaaS — that flow atomically creates the index, issues an API key, and persists both.
 
 ### List indexes
 
@@ -391,6 +423,331 @@ POST /indexes/{name}/similar
 ```
 
 Same body as `POST /products/similar`. Returns `404` if the index doesn't exist.
+
+---
+
+## Admin Overrides
+
+Phase 2 overrides let you apply deterministic, query-scoped rules on top of the algorithmic ranking. They are applied after scoring on every search — no re-indexing required and no aggregation delay.
+
+Three override types, applied in this order:
+
+| Type | Effect |
+|---|---|
+| **Suppression** | Remove a product from results for a specific query |
+| **Pin** | Force a product to an exact position for a specific query |
+| **Sponsored slot** | Inject an advertiser product at a fixed position; marks hit with `sponsored: true` |
+
+All override routes exist in two namespaces:
+
+- `/admin/*` — operates on the **default index**, admin key only
+- `/indexes/{name}/admin/*` — operates on a **named index**, accessible by the index's tenant key or by an admin
+
+The routes below use `/admin/*`; substitute `/indexes/{name}/admin/` for per-tenant usage.
+
+---
+
+### Pins
+
+Force a product to appear at position N for an exact query string. Bypasses scoring entirely.
+
+```
+GET  /admin/pins
+POST /admin/pins
+DELETE /admin/pins/{id}
+```
+
+**Create a pin**
+
+```json
+{
+  "query": "running shoes",
+  "product_id": "sku-001",
+  "position": 1
+}
+```
+
+- `query` — exact match against the search query string
+- `position` — 1-indexed; 1 = first result
+
+Response: `201 Created` with the pin object including `id`, `created_at`.
+
+**List pins** — returns `{"pins": [...]}`.
+
+**Delete a pin** — use the `id` returned on creation. Returns `204 No Content`.
+
+---
+
+### Sponsored Slots
+
+Inject an advertiser product before organic results. Supports date-range gating and prefix matching.
+
+```
+GET  /admin/sponsored
+POST /admin/sponsored
+DELETE /admin/sponsored/{id}
+```
+
+**Create a sponsored slot**
+
+```json
+{
+  "query_pattern": "running",
+  "product_id": "sku-advert",
+  "position": 1,
+  "label": "Sponsored",
+  "start_at": "2026-01-01T00:00:00Z",
+  "end_at": "2026-12-31T23:59:59Z"
+}
+```
+
+- `query_pattern` — matches any query that starts with this string: `"running"` matches `"running"`, `"running shoes"`, `"running gear"`, etc.
+- `label` — returned as `sponsored_label` in the hit metadata (default: `"Sponsored"`)
+- `start_at` / `end_at` — optional UTC timestamps; slot is inactive outside this window
+
+The injected hit includes `"sponsored": true` and `"sponsored_label": "<label>"` in its metadata.
+
+**List** — returns `{"sponsored": [...]}`.
+
+**Delete** — use the `id` returned on creation. Returns `204 No Content`.
+
+---
+
+### Suppressions
+
+Remove a product from results for a specific query.
+
+```
+GET  /admin/suppressions
+POST /admin/suppressions
+DELETE /admin/suppressions/{id}
+```
+
+**Create a suppression**
+
+```json
+{
+  "query": "running shoes",
+  "product_id": "sku-001"
+}
+```
+
+**List** — returns `{"suppressions": [...]}`.
+
+**Delete** — restores the product for that query. Returns `204 No Content`.
+
+---
+
+### Override Status
+
+Check whether the index has any active manual overrides ("tainted").
+
+```
+GET /admin/overrides
+GET /admin/overrides?q=running+shoes
+```
+
+Without `?q`, returns a summary of all overrides:
+
+```json
+{
+  "tainted": true,
+  "pin_count": 2,
+  "sponsored_count": 1,
+  "suppression_count": 0,
+  "pins": [...],
+  "sponsored": [...],
+  "suppressions": [...]
+}
+```
+
+With `?q=<query>`, the response also includes `active_pins`, `active_sponsored`, and `active_suppressions` — the server-computed subset of overrides that currently apply to that query (prefix matching for sponsored, exact matching for pins/suppressions). Use this to build UIs that show toggle state per result without duplicating the matching logic client-side.
+
+---
+
+### Force Aggregation
+
+Phase 1 behavioral training (click/purchase events) takes effect after the aggregation loop runs (default every 5 minutes). To apply training immediately:
+
+```
+POST /admin/aggregate
+```
+
+Response: `{"status": "aggregation_complete"}`
+
+---
+
+### Export / Import
+
+Snapshot all overrides to JSON for backup or migration between environments.
+
+```
+GET  /admin/training-export
+POST /admin/training-import
+```
+
+The export format is an `OverrideExport` object containing `pins`, `sponsored`, `suppressions`, and `exported_at`. Pass it back as the body to import. Existing overrides are not cleared before import.
+
+---
+
+## Tenants
+
+The Tenants API is the recommended way to run Vectoria as a multi-tenant SaaS. Each tenant gets:
+
+- A **named index** — isolated product catalog, overrides, and behavioral signals
+- A **scoped API key** — can only access their own index namespace
+- **Persistent storage** — when running with `VECTORIA_VECTOR_BACKEND=edgestore-hnsw`, the index is written to `indexes/{name}/` and survives restarts
+
+All tenant management routes require the global admin key.
+
+On startup the server reloads all previously-created tenant indexes from disk automatically.
+
+---
+
+### List tenants
+
+```
+GET /admin/tenants
+```
+
+Response (API keys are redacted in list output):
+
+```json
+{
+  "tenants": [
+    {"name": "acme-corp", "created_at": "2026-07-15T10:00:00Z"},
+    {"name": "widgets-inc", "created_at": "2026-07-15T11:30:00Z"}
+  ]
+}
+```
+
+---
+
+### Create a tenant
+
+```
+POST /admin/tenants
+```
+
+Body:
+
+```json
+{"name": "acme-corp"}
+```
+
+Name rules: 1–64 characters, letters/digits/hyphens/underscores only.
+
+This atomically:
+1. Creates a named index `acme-corp`
+2. Generates an API key prefixed `vtk_`
+3. Persists both to disk
+
+Response: `201 Created`
+
+```json
+{
+  "name": "acme-corp",
+  "api_key": "vtk_4a7f...",
+  "created_at": "2026-07-15T10:00:00Z",
+  "index": "acme-corp"
+}
+```
+
+**The API key is returned once only.** Store it immediately — the list endpoint does not return keys.
+
+Error responses:
+- `400 Bad Request` — name fails validation
+- `409 Conflict` — tenant already exists
+
+---
+
+### Delete a tenant
+
+```
+DELETE /admin/tenants/{name}
+```
+
+Removes the tenant key and deletes the named index including all its data on disk.
+
+Response: `204 No Content` on success, `404` if not found.
+
+---
+
+### Rotate API key
+
+Issue a new API key for a tenant. The old key is invalidated immediately — no grace period.
+
+```
+POST /admin/tenants/{name}/rotate-key
+```
+
+Response:
+
+```json
+{"name": "acme-corp", "api_key": "vtk_9b2e..."}
+```
+
+---
+
+### Using the tenant API key
+
+The tenant key authenticates the same way as the admin key (`Authorization: Bearer <key>`). The key carries the tenant identity — any index name in the URL path is automatically scoped to that tenant's namespace internally (`{tenant}/{index-name}`). A tenant key for `acme-corp` hitting `POST /indexes/catalog/products` reaches `acme-corp/catalog`, never another tenant's data.
+
+Attempting to access an index that doesn't exist within the tenant's own namespace returns `404 Not Found` (not 403 — the server deliberately avoids confirming whether another tenant's namespace exists).
+
+**Tenant routes available:**
+
+| Route | Description |
+|---|---|
+| `POST /indexes/{name}/products` | Index a product |
+| `POST /indexes/{name}/search` | Search |
+| `POST /indexes/{name}/similar` | Similar items |
+| `GET /indexes/{name}/admin/pins` | List pins |
+| `POST /indexes/{name}/admin/pins` | Create a pin |
+| `DELETE /indexes/{name}/admin/pins/{id}` | Delete a pin |
+| `GET /indexes/{name}/admin/sponsored` | List sponsored slots |
+| `POST /indexes/{name}/admin/sponsored` | Create a sponsored slot |
+| `DELETE /indexes/{name}/admin/sponsored/{id}` | Delete a sponsored slot |
+| `GET /indexes/{name}/admin/suppressions` | List suppressions |
+| `POST /indexes/{name}/admin/suppressions` | Create a suppression |
+| `DELETE /indexes/{name}/admin/suppressions/{id}` | Delete a suppression |
+| `GET /indexes/{name}/admin/stats` | Index statistics |
+| `GET /indexes/{name}/admin/overrides` | Override status (supports `?q=`) |
+| `POST /indexes/{name}/admin/aggregate` | Force aggregation |
+| `GET /indexes/{name}/admin/training-export` | Export overrides |
+| `POST /indexes/{name}/admin/training-import` | Import overrides |
+
+---
+
+### Example: full tenant flow
+
+```bash
+# 1. Create a tenant (admin key)
+curl -sX POST http://localhost:7700/admin/tenants \
+  -H "Authorization: Bearer $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "acme-corp"}' | tee /tmp/tenant.json
+
+TENANT_KEY=$(cat /tmp/tenant.json | python3 -c "import sys,json; print(json.load(sys.stdin)['api_key'])")
+
+# 2. Index products as the tenant
+curl -sX POST http://localhost:7700/indexes/acme-corp/products \
+  -H "Authorization: Bearer $TENANT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"id": "p1", "text": "running shoe", "metadata": {"title": "Air Runner"}}'
+
+# 3. Search
+curl -sX POST http://localhost:7700/indexes/acme-corp/search \
+  -H "Authorization: Bearer $TENANT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"q": "running", "limit": 5}'
+
+# 4. Pin a result
+curl -sX POST http://localhost:7700/indexes/acme-corp/admin/pins \
+  -H "Authorization: Bearer $TENANT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "running", "product_id": "p1", "position": 1}'
+```
 
 ---
 

@@ -31,7 +31,7 @@ echo ""
 
 # ── 1. Create directory structure ──────────────────────────────────────────
 echo "[1/7] Creating directories..."
-$SSH "sudo mkdir -p $APP_DIR/{website,webstore,deploy/nginx,data,logs} && \
+$SSH "sudo mkdir -p $APP_DIR/{website,webstore,platform,deploy/nginx,data,logs} && \
       sudo chown -R ubuntu:ubuntu $APP_DIR"
 
 # ── 2. Sync source + deploy artifacts ─────────────────────────────────────
@@ -61,6 +61,12 @@ rsync -az --checksum --delete \
   -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
   "$REPO_ROOT/examples/webstore/" \
   "$REMOTE_USER@$REMOTE_HOST:$APP_DIR/webstore/"
+
+echo "[2d/7] Syncing platform console..."
+rsync -az --checksum --delete \
+  -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
+  "$REPO_ROOT/examples/saas-console/" \
+  "$REMOTE_USER@$REMOTE_HOST:$APP_DIR/platform/"
 
 # ── Preflight: .env required before docker + certbot steps ────────────────
 if ! $SSH "test -f $APP_DIR/.env" 2>/dev/null; then
@@ -123,6 +129,7 @@ $SSH "
       -d vectoriasearch.com \
       -d www.vectoriasearch.com \
       -d demo.vectoriasearch.com \
+      -d platform.vectoriasearch.com \
       -d a.vectoriasearch.com
     echo '  certificate issued.'
   fi
@@ -158,6 +165,8 @@ $SSH "
   VECTORIA_API_KEY=\$(grep ^VECTORIA_API_KEY $APP_DIR/.env | cut -d= -f2 | tr -d '\"')
   echo \"window.VECTORIA_API_KEY = '\${VECTORIA_API_KEY}';\" > $APP_DIR/webstore/config.js
   echo '  webstore config.js written.'
+  echo \"window.VECTORIA_DEFAULT_URL = 'https://demo.vectoriasearch.com';\" > $APP_DIR/platform/js/config.js
+  echo '  platform config.js written.'
   sudo nginx -s reload
   echo '  nginx reloaded.'
 
@@ -193,6 +202,7 @@ echo "Setup complete."
 echo ""
 echo "  Website:  https://vectoriasearch.com"
 echo "  Demo:     https://demo.vectoriasearch.com"
+echo "  Platform: https://platform.vectoriasearch.com"
 echo "  Algolia:  https://a.vectoriasearch.com"
 echo ""
-echo "Next: ensure DNS for www, demo, algolia subdomains all point to $REMOTE_HOST"
+echo "Next: ensure DNS for www, demo, platform, algolia subdomains all point to $REMOTE_HOST"

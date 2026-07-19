@@ -102,6 +102,20 @@ pub trait StorageEngine: Send + Sync {
     async fn delete_product_relations(&self, _product_id: &str) -> Result<()> {
         Ok(())
     }
+
+    // ── Phase 2: Pins, Sponsored, Suppressions ────────────────────────────────
+
+    async fn put_pin(&self, _pin: &crate::model::Pin) -> Result<()> { Ok(()) }
+    async fn delete_pin(&self, _id: &str) -> Result<()> { Ok(()) }
+    async fn list_pins(&self) -> Result<Vec<crate::model::Pin>> { Ok(vec![]) }
+
+    async fn put_sponsored(&self, _slot: &crate::model::SponsoredSlot) -> Result<()> { Ok(()) }
+    async fn delete_sponsored(&self, _id: &str) -> Result<()> { Ok(()) }
+    async fn list_sponsored(&self) -> Result<Vec<crate::model::SponsoredSlot>> { Ok(vec![]) }
+
+    async fn put_suppression(&self, _sup: &crate::model::Suppression) -> Result<()> { Ok(()) }
+    async fn delete_suppression(&self, _id: &str) -> Result<()> { Ok(()) }
+    async fn list_suppressions(&self) -> Result<Vec<crate::model::Suppression>> { Ok(vec![]) }
 }
 
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize, Clone)]

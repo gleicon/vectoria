@@ -1,0 +1,350 @@
+<meta charset="utf-8">
+<title>Vectoria Console — Admin</title>
+<link rel="stylesheet" href="css/console.css">
+
+<div class="page">
+  <div id="nav-root"></div>
+
+  <div class="content">
+    <div id="flash" class="flash"></div>
+
+    <div class="tabs" id="admin-tabs">
+      <button class="tab-btn" data-tab="tab-tenants">Tenants</button>
+      <button class="tab-btn" data-tab="tab-indexes">System Indexes</button>
+    </div>
+
+    <!-- Tenants tab -->
+    <div class="tab-pane" id="tab-tenants">
+      <div class="card">
+        <div class="card-title">Tenants</div>
+        <p style="font-size:0.8rem;color:var(--muted);margin:0 0 1rem">
+          Tenants are isolated namespaces for separate organizations or customers.
+          Each tenant has its own API key and manages its own indexes — click <strong>manage</strong> to view or create indexes for a tenant.
+          Tenant data is never visible across tenants or in system index queries.
+        </p>
+
+        <div class="flex gap-1 mt-1" style="margin-bottom:1rem">
+          <input id="new-tenant-name" type="text" placeholder="tenant-name (a-z, 0-9, hyphens)" style="max-width:280px">
+          <button class="btn btn-primary" id="create-tenant-btn">Create tenant</button>
+        </div>
+
+        <div class="table-wrap">
+          <table id="tenant-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Indexes</th>
+                <th>API Key</th>
+                <th>Created</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tenant-tbody">
+              <tr><td colspan="5" class="empty-state">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Indexes tab -->
+    <div class="tab-pane" id="tab-indexes">
+      <div class="card">
+        <div class="card-title">System Indexes</div>
+        <p style="font-size:0.8rem;color:var(--muted);margin:0 0 1rem">
+          System indexes are shared and accessible with the admin key directly.
+          The <code>default</code> index serves the main demo on this server.
+          Tenant indexes live under each tenant — use the Tenants tab to manage them.
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Products</th><th>Vectors</th><th>Queries</th><th></th></tr>
+            </thead>
+            <tbody id="index-tbody">
+              <tr><td colspan="5" class="empty-state">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.load-help-row td { background: var(--bg-alt, #1a1a2e); padding: 0.75rem 1rem; }
+.load-help-row code { display: block; font-size: 0.78rem; background: var(--code-bg, #0d0d1a); border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem 0.75rem; white-space: pre; overflow-x: auto; margin: 0.35rem 0; color: var(--text); }
+.load-help-row .help-label { font-size: 0.75rem; color: var(--muted); margin-top: 0.5rem; }
+.load-help-row { display: none; }
+.load-help-row.open { display: table-row; }
+</style>
+
+<script type="module">
+import { session }                    from './js/api.js';
+import { mountNav, flash, initTabs } from './js/nav.js';
+
+const client = session.client();
+if (!client) { window.location.href = 'index.html'; }
+
+await mountNav('nav-root', 'admin');
+initTabs(document.getElementById('admin-tabs'));
+
+// ── Tenants ──────────────────────────────────────────────────────────────────
+
+async function loadTenants() {
+  const tbody = document.getElementById('tenant-tbody');
+  try {
+    const data = await client.listTenants();
+    const tenants = data.tenants ?? data;
+    if (!tenants.length) {
+      setEmpty(tbody, 5, 'No tenants yet. Create one above.');
+      return;
+    }
+    // Fetch per-tenant index counts in parallel
+    const indexResults = await Promise.allSettled(
+      tenants.map(t => client.listTenantIndexes(t.name))
+    );
+    tbody.replaceChildren();
+    tenants.forEach((t, i) => {
+      const idxData = indexResults[i].status === 'fulfilled' ? indexResults[i].value : null;
+      const indexCount = idxData ? (idxData.indexes ?? []).length : null;
+      const [row, helpRow] = tenantRow(t, indexCount);
+      tbody.appendChild(row);
+      tbody.appendChild(helpRow);
+    });
+  } catch (e) {
+    setEmpty(tbody, 5, `Error: ${e.message}`);
+  }
+}
+
+function tenantRow(t, indexCount) {
+  const serverUrl = session.load().url || 'https://demo.vectoriasearch.com';
+  const tr = document.createElement('tr');
+
+  // Name
+  const tdName = document.createElement('td');
+  tdName.className = 'mono';
+  tdName.textContent = t.name;
+
+  // Index count
+  const tdCount = document.createElement('td');
+  tdCount.className = 'mono';
+  tdCount.textContent = indexCount !== null ? indexCount.toLocaleString() : '—';
+
+  // API Key (blurred)
+  const tdKey = document.createElement('td');
+  tdKey.className = 'mono';
+  if (t.api_key) {
+    const keySpan = document.createElement('span');
+    keySpan.className = 'key-blur';
+    keySpan.title = 'Click to reveal';
+    keySpan.textContent = t.api_key;
+    keySpan.addEventListener('click', () => keySpan.classList.toggle('key-blur'));
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'btn btn-ghost btn-sm';
+    copyBtn.textContent = 'copy';
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(t.api_key).then(() => {
+        copyBtn.textContent = 'copied!';
+        setTimeout(() => { copyBtn.textContent = 'copy'; }, 1500);
+      });
+    });
+    tdKey.append(keySpan, ' ', copyBtn);
+  } else {
+    tdKey.textContent = '—';
+    tdKey.style.color = 'var(--muted)';
+  }
+
+  // Created date
+  const tdDate = document.createElement('td');
+  tdDate.textContent = t.created_at ? new Date(t.created_at).toLocaleDateString() : '—';
+
+  // Actions
+  const tdActions = document.createElement('td');
+  tdActions.className = 'text-right';
+  tdActions.style.whiteSpace = 'nowrap';
+
+  const manageBtn = document.createElement('a');
+  manageBtn.href = `tenant-detail.html?tenant=${encodeURIComponent(t.name)}`;
+  manageBtn.className = 'btn btn-ghost btn-sm';
+  manageBtn.title = `View ${t.name} indexes and settings`;
+  manageBtn.textContent = 'manage';
+
+  const rotateBtn = document.createElement('button');
+  rotateBtn.className = 'btn btn-ghost btn-sm';
+  rotateBtn.textContent = 'rotate key';
+  rotateBtn.addEventListener('click', () => rotateKey(t.name, tr));
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'btn btn-danger btn-sm';
+  deleteBtn.textContent = 'delete';
+  deleteBtn.addEventListener('click', () => deleteTenant(t.name));
+
+  const loadBtn = document.createElement('button');
+  loadBtn.className = 'btn btn-ghost btn-sm';
+  loadBtn.textContent = 'load data ▾';
+  loadBtn.addEventListener('click', () => {
+    helpRow.classList.toggle('open');
+    loadBtn.textContent = helpRow.classList.contains('open') ? 'load data ▴' : 'load data ▾';
+  });
+
+  tdActions.append(manageBtn, ' ', rotateBtn, ' ', loadBtn, ' ', deleteBtn);
+  tr.append(tdName, tdCount, tdKey, tdDate, tdActions);
+
+  // Collapsible help row — built with DOM methods only (no innerHTML) to avoid XSS
+  const helpRow = document.createElement('tr');
+  helpRow.className = 'load-help-row';
+  const helpTd = document.createElement('td');
+  helpTd.colSpan = 5;
+
+  function helpLabel(text) {
+    const d = document.createElement('div');
+    d.className = 'help-label';
+    d.textContent = text;
+    return d;
+  }
+  function codeBlock(lines) {
+    const c = document.createElement('code');
+    c.textContent = lines.join('\n');
+    return c;
+  }
+
+  helpTd.append(
+    helpLabel('Load ESCI data via CLI (run locally, needs "make esci-download" first):'),
+    codeBlock([
+      `make tenant-import \\`,
+      `  TENANT=${t.name} \\`,
+      `  INDEX_NAME=<index-name> \\`,
+      `  API_KEY=<vtk_key> \\`,
+      `  SERVER=${serverUrl} \\`,
+      `  MAX_PRODUCTS=1000`,
+    ]),
+    helpLabel('TENANT identifies which API key to use. INDEX_NAME is the target index within that tenant (create it first via "manage"). Defaults to tenant name if omitted.'),
+    helpLabel('Or index a single product via curl (replace <index-name> with your index):'),
+    codeBlock([
+      `curl -X POST ${serverUrl}/indexes/<index-name>/products \\`,
+      `  -H "Authorization: Bearer <vtk_key>" \\`,
+      `  -H "Content-Type: application/json" \\`,
+      `  -d '{"id":"prod-1","text":"product description","metadata":{}}'`,
+    ]),
+    helpLabel('API key not visible? Use "rotate key" to get a new one, then copy it.'),
+  );
+  helpRow.appendChild(helpTd);
+
+  return [tr, helpRow];
+}
+
+document.getElementById('create-tenant-btn').addEventListener('click', async () => {
+  const nameInput = document.getElementById('new-tenant-name');
+  const name = nameInput.value.trim();
+  if (!name) { flash('flash', 'Enter a tenant name.', 'err'); return; }
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) {
+    flash('flash', 'Name must be lowercase letters, numbers, and hyphens only.', 'err');
+    return;
+  }
+  try {
+    const t = await client.createTenant(name);
+    flash('flash', `Tenant "${name}" created. Key: ${t.api_key}`, 'ok');
+    nameInput.value = '';
+    loadTenants();
+    loadIndexes();
+  } catch (e) {
+    flash('flash', `Create failed: ${e.message}`, 'err');
+  }
+});
+
+async function rotateKey(name, tr) {
+  if (!confirm(`Rotate API key for "${name}"? The current key will stop working immediately.`)) return;
+  try {
+    await client.rotateKey(name);
+    flash('flash', `Key rotated for "${name}". Reload to see the new key.`, 'ok');
+    loadTenants();
+  } catch (e) {
+    flash('flash', `Rotate failed: ${e.message}`, 'err');
+  }
+}
+
+async function deleteTenant(name) {
+  if (!confirm(`Delete tenant "${name}" and its index? This is permanent.`)) return;
+  try {
+    await client.deleteTenant(name);
+    flash('flash', `Tenant "${name}" deleted.`, 'ok');
+    loadTenants();
+    loadIndexes();
+  } catch (e) {
+    flash('flash', `Delete failed: ${e.message}`, 'err');
+  }
+}
+
+// ── Indexes ──────────────────────────────────────────────────────────────────
+
+async function loadIndexes() {
+  const tbody = document.getElementById('index-tbody');
+  try {
+    const data = await client.listIndexes();
+    // Admin sees all registry keys; filter out tenant-namespaced ones (contain '/')
+    const names = (data.indexes ?? data).filter(n => !n.includes('/'));
+    if (!names.length) {
+      setEmpty(tbody, 5, 'No system indexes (only the default index exists).');
+      return;
+    }
+    // Fetch stats for every index in parallel
+    const statsResults = await Promise.allSettled(
+      names.map(name => client.indexStats(name))
+    );
+    tbody.replaceChildren();
+    names.forEach((name, i) => {
+      const s = statsResults[i].status === 'fulfilled' ? statsResults[i].value : null;
+      const tr = document.createElement('tr');
+
+      const tdName = document.createElement('td');
+      tdName.className = 'mono';
+      tdName.textContent = name;
+
+      const tdProducts = document.createElement('td');
+      tdProducts.className = 'mono';
+      tdProducts.textContent = s ? s.product_count.toLocaleString() : '—';
+
+      const tdVectors = document.createElement('td');
+      tdVectors.className = 'mono';
+      tdVectors.textContent = s ? s.vector_count.toLocaleString() : '—';
+
+      const tdQueries = document.createElement('td');
+      tdQueries.className = 'mono';
+      tdQueries.textContent = s ? s.query_count.toLocaleString() : '—';
+
+      const tdActions = document.createElement('td');
+      if (name !== 'default') {
+        const manageLink = document.createElement('a');
+        manageLink.href = 'tenant.html';
+        manageLink.className = 'btn btn-ghost btn-sm';
+        manageLink.textContent = 'manage';
+        manageLink.addEventListener('click', e => {
+          e.preventDefault();
+          sessionStorage.setItem('vt_index', name);
+          window.location.href = 'tenant.html';
+        });
+        tdActions.appendChild(manageLink);
+      }
+
+      tr.append(tdName, tdProducts, tdVectors, tdQueries, tdActions);
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    setEmpty(tbody, 5, `Error: ${e.message}`);
+  }
+}
+
+function setEmpty(tbody, cols, msg) {
+  const tr = document.createElement('tr');
+  const td = document.createElement('td');
+  td.colSpan = cols;
+  td.className = 'empty-state';
+  td.textContent = msg;
+  tr.appendChild(td);
+  tbody.replaceChildren(tr);
+}
+
+loadTenants();
+loadIndexes();
+</script>

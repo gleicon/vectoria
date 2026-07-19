@@ -36,6 +36,12 @@ impl QueryResultCache {
         })
     }
 
+    /// Invalidate all cached entries. Called after any override mutation so the next
+    /// search re-applies the current override set rather than serving a stale slice.
+    pub fn clear(&self) {
+        self.store.write().unwrap().clear();
+    }
+
     pub fn put(&self, key: String, response: SearchResponse) {
         let mut store = self.store.write().unwrap();
         let now = Instant::now();

@@ -3,29 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vectoria Admin — Training Panel</title>
+  <title>Vectoria Admin</title>
   <style>
     :root {
-      --primary: #2563eb;
-      --primary-h: #1d4ed8;
-      --green: #16a34a;
-      --red: #dc2626;
-      --text: #0f172a;
-      --text2: #334155;
-      --muted: #64748b;
-      --border: #e2e8f0;
-      --border2: #cbd5e1;
-      --bg: #ffffff;
-      --bg2: #f8fafc;
+      --primary: #2563eb; --primary-h: #1d4ed8;
+      --green: #16a34a;  --red: #dc2626; --orange: #ea580c;
+      --text: #0f172a;   --text2: #334155; --muted: #64748b;
+      --border: #e2e8f0; --border2: #cbd5e1;
+      --bg: #ffffff;     --bg2: #f8fafc;
       --shadow: 0 1px 3px rgba(0,0,0,0.07);
       --mono: 'SF Mono','Fira Code','Cascadia Code',monospace;
-      --sans: 'Inter',system-ui,sans-serif;
-      --r: 8px;
+      --sans: 'Inter',system-ui,sans-serif; --r: 8px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: var(--sans); background: var(--bg2); color: var(--text); min-height: 100vh; }
 
-    /* ── topbar ── */
+    /* topbar */
     #topbar {
       background: var(--bg); border-bottom: 1px solid var(--border);
       padding: 12px 24px; display: flex; align-items: center; gap: 12px;
@@ -33,23 +26,26 @@
     .logo { font-weight: 700; font-size: 0.9375rem; color: var(--text); letter-spacing: -0.01em; }
     .logo span { color: var(--primary); }
     .badge {
-      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.07em;
-      padding: 2px 8px; border-radius: 4px;
-      background: rgba(220,38,38,0.08); color: var(--red);
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.07em; padding: 2px 8px;
+      border-radius: 4px; background: rgba(220,38,38,0.08); color: var(--red);
       border: 1px solid rgba(220,38,38,0.2);
     }
+    .taint-badge {
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.07em; padding: 2px 8px;
+      border-radius: 4px; border: 1px solid transparent; display: none;
+    }
+    .taint-badge.tainted { background: rgba(234,88,12,0.09); color: var(--orange); border-color: rgba(234,88,12,0.25); display: inline; }
+    .taint-badge.clean   { background: rgba(22,163,74,0.08);  color: var(--green);  border-color: rgba(22,163,74,0.2);  display: inline; }
     #topbar .spacer { flex: 1; }
     #conn-status { font-size: 0.75rem; font-family: var(--mono); color: var(--muted); }
 
-    /* ── config bar ── */
+    /* config bar */
     #config-bar {
       background: var(--bg); border-bottom: 1px solid var(--border);
-      padding: 9px 24px; display: flex; gap: 10px; align-items: center;
-      font-size: 0.8125rem;
+      padding: 9px 24px; display: flex; gap: 10px; align-items: center; font-size: 0.8125rem;
     }
     .cfg-label { color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
-    #cfg-url { width: 250px; }
-    #cfg-key { width: 200px; }
+    #cfg-url { width: 240px; } #cfg-key { width: 200px; }
     #config-bar input {
       padding: 6px 10px; border: 1px solid var(--border2); border-radius: 6px;
       font-size: 0.8125rem; font-family: var(--mono); color: var(--text);
@@ -57,22 +53,35 @@
     }
     #config-bar input:focus { border-color: var(--primary); }
 
-    /* ── layout ── */
-    main { max-width: 940px; margin: 28px auto; padding: 0 24px; display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start; }
+    /* tab bar */
+    #tab-bar {
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      padding: 0 24px; display: flex; gap: 0;
+    }
+    .tab-btn {
+      padding: 10px 16px; font-size: 0.8125rem; font-weight: 500; color: var(--muted);
+      border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent;
+      font-family: var(--sans); transition: color 0.12s, border-color 0.12s; white-space: nowrap;
+    }
+    .tab-btn:hover { color: var(--text2); }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
 
-    /* ── panel ── */
+    /* layout */
+    #workspace { max-width: 1100px; margin: 24px auto; padding: 0 24px; display: grid; grid-template-columns: 1fr 280px; gap: 20px; align-items: start; }
+
+    /* panels */
     .panel { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; box-shadow: var(--shadow); }
     .panel-hd {
-      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      padding: 11px 16px; border-bottom: 1px solid var(--border);
       font-size: 0.8125rem; font-weight: 600; color: var(--text2);
       display: flex; align-items: center; gap: 7px;
     }
 
-    /* ── buttons ── */
+    /* buttons */
     .btn {
-      padding: 7px 14px; border-radius: 6px; font-weight: 500;
-      font-size: 0.8125rem; cursor: pointer; border: 1px solid transparent;
-      font-family: var(--sans); transition: all 0.12s; white-space: nowrap;
+      padding: 7px 14px; border-radius: 6px; font-weight: 500; font-size: 0.8125rem;
+      cursor: pointer; border: 1px solid transparent; font-family: var(--sans);
+      transition: all 0.12s; white-space: nowrap;
     }
     .btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
     .btn-primary:hover { background: var(--primary-h); border-color: var(--primary-h); }
@@ -81,17 +90,45 @@
     .btn-green { background: var(--green); color: #fff; border-color: var(--green); }
     .btn-green:hover { background: #15803d; }
     .btn-green:disabled { background: var(--border); color: var(--muted); border-color: var(--border); cursor: not-allowed; }
+    .btn-danger { background: transparent; color: var(--red); border-color: rgba(220,38,38,0.2); font-size: 0.75rem; padding: 4px 10px; }
+    .btn-danger:hover { background: rgba(220,38,38,0.05); border-color: var(--red); }
+    .btn-sm { padding: 5px 10px; font-size: 0.78rem; }
 
-    /* ── search row ── */
-    .search-row { padding: 14px 16px; display: flex; gap: 8px; border-bottom: 1px solid var(--border); }
+    /* form rows */
+    .form-grid { padding: 14px 16px; display: grid; gap: 10px; border-bottom: 1px solid var(--border); }
+    .form-grid input, .form-grid select {
+      width: 100%; padding: 7px 10px; border: 1px solid var(--border2); border-radius: 6px;
+      font-size: 0.8125rem; font-family: var(--sans); color: var(--text); background: var(--bg);
+      outline: none; transition: border-color 0.12s;
+    }
+    .form-grid input:focus, .form-grid select:focus { border-color: var(--primary); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .form-row.trio { grid-template-columns: 2fr 2fr 1fr; }
+    .form-row.quad { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    .field-label { font-size: 0.72rem; color: var(--muted); margin-bottom: 3px; }
+    .form-actions { display: flex; justify-content: flex-end; }
+
+    /* tables */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .data-table th { font-size: 0.72rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); background: var(--bg2); }
+    .data-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text2); vertical-align: middle; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: var(--bg2); }
+    .pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; }
+    .pill-blue { background: rgba(37,99,235,0.09); color: var(--primary); }
+    .pill-orange { background: rgba(234,88,12,0.09); color: var(--orange); }
+    .pill-green { background: rgba(22,163,74,0.09); color: var(--green); }
+    .pill-gray { background: var(--bg2); color: var(--muted); border: 1px solid var(--border); }
+    .empty-row td { text-align: center; color: var(--muted); padding: 28px; }
+
+    /* search tab */
+    .search-row { padding: 13px 16px; display: flex; gap: 8px; border-bottom: 1px solid var(--border); }
     #search-input {
       flex: 1; padding: 8px 12px; border: 1.5px solid var(--border2); border-radius: 6px;
-      font-size: 0.9375rem; font-family: var(--sans); color: var(--text); outline: none;
-      transition: border-color 0.12s;
+      font-size: 0.9375rem; font-family: var(--sans); color: var(--text);
+      outline: none; transition: border-color 0.12s;
     }
     #search-input:focus { border-color: var(--primary); }
-
-    /* ── mode pills ── */
     .mode-row { padding: 8px 16px; display: flex; gap: 5px; border-bottom: 1px solid var(--border); }
     .mode-btn {
       padding: 3px 11px; border-radius: 12px; font-size: 0.75rem; font-weight: 500;
@@ -99,100 +136,128 @@
       color: var(--muted); font-family: var(--sans); transition: all 0.12s;
     }
     .mode-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-
-    /* ── results ── */
     #results-list { list-style: none; min-height: 60px; }
     #results-list.empty::after {
       content: 'Run a search to see results.';
-      display: block; text-align: center; color: var(--muted);
-      font-size: 0.875rem; padding: 36px 0;
+      display: block; text-align: center; color: var(--muted); font-size: 0.875rem; padding: 36px 0;
     }
-
     .result-item {
       display: flex; align-items: flex-start; padding: 11px 16px; gap: 10px;
-      border-bottom: 1px solid var(--border); cursor: grab; transition: background 0.1s;
-      user-select: none;
+      border-bottom: 1px solid var(--border); cursor: grab; transition: background 0.1s; user-select: none;
     }
     .result-item:last-child { border-bottom: none; }
     .result-item:hover { background: var(--bg2); }
     .result-item.dragging { opacity: 0.35; }
     .result-item.drag-over { border-top: 2px solid var(--primary); padding-top: 9px; }
-
-    .drag-handle { color: var(--border2); font-size: 1.1rem; flex-shrink: 0; padding-top: 1px; line-height: 1; }
+    .drag-handle { color: var(--border2); font-size: 1.1rem; flex-shrink: 0; padding-top: 1px; }
     .result-pos {
-      font-size: 0.68rem; font-weight: 700; color: var(--muted);
-      background: var(--bg2); border: 1px solid var(--border);
-      border-radius: 4px; padding: 2px 6px; flex-shrink: 0; margin-top: 1px;
-      font-family: var(--mono); min-width: 28px; text-align: center;
+      font-size: 0.68rem; font-weight: 700; color: var(--muted); background: var(--bg2);
+      border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; flex-shrink: 0;
+      margin-top: 1px; font-family: var(--mono); min-width: 28px; text-align: center;
     }
-    .result-pos.up   { background: rgba(22,163,74,0.08); color: var(--green); border-color: rgba(22,163,74,0.3); }
-    .result-pos.down { background: rgba(220,38,38,0.06); color: var(--red); border-color: rgba(220,38,38,0.2); }
-
+    .result-pos.up   { background: rgba(22,163,74,0.08);  color: var(--green); border-color: rgba(22,163,74,0.3); }
+    .result-pos.down { background: rgba(220,38,38,0.06); color: var(--red);   border-color: rgba(220,38,38,0.2); }
     .result-body { flex: 1; min-width: 0; }
     .result-title { font-weight: 600; font-size: 0.9375rem; color: var(--text); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .result-meta  { font-size: 0.78rem; color: var(--muted); margin-bottom: 3px; }
     .result-desc  { font-size: 0.8125rem; color: var(--text2); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-
-    .result-score {
-      font-size: 0.72rem; font-weight: 700; color: var(--primary);
-      background: rgba(37,99,235,0.07); border: 1px solid rgba(37,99,235,0.15);
-      border-radius: 4px; padding: 2px 7px; flex-shrink: 0; margin-top: 1px;
-      font-family: var(--mono);
-    }
-
-    /* ── action bar ── */
-    .action-bar {
-      padding: 10px 16px; border-top: 1px solid var(--border);
-      display: flex; gap: 8px; align-items: center;
-    }
+    .result-score { font-size: 0.72rem; font-weight: 700; color: var(--primary); background: rgba(37,99,235,0.07); border: 1px solid rgba(37,99,235,0.15); border-radius: 4px; padding: 2px 7px; flex-shrink: 0; margin-top: 1px; font-family: var(--mono); }
+    .action-bar { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center; }
     #action-status { flex: 1; font-size: 0.8rem; color: var(--muted); }
 
-    /* ── event log ── */
+    /* event log */
     #event-log {
       font-family: var(--mono); font-size: 0.73rem; color: var(--text2);
-      padding: 10px 12px; min-height: 200px; max-height: 420px; overflow-y: auto;
-      line-height: 1.75;
+      padding: 10px 12px; min-height: 180px; max-height: 500px; overflow-y: auto; line-height: 1.75;
     }
     #event-log.empty::after { content: 'Events appear here.'; color: var(--muted); }
-    .log-ok   { color: var(--green); }
-    .log-err  { color: var(--red); }
-    .log-info { color: var(--muted); }
-    .log-ts   { color: var(--border2); margin-right: 6px; }
+    .log-ok { color: var(--green); } .log-err { color: var(--red); } .log-info { color: var(--muted); }
+    .log-ts { color: var(--border2); margin-right: 6px; }
 
-    /* ── phase 2 card ── */
-    .phase2-card {
-      margin-top: 14px;
-      background: var(--bg); border: 1px solid var(--border); border-radius: var(--r);
-      padding: 16px; font-size: 0.8rem; color: var(--text2); line-height: 1.7;
-      box-shadow: var(--shadow);
+    /* overrides tab */
+    .taint-box {
+      margin: 16px; padding: 14px 16px; border-radius: var(--r);
+      border: 1px solid var(--border); display: flex; align-items: center; gap: 12px;
     }
-    .phase2-card h3 {
-      font-size: 0.8125rem; font-weight: 700; color: var(--text);
-      margin-bottom: 10px; display: flex; align-items: center; gap: 7px;
+    .taint-box.tainted { border-color: rgba(234,88,12,0.3); background: rgba(234,88,12,0.04); }
+    .taint-box.clean   { border-color: rgba(22,163,74,0.25); background: rgba(22,163,74,0.04); }
+    .taint-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .taint-dot.tainted { background: var(--orange); }
+    .taint-dot.clean   { background: var(--green); }
+    .taint-text h4 { font-size: 0.875rem; font-weight: 600; margin-bottom: 2px; }
+    .taint-text p  { font-size: 0.78rem; color: var(--muted); }
+    .export-row { padding: 12px 16px; display: flex; gap: 8px; border-top: 1px solid var(--border); }
+    textarea.import-area {
+      width: 100%; height: 120px; padding: 8px 10px; border: 1px solid var(--border2); border-radius: 6px;
+      font-family: var(--mono); font-size: 0.75rem; color: var(--text); resize: vertical; outline: none;
     }
-    .phase2-card .p2-tag {
-      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.06em;
-      padding: 1px 7px; border-radius: 4px;
-      background: rgba(37,99,235,0.08); color: var(--primary);
-      border: 1px solid rgba(37,99,235,0.2);
+    textarea.import-area:focus { border-color: var(--primary); }
+    .import-section { padding: 14px 16px; border-top: 1px solid var(--border); }
+    .import-section h4 { font-size: 0.8rem; font-weight: 600; color: var(--text2); margin-bottom: 8px; }
+
+    /* result quick-actions */
+    .result-actions { display: flex; gap: 4px; flex-shrink: 0; align-items: center; flex-wrap: wrap; justify-content: flex-end; max-width: 160px; }
+    .act-btn {
+      padding: 3px 8px; font-size: 0.7rem; font-weight: 500; border-radius: 5px;
+      cursor: pointer; border: 1px solid var(--border2); background: var(--bg);
+      color: var(--muted); font-family: var(--sans); transition: all 0.12s; white-space: nowrap;
     }
-    .phase2-card ul { padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
-    .phase2-card li { display: flex; gap: 8px; align-items: flex-start; }
-    .phase2-card li::before { content: '○'; color: var(--border2); flex-shrink: 0; margin-top: 1px; }
-    .phase2-card b { color: var(--text); }
+    .act-btn:hover { border-color: var(--primary); color: var(--primary); background: rgba(37,99,235,0.04); }
+    .act-btn.act-pin:hover    { border-color: var(--green);  color: var(--green);  background: rgba(22,163,74,0.04); }
+    .act-btn.act-sup:hover    { border-color: var(--red);    color: var(--red);    background: rgba(220,38,38,0.04); }
+    .act-btn.act-sp:hover     { border-color: var(--orange); color: var(--orange); background: rgba(234,88,12,0.04); }
+    .act-btn.act-done { opacity: 0.4; pointer-events: none; }
+    .act-btn.act-active { font-weight: 600; }
+    .act-btn.act-pin-active    { background: rgba(22,163,74,0.1);  color: var(--green);  border-color: rgba(22,163,74,0.4); }
+    .act-btn.act-sup-active    { background: rgba(220,38,38,0.08); color: var(--red);    border-color: rgba(220,38,38,0.3); }
+    .act-btn.act-sp-active     { background: rgba(234,88,12,0.09); color: var(--orange); border-color: rgba(234,88,12,0.3); }
+    .act-btn.act-pin-active:hover { background: rgba(22,163,74,0.2); }
+    .act-btn.act-sup-active:hover { background: rgba(220,38,38,0.14); }
+    .act-btn.act-sp-active:hover  { background: rgba(234,88,12,0.16); }
+
+    /* suppressed strip */
+    #suppressed-strip {
+      display: none; padding: 8px 16px; border-top: 1px solid var(--border);
+      background: rgba(220,38,38,0.03); font-size: 0.78rem; color: var(--muted);
+    }
+    #suppressed-strip.visible { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .sup-label { color: var(--red); font-weight: 600; flex-shrink: 0; }
+    .sup-chip {
+      display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 9px;
+      border-radius: 12px; border: 1px solid rgba(220,38,38,0.25);
+      background: rgba(220,38,38,0.07); color: var(--text2); font-size: 0.75rem;
+    }
+    .sup-chip button {
+      padding: 0 3px; background: none; border: none; cursor: pointer;
+      color: var(--red); font-size: 0.9rem; line-height: 1; opacity: 0.7;
+    }
+    .sup-chip button:hover { opacity: 1; }
+
+    /* aggregate bar */
+    .agg-bar {
+      padding: 8px 16px; border-top: 1px solid var(--border);
+      display: flex; gap: 8px; align-items: center; background: var(--bg2);
+      font-size: 0.78rem; color: var(--muted);
+    }
+    .agg-bar .spacer { flex: 1; }
+
+    /* tab content visibility */
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
   </style>
 </head>
 <body>
 
-<!-- ═══ TOPBAR ═══ -->
+<!-- TOPBAR -->
 <div id="topbar">
   <span class="logo">vectoria<span>.</span></span>
   <span class="badge">ADMIN</span>
+  <span class="taint-badge" id="taint-badge">● TAINTED</span>
   <div class="spacer"></div>
   <span id="conn-status">not connected</span>
 </div>
 
-<!-- ═══ CONFIG ═══ -->
+<!-- CONFIG -->
 <div id="config-bar">
   <span class="cfg-label">Server</span>
   <input id="cfg-url" type="text" value="http://localhost:7700" spellcheck="false">
@@ -201,37 +266,188 @@
   <button class="btn btn-outline" id="btn-connect">Connect</button>
 </div>
 
-<!-- ═══ MAIN ═══ -->
-<main>
+<!-- TABS -->
+<div id="tab-bar">
+  <button class="tab-btn active" data-tab="train">Search &amp; Train</button>
+  <button class="tab-btn" data-tab="pins">Pins</button>
+  <button class="tab-btn" data-tab="sponsored">Sponsored</button>
+  <button class="tab-btn" data-tab="suppressions">Suppressions</button>
+  <button class="tab-btn" data-tab="overrides">Overrides</button>
+</div>
 
-  <!-- left: search + results -->
-  <div class="panel">
-    <div class="panel-hd">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      Search &amp; Train
+<!-- WORKSPACE -->
+<div id="workspace">
+
+  <!-- LEFT: tab panels -->
+  <div>
+
+    <!-- ═══ TRAIN TAB ═══ -->
+    <div class="tab-content active panel" id="tab-train">
+      <div class="panel-hd">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Search &amp; Train (Phase 1 — probabilistic)
+      </div>
+      <div class="search-row">
+        <input id="search-input" type="text" placeholder="Enter a query to train…" autocomplete="off" spellcheck="false">
+        <button class="btn btn-primary" id="btn-search">Search</button>
+        <button class="btn btn-outline" id="btn-reset" title="Reset to original order">↺ Reset</button>
+      </div>
+      <div class="mode-row">
+        <button class="mode-btn active" data-mode="hybrid">Hybrid</button>
+        <button class="mode-btn" data-mode="bm25">BM25</button>
+        <button class="mode-btn" data-mode="semantic">Semantic</button>
+      </div>
+      <ul id="results-list" class="empty"></ul>
+      <div id="suppressed-strip"></div>
+      <div class="action-bar">
+        <span id="action-status">Search for a query, drag results to your preferred order, then train.</span>
+        <button class="btn btn-green" id="btn-train" disabled>Apply training</button>
+      </div>
+      <div class="agg-bar">
+        <span>Phase 1 training takes effect after aggregation (~5 min by default)</span>
+        <span class="spacer"></span>
+        <button class="btn btn-outline btn-sm" id="btn-aggregate">Force aggregation now</button>
+      </div>
     </div>
 
-    <div class="search-row">
-      <input id="search-input" type="text" placeholder="Enter a query to train…" autocomplete="off" spellcheck="false">
-      <button class="btn btn-primary" id="btn-search">Search</button>
-      <button class="btn btn-outline" id="btn-reset" title="Reset to original order">↺ Reset</button>
+    <!-- ═══ PINS TAB ═══ -->
+    <div class="tab-content panel" id="tab-pins">
+      <div class="panel-hd">
+        📌 Hard Pins — deterministic position overrides
+      </div>
+      <div class="form-grid">
+        <p style="font-size:0.8rem;color:var(--muted);line-height:1.6">Pin a product to an exact position for a query. Pins bypass scoring entirely and are applied immediately — unlike Phase 1 training, there is no aggregation delay.</p>
+        <div class="form-row trio">
+          <div>
+            <div class="field-label">Query (exact)</div>
+            <input id="pin-query" type="text" placeholder="running shoes">
+          </div>
+          <div>
+            <div class="field-label">Product ID</div>
+            <input id="pin-product" type="text" placeholder="sku-001">
+          </div>
+          <div>
+            <div class="field-label">Position (1 = top)</div>
+            <input id="pin-pos" type="number" min="1" value="1">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary btn-sm" id="btn-add-pin">Add pin</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="data-table" id="pins-table">
+          <thead><tr><th>Query</th><th>Product ID</th><th>Position</th><th>Created</th><th></th></tr></thead>
+          <tbody id="pins-body"></tbody>
+        </table>
+      </div>
     </div>
 
-    <div class="mode-row">
-      <button class="mode-btn active" data-mode="hybrid">Hybrid</button>
-      <button class="mode-btn" data-mode="bm25">BM25</button>
-      <button class="mode-btn" data-mode="semantic">Semantic</button>
+    <!-- ═══ SPONSORED TAB ═══ -->
+    <div class="tab-content panel" id="tab-sponsored">
+      <div class="panel-hd">
+        🎯 Sponsored Slots — sell search positions per query
+      </div>
+      <div class="form-grid">
+        <p style="font-size:0.8rem;color:var(--muted);line-height:1.6">Inject an advertiser product at a fixed position. The product appears before organic results and is marked <code style="font-family:var(--mono);font-size:0.78rem">sponsored: true</code> in the API response.</p>
+        <div class="form-row">
+          <div>
+            <div class="field-label">Query pattern (prefix match)</div>
+            <input id="sp-query" type="text" placeholder="running">
+          </div>
+          <div>
+            <div class="field-label">Product ID</div>
+            <input id="sp-product" type="text" placeholder="sku-001">
+          </div>
+        </div>
+        <div class="form-row quad">
+          <div>
+            <div class="field-label">Position</div>
+            <input id="sp-pos" type="number" min="1" value="1">
+          </div>
+          <div>
+            <div class="field-label">Label</div>
+            <input id="sp-label" type="text" value="Sponsored">
+          </div>
+          <div>
+            <div class="field-label">Start (UTC, optional)</div>
+            <input id="sp-start" type="datetime-local">
+          </div>
+          <div>
+            <div class="field-label">End (UTC, optional)</div>
+            <input id="sp-end" type="datetime-local">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary btn-sm" id="btn-add-sponsored">Add slot</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Pattern</th><th>Product ID</th><th>Pos</th><th>Label</th><th>Start</th><th>End</th><th>Status</th><th></th></tr></thead>
+          <tbody id="sponsored-body"></tbody>
+        </table>
+      </div>
     </div>
 
-    <ul id="results-list" class="empty"></ul>
-
-    <div class="action-bar">
-      <span id="action-status">Search for a query, drag results to your preferred order, then train.</span>
-      <button class="btn btn-green" id="btn-train" disabled>Apply training</button>
+    <!-- ═══ SUPPRESSIONS TAB ═══ -->
+    <div class="tab-content panel" id="tab-suppressions">
+      <div class="panel-hd">
+        🚫 Suppressions — hide a product for a query
+      </div>
+      <div class="form-grid">
+        <p style="font-size:0.8rem;color:var(--muted);line-height:1.6">Completely remove a product from results for a specific query. Stronger than Phase 1 negative training — the product is filtered out before results are returned.</p>
+        <div class="form-row">
+          <div>
+            <div class="field-label">Query (exact)</div>
+            <input id="sup-query" type="text" placeholder="running shoes">
+          </div>
+          <div>
+            <div class="field-label">Product ID</div>
+            <input id="sup-product" type="text" placeholder="sku-001">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary btn-sm" id="btn-add-suppression">Add suppression</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Query</th><th>Product ID</th><th>Created</th><th></th></tr></thead>
+          <tbody id="suppressions-body"></tbody>
+        </table>
+      </div>
     </div>
+
+    <!-- ═══ OVERRIDES TAB ═══ -->
+    <div class="tab-content panel" id="tab-overrides">
+      <div class="panel-hd">
+        🔍 Override Status — is this index tainted?
+      </div>
+      <div id="taint-box-container"></div>
+      <div style="overflow-x:auto;padding:14px 16px 0">
+        <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px">Active overrides by type:</p>
+        <table class="data-table" id="override-summary-table">
+          <thead><tr><th>Type</th><th>Count</th><th>Effect</th></tr></thead>
+          <tbody id="override-summary-body"></tbody>
+        </table>
+      </div>
+      <div class="export-row">
+        <button class="btn btn-outline btn-sm" id="btn-export">Export JSON</button>
+        <button class="btn btn-outline btn-sm" id="btn-refresh-overrides">Refresh</button>
+      </div>
+      <div class="import-section">
+        <h4>Import overrides (paste exported JSON)</h4>
+        <textarea class="import-area" id="import-json" placeholder='{"pins":[...],"sponsored":[...],"suppressions":[...],"exported_at":"..."}'></textarea>
+        <div style="margin-top:8px;display:flex;justify-content:flex-end">
+          <button class="btn btn-primary btn-sm" id="btn-import">Import</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
-  <!-- right: log + phase 2 -->
+  <!-- RIGHT: event log -->
   <div>
     <div class="panel">
       <div class="panel-hd">
@@ -240,298 +456,604 @@
       </div>
       <div id="event-log" class="empty"></div>
     </div>
-
-    <div class="phase2-card">
-      <h3><span class="p2-tag">PHASE 2</span> Not yet built</h3>
-      <ul>
-        <li><b>Hard pins</b> — <code>POST /admin/pins {query, product_id, position}</code>. Force absolute position, bypasses scoring. Current training is probabilistic (synthetic events); pins are deterministic.</li>
-        <li><b>Sponsored slots</b> — <code>POST /admin/sponsored {query_pattern, product_id, position, start, end, label}</code>. Injected before organic results, returned with <code>"sponsored": true</code>. Enables selling search positions per query.</li>
-        <li><b>Negative training</b> — suppress a product for a specific query entirely, not just demote it.</li>
-        <li><b>Export / import</b> — dump trained overrides and sponsored slots to JSON for backup, review, and replay across environments.</li>
-      </ul>
-    </div>
   </div>
 
-</main>
+</div><!-- /workspace -->
 
 <script>
 (function () {
-  'use strict';
+'use strict';
 
-  // clicks sent per position gained (e.g. +3 positions = 15 clicks)
-  const CLICKS_PER_POSITION = 5;
-  // purchase events sent for the product placed at position 1
-  const PURCHASE_BONUS_TOP = 5;
+// ── Phase 1 training constants ─────────────────────────────────────────────
+const CLICKS_PER_POSITION = 5;
+const PURCHASE_BONUS_TOP  = 5;
 
-  let currentQuery = '';
-  let currentMode  = 'hybrid';
-  let originalOrder = [];
-  let currentOrder  = [];
+let currentQuery = '', currentMode = 'hybrid';
+let originalOrder = [], currentOrder = [];
+// Maps productId → override id for active overrides matching the current query.
+let currentActiveOverrides = { pinned: {}, suppressed: {}, sponsored: {} };
 
-  const cfgUrl = () => document.getElementById('cfg-url').value.trim().replace(/\/$/, '');
-  const cfgKey = () => document.getElementById('cfg-key').value.trim();
+const cfgUrl = () => document.getElementById('cfg-url').value.trim().replace(/\/$/, '');
+const cfgKey = () => document.getElementById('cfg-key').value.trim();
+const authHdr = () => ({ 'Content-Type': 'application/json', ...(cfgKey() ? { 'Authorization': 'Bearer ' + cfgKey() } : {}) });
 
-  const connEl    = document.getElementById('conn-status');
-  const searchEl  = document.getElementById('search-input');
-  const listEl    = document.getElementById('results-list');
-  const trainBtn  = document.getElementById('btn-train');
-  const actionEl  = document.getElementById('action-status');
-  const logEl     = document.getElementById('event-log');
+const connEl   = document.getElementById('conn-status');
+const logEl    = document.getElementById('event-log');
+const taintTop = document.getElementById('taint-badge');
 
-  // ── logging ──────────────────────────────────────────────────────────────
-  function log(msg, cls) {
-    logEl.classList.remove('empty');
-    const row = document.createElement('div');
-    const ts  = document.createElement('span');
-    ts.className = 'log-ts';
-    ts.textContent = new Date().toLocaleTimeString('en', { hour12: false });
-    const body = document.createElement('span');
-    if (cls) body.className = cls;
-    body.textContent = msg;
-    row.appendChild(ts);
-    row.appendChild(body);
-    logEl.appendChild(row);
-    logEl.scrollTop = logEl.scrollHeight;
-  }
+// ── logging ──────────────────────────────────────────────────────────────
+function log(msg, cls) {
+  logEl.classList.remove('empty');
+  const row = document.createElement('div');
+  const ts  = document.createElement('span'); ts.className = 'log-ts';
+  ts.textContent = new Date().toLocaleTimeString('en', { hour12: false });
+  const body = document.createElement('span'); if (cls) body.className = cls;
+  body.textContent = msg;
+  row.appendChild(ts); row.appendChild(body); logEl.appendChild(row);
+  logEl.scrollTop = logEl.scrollHeight;
+}
 
-  function authHdr() {
-    const k = cfgKey();
-    return { 'Content-Type': 'application/json', ...(k ? { 'Authorization': 'Bearer ' + k } : {}) };
-  }
-
-  // ── connect ───────────────────────────────────────────────────────────────
-  document.getElementById('btn-connect').addEventListener('click', async () => {
-    connEl.style.color = 'var(--muted)';
-    connEl.textContent = 'connecting…';
-    try {
-      const r = await fetch(cfgUrl() + '/health', { headers: authHdr() });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const j = await r.json();
-      connEl.style.color = 'var(--green)';
-      connEl.textContent = '✓ ' + (j.version || 'connected');
-      log('Connected — ' + cfgUrl(), 'log-ok');
-    } catch (e) {
-      connEl.style.color = 'var(--red)';
-      connEl.textContent = '✗ ' + e.message;
-      log('Connection failed: ' + e.message, 'log-err');
-    }
+// ── tabs ──────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'pins') loadPins();
+    if (btn.dataset.tab === 'sponsored') loadSponsored();
+    if (btn.dataset.tab === 'suppressions') loadSuppressions();
+    if (btn.dataset.tab === 'overrides') loadOverrides();
   });
+});
 
-  // ── mode ──────────────────────────────────────────────────────────────────
-  document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentMode = btn.dataset.mode;
-    });
+// ── connect ───────────────────────────────────────────────────────────────
+document.getElementById('btn-connect').addEventListener('click', async () => {
+  connEl.style.color = 'var(--muted)'; connEl.textContent = 'connecting…';
+  try {
+    const r = await fetch(cfgUrl() + '/health', { headers: authHdr() });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    connEl.style.color = 'var(--green)';
+    connEl.textContent = '✓ ' + (j.version || 'connected');
+    log('Connected — ' + cfgUrl(), 'log-ok');
+    loadOverrides(); // check taint on connect
+  } catch (e) {
+    connEl.style.color = 'var(--red)'; connEl.textContent = '✗ ' + e.message;
+    log('Connection failed: ' + e.message, 'log-err');
+  }
+});
+
+// ── mode ──────────────────────────────────────────────────────────────────
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active'); currentMode = btn.dataset.mode;
   });
+});
 
-  // ── search ────────────────────────────────────────────────────────────────
-  document.getElementById('btn-search').addEventListener('click', runSearch);
-  searchEl.addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(); });
+// ── search (Phase 1) ──────────────────────────────────────────────────────
+document.getElementById('btn-search').addEventListener('click', runSearch);
+document.getElementById('search-input').addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(); });
 
-  async function runSearch() {
-    const q = searchEl.value.trim();
-    if (!q) return;
-    currentQuery = q;
-    log('Search: "' + q + '" [' + currentMode + ']', 'log-info');
-    try {
-      const r = await fetch(cfgUrl() + '/search', {
+async function runSearch() {
+  const q = document.getElementById('search-input').value.trim();
+  if (!q) return;
+  currentQuery = q;
+  log('Search: "' + q + '" [' + currentMode + ']', 'log-info');
+  try {
+    const [searchResp, overridesResp] = await Promise.all([
+      fetch(cfgUrl() + '/search', {
         method: 'POST', headers: authHdr(),
         body: JSON.stringify({ q, limit: 15, mode: currentMode }),
+      }),
+      fetch(cfgUrl() + '/admin/overrides?q=' + encodeURIComponent(q), { headers: authHdr() }),
+    ]);
+    if (!searchResp.ok) throw new Error('HTTP ' + searchResp.status);
+    const data = await searchResp.json();
+    const hits = data.hits || [];
+    originalOrder = hits.slice(); currentOrder = hits.slice();
+    if (overridesResp.ok) {
+      const overrides = await overridesResp.json();
+      // Server tells us exactly which products have active overrides for this query.
+      // No client-side matching logic — the server owns the algorithm.
+      currentActiveOverrides = { pinned: {}, suppressed: {}, sponsored: {} };
+      for (const pin of (overrides.active_pins || [])) {
+        currentActiveOverrides.pinned[pin.product_id] = pin.id;
+      }
+      for (const slot of (overrides.active_sponsored || [])) {
+        currentActiveOverrides.sponsored[slot.product_id] = slot.id;
+      }
+      for (const sup of (overrides.active_suppressions || [])) {
+        currentActiveOverrides.suppressed[sup.product_id] = sup.id;
+      }
+      updateTaintIndicator(overrides.tainted, overrides.pin_count, overrides.sponsored_count, overrides.suppression_count);
+    }
+    render(); document.getElementById('btn-train').disabled = true;
+    document.getElementById('action-status').textContent = hits.length + ' results — drag to reorder, then apply training.';
+    log(hits.length + ' results.', 'log-ok');
+  } catch (e) {
+    log('Search error: ' + e.message, 'log-err');
+    document.getElementById('action-status').textContent = 'Search failed — ' + e.message;
+  }
+}
+
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  currentOrder = originalOrder.slice(); render();
+  document.getElementById('btn-train').disabled = true;
+  document.getElementById('action-status').textContent = 'Reset to original order.';
+  log('Order reset.', 'log-info');
+});
+
+function renderSuppressedStrip() {
+  const strip = document.getElementById('suppressed-strip');
+  const entries = Object.entries(currentActiveOverrides.suppressed);
+  if (!entries.length) { strip.className = ''; strip.replaceChildren(); return; }
+  strip.className = 'visible';
+  strip.replaceChildren();
+  const label = document.createElement('span'); label.className = 'sup-label'; label.textContent = '🚫 Hidden:';
+  strip.appendChild(label);
+  for (const [productId, supId] of entries) {
+    const chip = document.createElement('span'); chip.className = 'sup-chip';
+    chip.textContent = productId;
+    const btn = document.createElement('button'); btn.textContent = '×'; btn.title = 'Remove suppression';
+    btn.addEventListener('click', async () => {
+      btn.textContent = '…';
+      await deleteOverride('suppressions', supId);
+      setTimeout(() => runSearch(), 300);
+    });
+    chip.appendChild(btn); strip.appendChild(chip);
+  }
+}
+
+function render() {
+  renderSuppressedStrip();
+  const listEl = document.getElementById('results-list');
+  listEl.replaceChildren(); listEl.classList.remove('empty');
+  currentOrder.forEach((hit, idx) => {
+    const origIdx = originalOrder.findIndex(h => h.id === hit.id);
+    const delta   = origIdx - idx;
+    const li      = document.createElement('li');
+    li.className = 'result-item'; li.draggable = true; li.dataset.id = hit.id;
+    const posClass = delta > 0 ? 'up' : delta < 0 ? 'down' : '';
+    const posLabel = (idx + 1) + (delta > 0 ? ' ↑' : delta < 0 ? ' ↓' : '');
+    const m = hit.metadata || {};
+    const title = m.title || m.name || hit.id;
+    const meta  = [m.brand, m.category, m.price != null ? '$' + Number(m.price).toFixed(2) : null].filter(Boolean).join(' · ');
+    const desc  = String(m.description || m.text || '').slice(0, 140);
+    const score = hit.score != null ? Math.round(hit.score * 100) + '%' : '';
+
+    const handle = document.createElement('span'); handle.className = 'drag-handle'; handle.textContent = '⠿';
+    const pos = document.createElement('span');
+    pos.className = 'result-pos' + (posClass ? ' ' + posClass : ''); pos.textContent = posLabel;
+    const body = document.createElement('div'); body.className = 'result-body';
+    const titleEl = document.createElement('div'); titleEl.className = 'result-title'; titleEl.textContent = title;
+    body.appendChild(titleEl);
+    if (meta) { const el = document.createElement('div'); el.className = 'result-meta'; el.textContent = meta; body.appendChild(el); }
+    if (desc) { const el = document.createElement('div'); el.className = 'result-desc'; el.textContent = desc; body.appendChild(el); }
+    li.appendChild(handle); li.appendChild(pos); li.appendChild(body);
+    if (score) { const el = document.createElement('span'); el.className = 'result-score'; el.textContent = score; li.appendChild(el); }
+
+    // quick-action buttons: show active state (unpin/unsuppress/unsponsor) or create buttons
+    const acts = document.createElement('div');
+    acts.className = 'result-actions';
+    const pinId  = currentActiveOverrides.pinned[hit.id];
+    const supId  = currentActiveOverrides.suppressed[hit.id];
+    const spId   = currentActiveOverrides.sponsored[hit.id];
+    const actions = [
+      pinId
+        ? { label: '📌 Unpin',     cls: 'act-btn act-active act-pin-active', fn: () => deleteOverride('pins', pinId) }
+        : { label: '📌 Pin #1',    cls: 'act-btn act-pin',                   fn: () => quickPin(hit.id, 1) },
+      supId
+        ? { label: '🚫 Unsuppress',cls: 'act-btn act-active act-sup-active', fn: () => deleteOverride('suppressions', supId) }
+        : { label: '🚫 Suppress',  cls: 'act-btn act-sup',                   fn: () => quickSuppress(hit.id) },
+      spId
+        ? { label: '🎯 Unsponsor', cls: 'act-btn act-active act-sp-active',  fn: () => deleteOverride('sponsored', spId) }
+        : { label: '🎯 Sponsor #1',cls: 'act-btn act-sp',                    fn: () => quickSponsor(hit.id, 1) },
+    ];
+    actions.forEach(({ label, cls, fn }) => {
+      const b = document.createElement('button');
+      b.className = cls; b.textContent = label;
+      b.addEventListener('click', async e => {
+        e.stopPropagation();
+        b.classList.add('act-done'); b.textContent = '…';
+        await fn();
+        setTimeout(() => runSearch(), 300);
       });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const data = await r.json();
-      const hits = data.hits || data.results || [];
-      originalOrder = hits.slice();
-      currentOrder  = hits.slice();
-      render();
-      trainBtn.disabled = true;
-      actionEl.textContent = hits.length + ' results — drag to reorder, then apply training.';
-      log(hits.length + ' results.', 'log-ok');
-    } catch (e) {
-      log('Search error: ' + e.message, 'log-err');
-      actionEl.textContent = 'Search failed — ' + e.message;
-    }
-  }
+      acts.appendChild(b);
+    });
+    li.appendChild(acts);
 
-  document.getElementById('btn-reset').addEventListener('click', () => {
-    currentOrder = originalOrder.slice();
-    render();
-    trainBtn.disabled = true;
-    actionEl.textContent = 'Reset to original order.';
-    log('Order reset.', 'log-info');
+    attachDrag(li, listEl); listEl.appendChild(li);
   });
+}
 
-  // ── render ────────────────────────────────────────────────────────────────
-  function render() {
-    listEl.replaceChildren();
-    listEl.classList.remove('empty');
+let dragSrc = null;
+function attachDrag(li, listEl) {
+  li.addEventListener('dragstart', e => { dragSrc = li; li.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+  li.addEventListener('dragend', () => { li.classList.remove('dragging'); listEl.querySelectorAll('.result-item').forEach(el => el.classList.remove('drag-over')); });
+  li.addEventListener('dragover', e => {
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    if (li !== dragSrc) { listEl.querySelectorAll('.result-item').forEach(el => el.classList.remove('drag-over')); li.classList.add('drag-over'); }
+  });
+  li.addEventListener('drop', e => {
+    e.preventDefault(); li.classList.remove('drag-over');
+    if (!dragSrc || dragSrc === li) return;
+    const si = currentOrder.findIndex(h => h.id === dragSrc.dataset.id);
+    const ti = currentOrder.findIndex(h => h.id === li.dataset.id);
+    const [moved] = currentOrder.splice(si, 1); currentOrder.splice(ti, 0, moved);
+    render(); syncTrainButton();
+  });
+}
 
-    currentOrder.forEach((hit, idx) => {
-      const origIdx = originalOrder.findIndex(h => h.id === hit.id);
-      const delta   = origIdx - idx; // positive = moved up
-
-      const li = document.createElement('li');
-      li.className = 'result-item';
-      li.draggable = true;
-      li.dataset.id = hit.id;
-
-      const posClass = delta > 0 ? 'up' : delta < 0 ? 'down' : '';
-      const posLabel = (idx + 1) + (delta > 0 ? ' ↑' : delta < 0 ? ' ↓' : '');
-
-      const m     = hit.metadata || {};
-      const title = m.title || m.name || hit.id;
-      const meta  = [m.brand, m.category, m.price != null ? '$' + Number(m.price).toFixed(2) : null].filter(Boolean).join(' · ');
-      const desc  = String(m.description || m.text || '').slice(0, 140);
-      const score = hit.score != null ? Math.round(hit.score * 100) + '%' : '';
-
-      // Build DOM safely
-      const handle = document.createElement('span');
-      handle.className = 'drag-handle';
-      handle.textContent = '⠿';
-
-      const pos = document.createElement('span');
-      pos.className = 'result-pos' + (posClass ? ' ' + posClass : '');
-      pos.textContent = posLabel;
-
-      const body = document.createElement('div');
-      body.className = 'result-body';
-
-      const titleEl = document.createElement('div');
-      titleEl.className = 'result-title';
-      titleEl.textContent = title;
-      body.appendChild(titleEl);
-
-      if (meta) {
-        const metaEl = document.createElement('div');
-        metaEl.className = 'result-meta';
-        metaEl.textContent = meta;
-        body.appendChild(metaEl);
-      }
-      if (desc) {
-        const descEl = document.createElement('div');
-        descEl.className = 'result-desc';
-        descEl.textContent = desc;
-        body.appendChild(descEl);
-      }
-
-      li.appendChild(handle);
-      li.appendChild(pos);
-      li.appendChild(body);
-
-      if (score) {
-        const scoreEl = document.createElement('span');
-        scoreEl.className = 'result-score';
-        scoreEl.textContent = score;
-        li.appendChild(scoreEl);
-      }
-
-      attachDrag(li);
-      listEl.appendChild(li);
-    });
+function syncTrainButton() {
+  const changed = currentOrder.some((h, i) => h.id !== originalOrder[i]?.id);
+  document.getElementById('btn-train').disabled = !changed;
+  if (changed) {
+    const n = currentOrder.filter((h, i) => originalOrder.findIndex(x => x.id === h.id) > i).length;
+    document.getElementById('action-status').textContent = n + ' product' + (n !== 1 ? 's' : '') + ' promoted — click "Apply training" to submit.';
   }
+}
 
-  // ── drag and drop ─────────────────────────────────────────────────────────
-  let dragSrc = null;
-
-  function attachDrag(li) {
-    li.addEventListener('dragstart', e => {
-      dragSrc = li;
-      li.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-    });
-    li.addEventListener('dragend', () => {
-      li.classList.remove('dragging');
-      listEl.querySelectorAll('.result-item').forEach(el => el.classList.remove('drag-over'));
-    });
-    li.addEventListener('dragover', e => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      if (li !== dragSrc) {
-        listEl.querySelectorAll('.result-item').forEach(el => el.classList.remove('drag-over'));
-        li.classList.add('drag-over');
-      }
-    });
-    li.addEventListener('drop', e => {
-      e.preventDefault();
-      li.classList.remove('drag-over');
-      if (!dragSrc || dragSrc === li) return;
-      const srcId  = dragSrc.dataset.id;
-      const tgtId  = li.dataset.id;
-      const si = currentOrder.findIndex(h => h.id === srcId);
-      const ti = currentOrder.findIndex(h => h.id === tgtId);
-      const [moved] = currentOrder.splice(si, 1);
-      currentOrder.splice(ti, 0, moved);
-      render();
-      syncTrainButton();
-    });
-  }
-
-  function syncTrainButton() {
-    const changed = currentOrder.some((h, i) => h.id !== originalOrder[i]?.id);
-    trainBtn.disabled = !changed;
-    if (changed) {
-      const movedUp = currentOrder.filter((h, i) => {
-        const o = originalOrder.findIndex(x => x.id === h.id);
-        return o > i;
-      }).length;
-      actionEl.textContent = movedUp + ' product' + (movedUp !== 1 ? 's' : '') + ' promoted — click "Apply training" to submit.';
+document.getElementById('btn-train').addEventListener('click', async () => {
+  if (!currentQuery) return;
+  const trainBtn = document.getElementById('btn-train');
+  trainBtn.disabled = true; trainBtn.textContent = 'Sending…';
+  log('Applying training for "' + currentQuery + '"…', 'log-info');
+  let totalSent = 0, totalErr = 0;
+  for (let i = 0; i < currentOrder.length; i++) {
+    const hit = currentOrder[i];
+    const origIdx = originalOrder.findIndex(h => h.id === hit.id);
+    const delta = origIdx - i;
+    if (delta <= 0) continue;
+    const clickCount    = Math.min(30, delta * CLICKS_PER_POSITION);
+    const purchaseCount = i === 0 ? PURCHASE_BONUS_TOP : 0;
+    const events = [
+      ...Array(clickCount).fill({ type: 'click',    product_id: hit.id, query: currentQuery }),
+      ...Array(purchaseCount).fill({ type: 'purchase', product_id: hit.id, query: currentQuery }),
+    ];
+    let sent = 0, errs = 0;
+    for (const ev of events) {
+      try { const r = await fetch(cfgUrl() + '/events', { method: 'POST', headers: authHdr(), body: JSON.stringify(ev) }); r.ok ? sent++ : errs++; }
+      catch { errs++; }
     }
+    totalSent += sent; totalErr += errs;
+    const name = (hit.metadata || {}).title || (hit.metadata || {}).name || hit.id;
+    log('↑ ' + name + ' (' + (origIdx+1) + '→' + (i+1) + '): ' + sent + ' events' + (errs ? ', ' + errs + ' err' : ''), errs ? 'log-err' : 'log-ok');
   }
+  trainBtn.textContent = 'Apply training';
+  originalOrder = currentOrder.slice(); render();
+  const summary = totalErr === 0
+    ? totalSent + ' events sent. Rankings update after aggregation (~5 min).'
+    : totalSent + ' sent, ' + totalErr + ' failed.';
+  document.getElementById('action-status').textContent = summary;
+  log('Done — ' + summary, totalErr ? 'log-err' : 'log-ok');
+});
 
-  // ── training ──────────────────────────────────────────────────────────────
-  trainBtn.addEventListener('click', applyTraining);
+// ── PINS ──────────────────────────────────────────────────────────────────
+async function loadPins() {
+  try {
+    const r = await fetch(cfgUrl() + '/admin/pins', { headers: authHdr() });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    renderPins(data.pins || []);
+  } catch (e) { log('Pins load error: ' + e.message, 'log-err'); }
+}
 
-  async function applyTraining() {
-    if (!currentQuery) return;
-    trainBtn.disabled = true;
-    trainBtn.textContent = 'Sending…';
-    log('Applying training for "' + currentQuery + '"…', 'log-info');
-
-    let totalSent = 0, totalErr = 0;
-
-    for (let i = 0; i < currentOrder.length; i++) {
-      const hit     = currentOrder[i];
-      const origIdx = originalOrder.findIndex(h => h.id === hit.id);
-      const delta   = origIdx - i; // positive = promoted
-
-      if (delta <= 0) continue; // only send events for promoted products
-
-      const clickCount    = Math.min(30, delta * CLICKS_PER_POSITION);
-      const purchaseCount = i === 0 ? PURCHASE_BONUS_TOP : 0;
-
-      const events = [
-        ...Array(clickCount).fill({ type: 'click',    product_id: hit.id, query: currentQuery }),
-        ...Array(purchaseCount).fill({ type: 'purchase', product_id: hit.id, query: currentQuery }),
-      ];
-
-      let sent = 0, errs = 0;
-      for (const ev of events) {
-        try {
-          const r = await fetch(cfgUrl() + '/events', {
-            method: 'POST', headers: authHdr(), body: JSON.stringify(ev),
-          });
-          r.ok ? sent++ : errs++;
-        } catch { errs++; }
-      }
-
-      totalSent += sent; totalErr += errs;
-      const m    = hit.metadata || {};
-      const name = m.title || m.name || hit.id;
-      log('↑ ' + name + ' (pos ' + (origIdx + 1) + '→' + (i + 1) + '): ' + sent + ' events' + (errs ? ', ' + errs + ' err' : ''), errs ? 'log-err' : 'log-ok');
-    }
-
-    trainBtn.textContent = 'Apply training';
-    originalOrder = currentOrder.slice();
-    render();
-
-    const summary = totalErr === 0
-      ? totalSent + ' events sent. Rankings update after the next aggregation cycle (~5 min).'
-      : totalSent + ' sent, ' + totalErr + ' failed.';
-    actionEl.textContent = summary;
-    log('Done — ' + summary, totalErr ? 'log-err' : 'log-ok');
+function renderPins(pins) {
+  const tbody = document.getElementById('pins-body');
+  tbody.replaceChildren();
+  if (!pins.length) {
+    const tr = document.createElement('tr'); const td = document.createElement('td');
+    td.colSpan = 5; td.className = 'empty-row'; td.textContent = 'No pins. Add one above.';
+    tr.appendChild(td); tbody.appendChild(tr); return;
   }
+  pins.forEach(pin => {
+    const tr = document.createElement('tr');
+    [pin.query, pin.product_id, pin.position, fmtDate(pin.created_at)].forEach(v => {
+      const td = document.createElement('td'); td.textContent = v; tr.appendChild(td);
+    });
+    const tdBtn = document.createElement('td');
+    const btn = document.createElement('button'); btn.className = 'btn btn-danger'; btn.textContent = 'Delete';
+    btn.addEventListener('click', async () => {
+      try {
+        const r = await fetch(cfgUrl() + '/admin/pins/' + pin.id, { method: 'DELETE', headers: authHdr() });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        log('Pin deleted: ' + pin.query + ' → #' + pin.position, 'log-ok');
+        loadPins(); loadOverrides();
+      } catch (e) { log('Delete pin error: ' + e.message, 'log-err'); }
+    });
+    tdBtn.appendChild(btn); tr.appendChild(tdBtn); tbody.appendChild(tr);
+  });
+}
+
+document.getElementById('btn-add-pin').addEventListener('click', async () => {
+  const query = document.getElementById('pin-query').value.trim();
+  const product_id = document.getElementById('pin-product').value.trim();
+  const position = parseInt(document.getElementById('pin-pos').value, 10);
+  if (!query || !product_id || !position) { log('Pin: query, product_id, and position required', 'log-err'); return; }
+  try {
+    const r = await fetch(cfgUrl() + '/admin/pins', { method: 'POST', headers: authHdr(), body: JSON.stringify({ query, product_id, position }) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    log('Pin added: "' + query + '" → ' + product_id + ' at #' + position, 'log-ok');
+    document.getElementById('pin-query').value = '';
+    document.getElementById('pin-product').value = '';
+    document.getElementById('pin-pos').value = '1';
+    loadPins(); loadOverrides();
+  } catch (e) { log('Add pin error: ' + e.message, 'log-err'); }
+});
+
+// ── SPONSORED ─────────────────────────────────────────────────────────────
+async function loadSponsored() {
+  try {
+    const r = await fetch(cfgUrl() + '/admin/sponsored', { headers: authHdr() });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    renderSponsored(data.sponsored || []);
+  } catch (e) { log('Sponsored load error: ' + e.message, 'log-err'); }
+}
+
+function renderSponsored(slots) {
+  const tbody = document.getElementById('sponsored-body');
+  tbody.replaceChildren();
+  if (!slots.length) {
+    const tr = document.createElement('tr'); const td = document.createElement('td');
+    td.colSpan = 8; td.className = 'empty-row'; td.textContent = 'No sponsored slots. Add one above.';
+    tr.appendChild(td); tbody.appendChild(tr); return;
+  }
+  const now = new Date();
+  slots.forEach(slot => {
+    const tr = document.createElement('tr');
+    const start = slot.start_at ? new Date(slot.start_at) : null;
+    const end   = slot.end_at   ? new Date(slot.end_at)   : null;
+    const active = (!start || start <= now) && (!end || end > now);
+    [slot.query_pattern, slot.product_id, slot.position, slot.label,
+     start ? start.toLocaleDateString() : '—', end ? end.toLocaleDateString() : '—'].forEach(v => {
+      const td = document.createElement('td'); td.textContent = v; tr.appendChild(td);
+    });
+    const tdStatus = document.createElement('td');
+    const pill = document.createElement('span');
+    pill.className = 'pill ' + (active ? 'pill-green' : 'pill-gray');
+    pill.textContent = active ? 'Active' : 'Inactive';
+    tdStatus.appendChild(pill); tr.appendChild(tdStatus);
+    const tdBtn = document.createElement('td');
+    const btn = document.createElement('button'); btn.className = 'btn btn-danger'; btn.textContent = 'Delete';
+    btn.addEventListener('click', async () => {
+      try {
+        const r = await fetch(cfgUrl() + '/admin/sponsored/' + slot.id, { method: 'DELETE', headers: authHdr() });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        log('Sponsored slot deleted: ' + slot.query_pattern, 'log-ok');
+        loadSponsored(); loadOverrides();
+      } catch (e) { log('Delete sponsored error: ' + e.message, 'log-err'); }
+    });
+    tdBtn.appendChild(btn); tr.appendChild(tdBtn); tbody.appendChild(tr);
+  });
+}
+
+document.getElementById('btn-add-sponsored').addEventListener('click', async () => {
+  const query_pattern = document.getElementById('sp-query').value.trim();
+  const product_id = document.getElementById('sp-product').value.trim();
+  const position = parseInt(document.getElementById('sp-pos').value, 10);
+  const label = document.getElementById('sp-label').value.trim() || 'Sponsored';
+  const startRaw = document.getElementById('sp-start').value;
+  const endRaw   = document.getElementById('sp-end').value;
+  if (!query_pattern || !product_id || !position) { log('Sponsored: pattern, product_id, and position required', 'log-err'); return; }
+  const body = { query_pattern, product_id, position, label,
+    start_at: startRaw ? new Date(startRaw).toISOString() : undefined,
+    end_at:   endRaw   ? new Date(endRaw).toISOString()   : undefined,
+  };
+  try {
+    const r = await fetch(cfgUrl() + '/admin/sponsored', { method: 'POST', headers: authHdr(), body: JSON.stringify(body) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    log('Sponsored slot added: "' + query_pattern + '" → ' + product_id + ' at #' + position, 'log-ok');
+    ['sp-query','sp-product','sp-label','sp-start','sp-end'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('sp-pos').value = '1'; document.getElementById('sp-label').value = 'Sponsored';
+    loadSponsored(); loadOverrides();
+  } catch (e) { log('Add sponsored error: ' + e.message, 'log-err'); }
+});
+
+// ── SUPPRESSIONS ──────────────────────────────────────────────────────────
+async function loadSuppressions() {
+  try {
+    const r = await fetch(cfgUrl() + '/admin/suppressions', { headers: authHdr() });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    renderSuppressions(data.suppressions || []);
+  } catch (e) { log('Suppressions load error: ' + e.message, 'log-err'); }
+}
+
+function renderSuppressions(sups) {
+  const tbody = document.getElementById('suppressions-body');
+  tbody.replaceChildren();
+  if (!sups.length) {
+    const tr = document.createElement('tr'); const td = document.createElement('td');
+    td.colSpan = 4; td.className = 'empty-row'; td.textContent = 'No suppressions. Add one above.';
+    tr.appendChild(td); tbody.appendChild(tr); return;
+  }
+  sups.forEach(sup => {
+    const tr = document.createElement('tr');
+    [sup.query, sup.product_id, fmtDate(sup.created_at)].forEach(v => {
+      const td = document.createElement('td'); td.textContent = v; tr.appendChild(td);
+    });
+    const tdBtn = document.createElement('td');
+    const btn = document.createElement('button'); btn.className = 'btn btn-danger'; btn.textContent = 'Delete';
+    btn.addEventListener('click', async () => {
+      try {
+        const r = await fetch(cfgUrl() + '/admin/suppressions/' + sup.id, { method: 'DELETE', headers: authHdr() });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        log('Suppression deleted: ' + sup.query + ' → ' + sup.product_id, 'log-ok');
+        loadSuppressions(); loadOverrides();
+      } catch (e) { log('Delete suppression error: ' + e.message, 'log-err'); }
+    });
+    tdBtn.appendChild(btn); tr.appendChild(tdBtn); tbody.appendChild(tr);
+  });
+}
+
+document.getElementById('btn-add-suppression').addEventListener('click', async () => {
+  const query = document.getElementById('sup-query').value.trim();
+  const product_id = document.getElementById('sup-product').value.trim();
+  if (!query || !product_id) { log('Suppression: query and product_id required', 'log-err'); return; }
+  try {
+    const r = await fetch(cfgUrl() + '/admin/suppressions', { method: 'POST', headers: authHdr(), body: JSON.stringify({ query, product_id }) });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    log('Suppression added: "' + query + '" → ' + product_id, 'log-ok');
+    document.getElementById('sup-query').value = ''; document.getElementById('sup-product').value = '';
+    loadSuppressions(); loadOverrides();
+  } catch (e) { log('Add suppression error: ' + e.message, 'log-err'); }
+});
+
+// ── OVERRIDES / TAINT ────────────────────────────────────────────────────
+async function loadOverrides() {
+  try {
+    const r = await fetch(cfgUrl() + '/admin/overrides', { headers: authHdr() });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    updateTaintIndicator(data.tainted, data.pin_count, data.sponsored_count, data.suppression_count);
+    renderOverrideSummary(data);
+  } catch (e) { /* ignore if not connected yet */ }
+}
+
+function updateTaintIndicator(tainted, pins, sponsored, suppressions) {
+  taintTop.className = 'taint-badge ' + (tainted ? 'tainted' : 'clean');
+  taintTop.textContent = tainted
+    ? '● TAINTED (' + pins + ' pins, ' + sponsored + ' sponsored, ' + suppressions + ' suppressions)'
+    : '● CLEAN';
+}
+
+function renderOverrideSummary(data) {
+  const container = document.getElementById('taint-box-container');
+  container.replaceChildren();
+  const box = document.createElement('div');
+  box.className = 'taint-box ' + (data.tainted ? 'tainted' : 'clean');
+  const dot = document.createElement('div'); dot.className = 'taint-dot ' + (data.tainted ? 'tainted' : 'clean');
+  const text = document.createElement('div'); text.className = 'taint-text';
+  const h4 = document.createElement('h4'); h4.textContent = data.tainted ? 'Index is tainted' : 'Index is clean';
+  const p = document.createElement('p');
+  p.textContent = data.tainted
+    ? 'This index has manual overrides active. Search results are being modified by admin rules.'
+    : 'No active overrides. Search results reflect purely algorithmic ranking.';
+  text.appendChild(h4); text.appendChild(p); box.appendChild(dot); box.appendChild(text);
+  container.appendChild(box);
+
+  const tbody = document.getElementById('override-summary-body');
+  tbody.replaceChildren();
+  const rows = [
+    ['Pins', data.pin_count, 'Force products to exact positions — bypasses scoring'],
+    ['Sponsored', data.sponsored_count, 'Inject advertiser products before organic results'],
+    ['Suppressions', data.suppression_count, 'Hide products from results for specific queries'],
+  ];
+  rows.forEach(([type, count, effect]) => {
+    const tr = document.createElement('tr');
+    const tdType = document.createElement('td'); tdType.textContent = type;
+    const tdCount = document.createElement('td');
+    const pill = document.createElement('span');
+    pill.className = 'pill ' + (count > 0 ? 'pill-orange' : 'pill-gray');
+    pill.textContent = count; tdCount.appendChild(pill);
+    const tdEffect = document.createElement('td'); tdEffect.textContent = effect; tdEffect.style.color = 'var(--muted)';
+    tr.appendChild(tdType); tr.appendChild(tdCount); tr.appendChild(tdEffect); tbody.appendChild(tr);
+  });
+}
+
+document.getElementById('btn-export').addEventListener('click', async () => {
+  try {
+    const r = await fetch(cfgUrl() + '/admin/training-export', { headers: authHdr() });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'vectoria-overrides-' + new Date().toISOString().slice(0,10) + '.json';
+    a.click(); log('Exported overrides to JSON.', 'log-ok');
+  } catch (e) { log('Export error: ' + e.message, 'log-err'); }
+});
+
+document.getElementById('btn-refresh-overrides').addEventListener('click', loadOverrides);
+
+document.getElementById('btn-import').addEventListener('click', async () => {
+  const raw = document.getElementById('import-json').value.trim();
+  if (!raw) { log('Import: paste JSON first', 'log-err'); return; }
+  try {
+    JSON.parse(raw); // validate
+    const r = await fetch(cfgUrl() + '/admin/training-import', { method: 'POST', headers: authHdr(), body: raw });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    log('Imported ' + data.imported + ' overrides.', 'log-ok');
+    document.getElementById('import-json').value = '';
+    loadOverrides();
+  } catch (e) { log('Import error: ' + e.message, 'log-err'); }
+});
+
+// ── quick actions (from search results) ───────────────────────────────────
+async function quickPin(productId, position) {
+  if (!currentQuery) return;
+  try {
+    const r = await fetch(cfgUrl() + '/admin/pins', {
+      method: 'POST', headers: authHdr(),
+      body: JSON.stringify({ query: currentQuery, product_id: productId, position }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    log('📌 Pinned ' + productId + ' to #' + position + ' for "' + currentQuery + '"', 'log-ok');
+    loadOverrides();
+  } catch (e) { log('Pin error: ' + e.message, 'log-err'); }
+}
+
+async function quickSuppress(productId) {
+  if (!currentQuery) return;
+  try {
+    const r = await fetch(cfgUrl() + '/admin/suppressions', {
+      method: 'POST', headers: authHdr(),
+      body: JSON.stringify({ query: currentQuery, product_id: productId }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    log('🚫 Suppressed ' + productId + ' for "' + currentQuery + '"', 'log-ok');
+    loadOverrides();
+  } catch (e) { log('Suppress error: ' + e.message, 'log-err'); }
+}
+
+async function quickSponsor(productId, position) {
+  if (!currentQuery) return;
+  try {
+    const r = await fetch(cfgUrl() + '/admin/sponsored', {
+      method: 'POST', headers: authHdr(),
+      body: JSON.stringify({ query_pattern: currentQuery, product_id: productId, position, label: 'Sponsored' }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    log('🎯 Sponsored ' + productId + ' at #' + position + ' for "' + currentQuery + '"', 'log-ok');
+    loadOverrides();
+  } catch (e) { log('Sponsor error: ' + e.message, 'log-err'); }
+}
+
+async function deleteOverride(type, id) {
+  try {
+    const r = await fetch(cfgUrl() + '/admin/' + type + '/' + id, { method: 'DELETE', headers: authHdr() });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    log('Removed ' + type.slice(0, -1) + ' ' + id, 'log-ok');
+    loadOverrides();
+  } catch (e) { log('Delete error: ' + e.message, 'log-err'); }
+}
+
+// ── aggregate ─────────────────────────────────────────────────────────────
+document.getElementById('btn-aggregate').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-aggregate');
+  btn.textContent = 'Running…'; btn.disabled = true;
+  try {
+    const r = await fetch(cfgUrl() + '/admin/aggregate', { method: 'POST', headers: authHdr() });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    log('Aggregation complete — re-run search to see updated rankings.', 'log-ok');
+    if (currentQuery) setTimeout(() => runSearch(), 200);
+  } catch (e) {
+    log('Aggregation error: ' + e.message, 'log-err');
+  } finally {
+    btn.textContent = 'Force aggregation now'; btn.disabled = false;
+  }
+});
+
+// ── helpers ───────────────────────────────────────────────────────────────
+function fmtDate(iso) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' }); }
+  catch { return '—'; }
+}
 
 })();
 </script>

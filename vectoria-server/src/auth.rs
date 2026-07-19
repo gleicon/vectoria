@@ -46,6 +46,11 @@ pub async fn require_api_key(
         .cloned()
     {
         Principal::Tenant(name)
+    } else if let Some(name) = key
+        .as_deref()
+        .and_then(|k| state.tenant_store.lookup_key(k))
+    {
+        Principal::Tenant(name)
     } else {
         return Err(StatusCode::UNAUTHORIZED);
     };

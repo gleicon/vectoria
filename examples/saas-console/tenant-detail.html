@@ -1,0 +1,385 @@
+<meta charset="utf-8">
+<title>Vectoria Console — Tenant</title>
+<link rel="stylesheet" href="css/console.css">
+
+<style>
+.tenant-header { display:flex; align-items:baseline; gap:1rem; margin-bottom:1.5rem; }
+.tenant-header h2 { margin:0; font-size:1.2rem; }
+.back-link { font-size:0.8rem; color:var(--muted); text-decoration:none; }
+.back-link:hover { color:var(--text); }
+.index-grid { display:grid; gap:0.75rem; }
+.index-card { background:var(--bg-alt,#1a1a2e); border:1px solid var(--border); border-radius:6px; padding:1rem 1.25rem; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.index-card-name { font-family:var(--font-mono,monospace); font-size:1rem; font-weight:600; color:var(--text); }
+.index-stat { font-size:0.75rem; color:var(--muted); }
+.index-stat span { color:var(--text); font-weight:500; }
+.index-actions { display:flex; gap:0.5rem; flex-shrink:0; }
+.empty-indexes { color:var(--muted); font-size:0.85rem; padding:1.5rem 0; }
+.key-blur { filter:blur(5px); cursor:pointer; transition:filter .2s; user-select:none; }
+.key-blur:hover { filter:blur(0); }
+.index-card-wrap { display:flex; flex-direction:column; }
+.index-load-help { display:none; background:var(--bg-alt,#1a1a2e); border:1px solid var(--border); border-top:none; border-radius:0 0 6px 6px; padding:0.75rem 1rem; }
+.index-card-wrap .index-card { border-radius:6px; }
+.index-card-wrap .index-card.help-open { border-radius:6px 6px 0 0; }
+.index-load-help.open { display:block; }
+.index-load-help code { display:block; font-size:0.78rem; background:var(--code-bg,#0d0d1a); border:1px solid var(--border); border-radius:4px; padding:0.5rem 0.75rem; white-space:pre; overflow-x:auto; margin:0.35rem 0; color:var(--text); }
+.index-load-help .help-label { font-size:0.75rem; color:var(--muted); margin-top:0.5rem; }
+.info-row { display:flex; gap:2rem; margin-bottom:1.5rem; flex-wrap:wrap; }
+.info-field label { display:block; font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:.25rem; }
+.info-field .value { font-family:var(--font-mono,monospace); font-size:0.85rem; }
+</style>
+
+<div class="page">
+  <div id="nav-root"></div>
+  <div class="content">
+    <div id="flash" class="flash"></div>
+
+    <div class="tenant-header">
+      <a class="back-link" href="admin.html">← All tenants</a>
+      <h2 id="tenant-title">Loading…</h2>
+      <span id="role-badge" class="badge" style="font-size:0.7rem;padding:2px 8px;border-radius:12px;background:var(--accent);color:#fff;opacity:.7">admin view</span>
+    </div>
+
+    <!-- Tenant info -->
+    <div class="card" id="tenant-info-card" style="display:none">
+      <div class="info-row" id="tenant-info-row"></div>
+      <p style="font-size:0.8rem;color:var(--muted);margin:0">
+        This is the tenant's API key. Share it with the tenant so they can index products and run searches.
+        It only resolves indexes within this tenant's namespace — other tenants' data is inaccessible with this key.
+      </p>
+    </div>
+
+    <!-- Quickstart steps (shown while loading, hidden once indexes exist) -->
+    <div class="card" id="quickstart-card" style="display:none">
+      <div class="card-title">Getting started</div>
+      <ol style="font-size:0.82rem;color:var(--muted);padding-left:1.25rem;margin:0;line-height:2">
+        <li><strong style="color:var(--text)">Create an index</strong> — use the form below. The index name identifies where products are stored (e.g. <code>catalog</code>).</li>
+        <li><strong style="color:var(--text)">Load products</strong> — use the tenant's API key + the index name. Products go to <code>POST /indexes/{index-name}/products</code>.</li>
+        <li><strong style="color:var(--text)">Search</strong> — click <em>Search &amp; Overrides</em> on the index row. Searches hit <code>POST /indexes/{index-name}/search</code> with the tenant key.</li>
+        <li><strong style="color:var(--text)">After a server restart</strong> — click <em>reindex</em> on the index row. BM25 is in-memory and must be rebuilt from stored products.</li>
+      </ol>
+      <p style="font-size:0.78rem;color:var(--muted);margin:.75rem 0 0">
+        See <a href="api-guide.html" style="color:var(--accent-hi)">API Guide</a> for curl examples and bulk-load commands.
+      </p>
+    </div>
+
+    <!-- Indexes -->
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Indexes</span>
+        <div class="flex gap-1" id="create-index-form">
+          <input id="new-index-name" type="text" placeholder="index-name" style="max-width:200px">
+          <button class="btn btn-primary btn-sm" id="create-index-btn">Create index</button>
+        </div>
+      </div>
+      <p style="font-size:0.8rem;color:var(--muted);margin:0 0 1rem">
+        Each index is an isolated product catalog. Use separate indexes for different catalogs (e.g. <code>catalog</code>, <code>seasonal</code>).
+        Data is loaded to an index, not a tenant — the tenant key + index name in the URL determine where products go.
+      </p>
+      <div id="index-grid" class="index-grid">
+        <div class="empty-indexes">Loading indexes…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { VectoriaClient, session } from './js/api.js';
+import { mountNav, flash }         from './js/nav.js';
+
+const s = session.load();
+if (!s.url || !s.key) { window.location.href = 'index.html'; }
+if (s.role !== 'admin') { window.location.href = 'tenant.html'; }
+
+const adminClient = session.client();
+const tenantName  = new URLSearchParams(location.search).get('tenant');
+if (!tenantName) { window.location.href = 'admin.html'; }
+
+await mountNav('nav-root', 'admin');
+document.getElementById('tenant-title').textContent = `Tenant: ${tenantName}`;
+document.title = `Vectoria Console — ${tenantName}`;
+
+// ── Load tenant info ──────────────────────────────────────────────────────────
+
+let tenantApiKey = null;
+let tenantClient = null;
+
+async function loadTenant() {
+  try {
+    const data = await adminClient.listTenants();
+    const tenant = (data.tenants ?? data).find(t => t.name === tenantName);
+    if (!tenant) { flash('flash', `Tenant "${tenantName}" not found.`, 'err'); return; }
+
+    tenantApiKey = tenant.api_key;
+    tenantClient = new VectoriaClient(s.url, tenantApiKey);
+
+    // Render info row
+    const row = document.getElementById('tenant-info-row');
+    row.replaceChildren(
+      infoField('Tenant', tenantName),
+      infoField('Created', tenant.created_at ? new Date(tenant.created_at).toLocaleDateString() : '—'),
+      infoField('API Key', tenant.api_key, true),
+    );
+    document.getElementById('tenant-info-card').style.display = 'block';
+  } catch (e) {
+    flash('flash', `Failed to load tenant: ${e.message}`, 'err');
+  }
+}
+
+function infoField(label, value, blurred = false) {
+  const div = document.createElement('div');
+  div.className = 'info-field';
+  const l = document.createElement('label');
+  l.textContent = label;
+  const v = document.createElement('div');
+  v.className = 'value';
+  if (blurred) {
+    const span = document.createElement('span');
+    span.className = 'key-blur';
+    span.title = 'Click to reveal';
+    span.textContent = value;
+    span.addEventListener('click', () => span.classList.toggle('key-blur'));
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'btn btn-ghost btn-sm';
+    copyBtn.style.marginLeft = '0.5rem';
+    copyBtn.textContent = 'copy';
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(value).then(() => {
+        copyBtn.textContent = 'copied!';
+        setTimeout(() => { copyBtn.textContent = 'copy'; }, 1500);
+      });
+    });
+    v.append(span, copyBtn);
+  } else {
+    v.textContent = value;
+  }
+  div.append(l, v);
+  return div;
+}
+
+// ── Load indexes ──────────────────────────────────────────────────────────────
+
+async function loadIndexes() {
+  if (!tenantClient) return;
+  const grid = document.getElementById('index-grid');
+  try {
+    const data = await adminClient.listTenantIndexes(tenantName);
+    const names = data.indexes ?? [];
+
+    const quickstart = document.getElementById('quickstart-card');
+    if (!names.length) {
+      if (quickstart) quickstart.style.display = 'block';
+      const emptyEl = document.createElement('div');
+      emptyEl.className = 'empty-indexes';
+      emptyEl.textContent = 'No indexes yet — create one above to get started.';
+      grid.replaceChildren(emptyEl);
+      return;
+    }
+    if (quickstart) quickstart.style.display = 'none';
+
+    // Fetch stats for all indexes in parallel using tenant client
+    const statsResults = await Promise.allSettled(names.map(n => tenantClient.indexStats(n)));
+    grid.replaceChildren();
+
+    names.forEach((name, i) => {
+      const stats = statsResults[i].status === 'fulfilled' ? statsResults[i].value : null;
+      grid.appendChild(indexCard(name, stats));
+    });
+  } catch (e) {
+    const errEl = document.createElement('div');
+    errEl.className = 'empty-indexes';
+    errEl.style.color = 'var(--err)';
+    errEl.textContent = `Error: ${e.message}`;
+    grid.replaceChildren(errEl);
+  }
+}
+
+function indexCard(name, stats) {
+  const wrap = document.createElement('div');
+  wrap.className = 'index-card-wrap';
+
+  const card = document.createElement('div');
+  card.className = 'index-card';
+
+  const left = document.createElement('div');
+
+  const nameEl = document.createElement('div');
+  nameEl.className = 'index-card-name';
+  nameEl.textContent = name;
+
+  const statsRow = document.createElement('div');
+  statsRow.style.display = 'flex';
+  statsRow.style.gap = '1.25rem';
+  statsRow.style.marginTop = '0.25rem';
+
+  function stat(label, value) {
+    const d = document.createElement('div');
+    d.className = 'index-stat';
+    d.appendChild(document.createTextNode(`${label}: `));
+    const s = document.createElement('span');
+    s.textContent = value ?? '—';
+    d.appendChild(s);
+    return d;
+  }
+
+  if (stats) {
+    statsRow.append(
+      stat('products', stats.product_count?.toLocaleString()),
+      stat('vectors', stats.vector_count?.toLocaleString()),
+      stat('queries', stats.query_count?.toLocaleString()),
+    );
+  } else {
+    statsRow.appendChild(stat('stats', 'unavailable'));
+  }
+
+  left.append(nameEl, statsRow);
+
+  const actions = document.createElement('div');
+  actions.className = 'index-actions';
+
+  // Search & Overrides — switches to tenant key for that session
+  const searchBtn = document.createElement('button');
+  searchBtn.className = 'btn btn-primary btn-sm';
+  searchBtn.textContent = 'Search & Overrides';
+  searchBtn.addEventListener('click', () => openIndex(name));
+
+  // Load data (collapsible help)
+  const loadBtn = document.createElement('button');
+  loadBtn.className = 'btn btn-ghost btn-sm';
+  loadBtn.textContent = 'load data ▾';
+
+  // Reindex
+  const reindexBtn = document.createElement('button');
+  reindexBtn.className = 'btn btn-ghost btn-sm';
+  reindexBtn.textContent = 'reindex';
+  reindexBtn.title = 'Rebuild BM25 and vector index from stored products';
+  reindexBtn.addEventListener('click', async () => {
+    reindexBtn.disabled = true;
+    reindexBtn.textContent = 'reindexing…';
+    try {
+      await tenantClient._req('POST', `/indexes/${encodeURIComponent(name)}/admin/reindex`);
+      flash('flash', `Reindex started for "${name}".`, 'ok');
+    } catch (e) {
+      flash('flash', `Reindex failed: ${e.message}`, 'err');
+    } finally {
+      setTimeout(() => { reindexBtn.disabled = false; reindexBtn.textContent = 'reindex'; }, 2000);
+    }
+  });
+
+  // Delete index
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'btn btn-danger btn-sm';
+  deleteBtn.textContent = 'delete';
+  deleteBtn.addEventListener('click', async () => {
+    if (!confirm(`Delete index "${name}" and all its products? This cannot be undone.`)) return;
+    try {
+      await tenantClient.deleteIndex(name);
+      flash('flash', `Index "${name}" deleted.`, 'ok');
+      loadIndexes();
+    } catch (e) {
+      flash('flash', `Delete failed: ${e.message}`, 'err');
+    }
+  });
+
+  // Collapsible help panel
+  const helpPanel = document.createElement('div');
+  helpPanel.className = 'index-load-help';
+
+  const serverUrl = s.url || 'https://demo.vectoriasearch.com';
+
+  function helpLabel(text) {
+    const d = document.createElement('div');
+    d.className = 'help-label';
+    d.textContent = text;
+    return d;
+  }
+  function codeBlock(lines) {
+    const c = document.createElement('code');
+    c.textContent = lines.join('\n');
+    return c;
+  }
+
+  const appendNote = document.createElement('div');
+  appendNote.className = 'help-label';
+  appendNote.innerHTML = '<strong style="color:var(--text)">Loading appends or upserts by product ID.</strong> ' +
+    'If a product with the same ID already exists it is overwritten; new IDs are added. ' +
+    'There is no bulk-replace — to start fresh, delete this index, recreate it, then load data.';
+
+  const fieldNote = document.createElement('div');
+  fieldNote.className = 'help-label';
+  fieldNote.innerHTML =
+    '<strong style="color:var(--text)">What gets searched:</strong> ' +
+    'If you include a <code>text</code> field, it is used as-is for BM25 and vector embedding. ' +
+    'If you omit it, the server derives the search corpus from metadata fields ' +
+    '<code>title</code>, <code>name</code>, <code>brand</code>, <code>category</code>, <code>description</code>, and <code>attributes.*</code> only. ' +
+    'All other metadata fields (<code>price</code>, <code>sku</code>, <code>color</code>, …) are stored and returned in results but are <em>not</em> searched. ' +
+    'Use the explicit <code>text</code> field if your schema does not match those five fields.';
+
+  helpPanel.append(
+    appendNote,
+    fieldNote,
+    helpLabel('Index a single product:'),
+    codeBlock([
+      `curl -X POST ${serverUrl}/indexes/${name}/products \\`,
+      `  -H "Authorization: Bearer ${tenantApiKey}" \\`,
+      `  -H "Content-Type: application/json" \\`,
+      `  -d '{"id":"prod-1","text":"blue running shoe size 10","metadata":{"title":"Blue Runner","brand":"ACME","price":59.99}}'`,
+    ]),
+    helpLabel('Bulk load from a JSON-lines file (one product per line):'),
+    codeBlock([
+      `while IFS= read -r line; do`,
+      `  curl -sS -X POST ${serverUrl}/indexes/${name}/products \\`,
+      `    -H "Authorization: Bearer ${tenantApiKey}" \\`,
+      `    -H "Content-Type: application/json" \\`,
+      `    -d "$line"`,
+      `done < products.jsonl`,
+    ]),
+    helpLabel('Each line in products.jsonl must be: {"id":"…","text":"…","metadata":{…}}'),
+    helpLabel('To replace the catalog entirely: delete this index, recreate it, then re-run the load commands above.'),
+    helpLabel('After a server restart, click "reindex" to rebuild the BM25 index from stored products.'),
+  );
+
+  loadBtn.addEventListener('click', () => {
+    helpPanel.classList.toggle('open');
+    card.classList.toggle('help-open');
+    loadBtn.textContent = helpPanel.classList.contains('open') ? 'load data ▴' : 'load data ▾';
+  });
+
+  actions.append(searchBtn, loadBtn, reindexBtn, deleteBtn);
+  card.append(left, actions);
+  wrap.append(card, helpPanel);
+  return wrap;
+}
+
+function openIndex(indexName) {
+  // Temporarily switch session to tenant key + index so tenant.html scopes correctly.
+  // Store admin key so we can restore on back navigation.
+  sessionStorage.setItem('vt_prev_key',  s.key);
+  sessionStorage.setItem('vt_prev_role', s.role);
+  session.save(s.url, tenantApiKey, 'tenant', indexName);
+  sessionStorage.setItem('vt_tenant_name', tenantName);
+  window.location.href = 'tenant.html?from=admin';
+}
+
+// ── Create index ──────────────────────────────────────────────────────────────
+
+document.getElementById('create-index-btn').addEventListener('click', async () => {
+  if (!tenantClient) { flash('flash', 'Tenant not loaded yet.', 'err'); return; }
+  const name = document.getElementById('new-index-name').value.trim();
+  if (!name) { flash('flash', 'Enter an index name.', 'err'); return; }
+  if (!/^[a-z0-9][a-z0-9-_]*$/.test(name)) {
+    flash('flash', 'Index name: lowercase letters, digits, hyphens, underscores only.', 'err');
+    return;
+  }
+  try {
+    await tenantClient.createIndex(name);
+    flash('flash', `Index "${name}" created.`, 'ok');
+    document.getElementById('new-index-name').value = '';
+    loadIndexes();
+  } catch (e) {
+    flash('flash', `Create failed: ${e.message}`, 'err');
+  }
+});
+
+await loadTenant();
+await loadIndexes();
+</script>

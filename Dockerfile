@@ -7,12 +7,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 
+# Passed by deploy.sh; changing it invalidates the cargo build cache layer on version bumps.
+ARG CARGO_VERSION=dev
+
 COPY Cargo.toml Cargo.lock ./
 COPY vectoria-core/ vectoria-core/
 COPY vectoria-server/ vectoria-server/
-# CLI manifest copied for workspace resolution; not compiled (-p vectoria-server only)
-# Skipping -p vectoria-cli avoids parquet/arrow deps (~15min extra build time)
+# CLI and WASM manifests copied for workspace resolution; neither is compiled here.
+# Skipping -p vectoria-cli avoids parquet/arrow deps (~15min extra build time).
 COPY vectoria-cli/ vectoria-cli/
+COPY vectoria-wasm/ vectoria-wasm/
 
 RUN cargo build --release -p vectoria-server
 

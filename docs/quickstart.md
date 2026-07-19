@@ -320,6 +320,8 @@ make esci-import MAX_PRODUCTS=10000 LOCALE=es SERVER=http://myserver:7700 API_KE
 ## Next steps
 
 - [API reference](api.md) — HTTP endpoints and embedded library usage
+- [API reference → Admin Overrides](api.md#admin-overrides) — pins, sponsored slots, suppressions
+- [API reference → Tenants](api.md#tenants) — multi-tenant SaaS with per-tenant API keys and isolated indexes
 - [Configuration reference](../vectoria.toml) — all fields documented inline
 - [Production deployment](prod.md)
 - [crates.io — vectoria-core](https://crates.io/crates/vectoria-core) — embed in your Rust app

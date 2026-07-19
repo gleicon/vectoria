@@ -1,0 +1,109 @@
+<meta charset="utf-8">
+<title>Vectoria Console — Login</title>
+<link rel="stylesheet" href="css/console.css">
+<script src="js/config.js"></script>
+
+<div class="login-wrap">
+  <div class="login-box">
+    <div class="login-logo">vectoria <span>console</span></div>
+
+    <div class="card">
+      <div id="flash" class="flash"></div>
+
+      <div class="form-group">
+        <label for="url">Server URL</label>
+        <input id="url" type="url" placeholder="http://localhost:7700" autocomplete="url">
+      </div>
+
+      <div class="form-group">
+        <label for="key">API Key</label>
+        <input id="key" type="password" placeholder="vtk_… or admin key" autocomplete="current-password">
+      </div>
+
+      <div class="form-group">
+        <label for="index">Index name <span class="text-muted">(leave blank if admin)</span></label>
+        <input id="index" type="text" placeholder="my-store" autocomplete="off">
+      </div>
+
+      <button class="btn btn-primary" id="connect-btn" style="width:100%">Connect</button>
+    </div>
+
+    <p class="text-muted mt-2" style="text-align:center;font-size:0.8rem">
+      Admin keys can access all indexes. Tenant keys are scoped to their own index.
+    </p>
+  </div>
+</div>
+
+<script type="module">
+import { VectoriaClient, session } from './js/api.js';
+
+const urlInput   = document.getElementById('url');
+const keyInput   = document.getElementById('key');
+const indexInput = document.getElementById('index');
+const connectBtn = document.getElementById('connect-btn');
+const flashEl    = document.getElementById('flash');
+
+const saved = session.load();
+if (window.VECTORIA_DEFAULT_URL) {
+  // Platform mode: always use configured server, never restore a stale session
+  // (saved index/key may belong to a different tenant or dev environment).
+  urlInput.value = window.VECTORIA_DEFAULT_URL;
+} else {
+  // Dev/self-hosted: restore full session so user doesn't retype everything.
+  if (saved.url)   urlInput.value   = saved.url;
+  if (saved.key)   keyInput.value   = saved.key;
+  if (saved.index) indexInput.value = saved.index;
+}
+
+connectBtn.addEventListener('click', connect);
+[urlInput, keyInput, indexInput].forEach(el =>
+  el.addEventListener('keydown', e => { if (e.key === 'Enter') connect(); })
+);
+
+async function connect() {
+  const url   = urlInput.value.trim();
+  const key   = keyInput.value.trim();
+  const index = indexInput.value.trim() || null;
+
+  if (!url || !key) {
+    showFlash('Server URL and API key are required.', 'err');
+    return;
+  }
+
+  connectBtn.disabled = true;
+  connectBtn.textContent = 'Connecting…';
+  clearFlash();
+
+  try {
+    const client = new VectoriaClient(url, key);
+    const { role } = await client.detectRole(index);
+    session.save(url, key, role, index);
+
+    if (role === 'admin') {
+      window.location.href = 'admin.html';
+    } else {
+      if (!index) {
+        showFlash('Tenant key detected — please enter your index name.', 'err');
+        indexInput.focus();
+        connectBtn.disabled = false;
+        connectBtn.textContent = 'Connect';
+        return;
+      }
+      window.location.href = 'tenant.html';
+    }
+  } catch (e) {
+    showFlash(`Connection failed: ${e.message}`, 'err');
+    connectBtn.disabled = false;
+    connectBtn.textContent = 'Connect';
+  }
+}
+
+function showFlash(msg, type) {
+  flashEl.textContent = msg;
+  flashEl.className = `flash flash-${type} show`;
+}
+function clearFlash() {
+  flashEl.className = 'flash';
+  flashEl.textContent = '';
+}
+</script>

@@ -1,0 +1,628 @@
+<meta charset="utf-8">
+<title>Vectoria Console — Search & Overrides</title>
+<link rel="stylesheet" href="css/console.css">
+
+<div class="page">
+  <div id="nav-root"></div>
+
+  <div class="content">
+    <div id="flash" class="flash"></div>
+
+    <!-- Admin-only index picker: shown when navigating to this page without an index set -->
+    <div id="index-picker" class="card" style="display:none;margin-bottom:var(--gap)">
+      <div class="card-title">Select index to manage</div>
+      <div class="flex gap-1">
+        <select id="index-select" style="max-width:260px"></select>
+        <button class="btn btn-primary" id="index-select-btn">Open</button>
+      </div>
+    </div>
+
+    <div id="index-banner" style="display:none;margin-bottom:var(--gap);font-family:var(--font);font-size:0.8rem;color:var(--muted)">
+      <span id="banner-back-link" style="display:none">
+        <a href="admin.html" id="banner-back-btn" style="color:var(--muted);text-decoration:none;margin-right:0.75rem">← admin</a>
+      </span>
+      <span id="banner-tenant-prefix" style="display:none">tenant: <strong id="banner-tenant-name" style="color:var(--accent-hi)"></strong> / </span>
+      index: <strong id="index-banner-name" style="color:var(--accent-hi)"></strong>
+    </div>
+
+    <div class="tabs" id="main-tabs">
+      <button class="tab-btn" data-tab="tab-search">Search</button>
+      <button class="tab-btn" data-tab="tab-upload">Upload catalog</button>
+      <button class="tab-btn" data-tab="tab-pins">Pins</button>
+      <button class="tab-btn" data-tab="tab-sponsored">Sponsored</button>
+      <button class="tab-btn" data-tab="tab-suppressions">Suppressions</button>
+    </div>
+
+    <!-- Search tab -->
+    <div class="tab-pane" id="tab-search">
+      <div class="search-row">
+        <input id="q" type="search" placeholder="Search products…" autocomplete="off">
+        <select id="mode">
+          <option value="hybrid">hybrid</option>
+          <option value="bm25">bm25</option>
+          <option value="semantic">semantic</option>
+        </select>
+        <button class="btn btn-primary" id="search-btn">Search</button>
+      </div>
+
+      <div id="suppressed-strip"></div>
+      <ul class="results mt-2" id="results-list"></ul>
+
+      <!-- Pin / Sponsored create forms (shown when a result is acted on) -->
+      <div class="card mt-3" id="pin-form-card" style="display:none">
+        <div class="card-title">Pin a product</div>
+        <div class="row">
+          <div class="col form-group">
+            <label>Query</label>
+            <input id="pin-query" type="text">
+          </div>
+          <div class="col form-group">
+            <label>Product ID</label>
+            <input id="pin-product-id" type="text" readonly>
+          </div>
+          <div class="col form-group">
+            <label>Position (1 = top)</label>
+            <input id="pin-position" type="number" value="1" min="1">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" id="pin-save-btn">Save pin</button>
+        <button class="btn btn-ghost btn-sm" id="pin-cancel-btn">Cancel</button>
+      </div>
+
+      <div class="card mt-3" id="sponsor-form-card" style="display:none">
+        <div class="card-title">Sponsor a product</div>
+        <div class="row">
+          <div class="col form-group">
+            <label>Query pattern (prefix)</label>
+            <input id="spon-pattern" type="text">
+          </div>
+          <div class="col form-group">
+            <label>Product ID</label>
+            <input id="spon-product-id" type="text" readonly>
+          </div>
+          <div class="col form-group">
+            <label>Slot position</label>
+            <input id="spon-position" type="number" value="1" min="1">
+          </div>
+        </div>
+        <div class="row">
+          <div class="col form-group">
+            <label>Start date (optional)</label>
+            <input id="spon-start" type="date">
+          </div>
+          <div class="col form-group">
+            <label>End date (optional)</label>
+            <input id="spon-end" type="date">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" id="spon-save-btn">Save sponsored slot</button>
+        <button class="btn btn-ghost btn-sm" id="spon-cancel-btn">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Upload tab -->
+    <div class="tab-pane" id="tab-upload">
+      <div class="card">
+        <div class="card-title">Import product catalog</div>
+        <div id="uploader-mount"></div>
+      </div>
+    </div>
+
+    <!-- Pins tab -->
+    <div class="tab-pane" id="tab-pins">
+      <div class="card">
+        <div class="card-title">All pins</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Query</th><th>Product ID</th><th>Position</th><th></th></tr></thead>
+            <tbody id="pins-tbody"><tr><td colspan="4" class="empty-state">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sponsored tab -->
+    <div class="tab-pane" id="tab-sponsored">
+      <div class="card">
+        <div class="card-title">All sponsored slots</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Pattern</th><th>Product ID</th><th>Slot</th><th>Active window</th><th></th></tr></thead>
+            <tbody id="sponsored-tbody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Suppressions tab -->
+    <div class="tab-pane" id="tab-suppressions">
+      <div class="card">
+        <div class="card-title">All suppressions</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Query</th><th>Product ID</th><th></th></tr></thead>
+            <tbody id="suppressions-tbody"><tr><td colspan="3" class="empty-state">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { session }              from './js/api.js';
+import { mountNav, flash, initTabs } from './js/nav.js';
+import { mountUploader }        from './js/upload.js';
+
+const s = session.load();
+if (!s.url || !s.key) { window.location.href = 'index.html'; }
+
+const client = session.client();
+// activeIndex drives all API calls on this page. It may be updated by the
+// admin index picker if the session has no index set (admin logged in without
+// specifying an index name at login).
+let activeIndex = s.index || null;
+
+// Detect if we arrived via admin → tenant-detail → this page.
+const fromAdmin    = new URLSearchParams(location.search).get('from') === 'admin';
+const adminTenant  = sessionStorage.getItem('vt_tenant_name') || null;
+const prevAdminKey = sessionStorage.getItem('vt_prev_key')    || null;
+const prevAdminRole= sessionStorage.getItem('vt_prev_role')   || null;
+
+await mountNav('nav-root', 'tenant');
+initTabs(document.getElementById('main-tabs'));
+
+// ── Index picker (admin without a session index) ──────────────────────────────
+
+async function initIndexPicker() {
+  const banner = document.getElementById('index-banner');
+  const picker = document.getElementById('index-picker');
+
+  if (activeIndex) {
+    banner.style.display = 'block';
+    document.getElementById('index-banner-name').textContent = activeIndex;
+
+    // Show tenant context breadcrumb when arriving from admin panel
+    if (fromAdmin && adminTenant) {
+      document.getElementById('banner-tenant-prefix').style.display = 'inline';
+      document.getElementById('banner-tenant-name').textContent = adminTenant;
+      document.getElementById('banner-back-link').style.display = 'inline';
+
+      document.getElementById('banner-back-btn').addEventListener('click', e => {
+        e.preventDefault();
+        // Restore admin session before navigating back
+        if (prevAdminKey) {
+          session.save(s.url, prevAdminKey, prevAdminRole || 'admin', '');
+          sessionStorage.removeItem('vt_prev_key');
+          sessionStorage.removeItem('vt_prev_role');
+          sessionStorage.removeItem('vt_tenant_name');
+        }
+        window.location.href = `tenant-detail.html?tenant=${encodeURIComponent(adminTenant)}`;
+      });
+    }
+    return;
+  }
+
+  if (s.role !== 'admin') {
+    // Tenant without an index — shouldn't happen; redirect to login
+    flash('flash', 'No index set. Please log in again and enter your index name.', 'err');
+    return;
+  }
+
+  // Admin without an index set — show the picker
+  picker.style.display = 'block';
+  const sel = document.getElementById('index-select');
+
+  function activateIndex(name) {
+    activeIndex = name;
+    // Persist so nav-bar link and page refresh remember it
+    sessionStorage.setItem('vt_index', name);
+    picker.style.display = 'none';
+    banner.style.display = 'block';
+    document.getElementById('index-banner-name').textContent = name;
+    document.getElementById('uploader-mount').replaceChildren();
+    mountUploader('uploader-mount', client, name, () => {});
+    loadPins(); loadSponsored(); loadSuppressions();
+  }
+
+  try {
+    const data = await client.listIndexes();
+    const names = (data.indexes ?? data).filter(n => n !== 'default');
+    if (names.length === 1) {
+      // Only one real index — activate it immediately, no click needed
+      activateIndex(names[0]);
+      return;
+    }
+    names.forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    });
+  } catch (e) {
+    flash('flash', `Could not load indexes: ${e.message}`, 'err');
+  }
+
+  document.getElementById('index-select-btn').addEventListener('click', () => {
+    const chosen = sel.value;
+    if (!chosen) return;
+    activateIndex(chosen);
+  });
+}
+
+await initIndexPicker();
+
+// ── Upload tab ───────────────────────────────────────────────────────────────
+
+mountUploader('uploader-mount', client, activeIndex, () => {});
+
+// ── Search tab ───────────────────────────────────────────────────────────────
+
+let currentQ = '';
+let activeOverrides = { pinned: {}, sponsored: {}, suppressed: {} };
+
+document.getElementById('search-btn').addEventListener('click', runSearch);
+document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(); });
+
+async function runSearch() {
+  if (!activeIndex) {
+    flash('flash', 'Select an index first.', 'err');
+    return;
+  }
+  const q    = document.getElementById('q').value.trim();
+  const mode = document.getElementById('mode').value;
+  if (!q) return;
+  currentQ = q;
+
+  const resultsList = document.getElementById('results-list');
+  resultsList.replaceChildren();
+
+  try {
+    const [searchData, overrideData] = await Promise.all([
+      client.search(q, { limit: 15, mode }, activeIndex),
+      client.getOverrides(activeIndex, q).catch(() => ({})),
+    ]);
+
+    // Build active override maps from server response — no client-side matching
+    activeOverrides.pinned    = {};
+    activeOverrides.sponsored = {};
+    activeOverrides.suppressed = {};
+    (overrideData.active_pins        ?? []).forEach(p  => { activeOverrides.pinned[p.product_id]    = p.id; });
+    (overrideData.active_sponsored   ?? []).forEach(s  => { activeOverrides.sponsored[s.product_id] = s.id; });
+    (overrideData.active_suppressions ?? []).forEach(s => { activeOverrides.suppressed[s.product_id] = s.id; });
+
+    renderSuppressedStrip(overrideData.active_suppressions ?? []);
+    renderResults(searchData.results ?? searchData.hits ?? [], q);
+  } catch (e) {
+    flash('flash', `Search failed: ${e.message}`, 'err');
+  }
+}
+
+function renderSuppressedStrip(suppressions) {
+  const strip = document.getElementById('suppressed-strip');
+  strip.replaceChildren();
+  if (!suppressions.length) return;
+
+  const label = document.createElement('span');
+  label.className = 'text-muted';
+  label.style.fontSize = '0.75rem';
+  label.textContent = 'Suppressed for this query:';
+  strip.appendChild(label);
+
+  suppressions.forEach(s => {
+    const chip = document.createElement('button');
+    chip.className = 'suppress-chip';
+    chip.textContent = `${s.product_id} ×`;
+    chip.title = `Remove suppression for ${s.product_id}`;
+    chip.addEventListener('click', async () => {
+      await client.deleteSuppression(s.id, activeIndex);
+      runSearch();
+      loadSuppressions();
+    });
+    strip.appendChild(chip);
+  });
+}
+
+// Track which product is being dragged for pin-by-drop
+let draggedHitId = null;
+
+function renderResults(hits, q) {
+  const list = document.getElementById('results-list');
+  list.replaceChildren();
+
+  if (!hits.length) {
+    const li = document.createElement('li');
+    li.className = 'empty-state';
+    li.textContent = 'No results.';
+    list.appendChild(li);
+    return;
+  }
+
+  hits.forEach((hit, i) => {
+    const position = i + 1;
+    const li = document.createElement('li');
+    li.draggable = true;
+    li.dataset.hitId = hit.id;
+    li.dataset.position = position;
+
+    // ── Drag source ──────────────────────────────────────────────────────────
+    li.addEventListener('dragstart', e => {
+      draggedHitId = hit.id;
+      e.dataTransfer.effectAllowed = 'move';
+      // Small delay so the ghost image renders before the class dims the row
+      setTimeout(() => li.classList.add('dragging'), 0);
+    });
+    li.addEventListener('dragend', () => {
+      draggedHitId = null;
+      li.classList.remove('dragging');
+      list.querySelectorAll('.drag-target').forEach(el => el.classList.remove('drag-target'));
+    });
+
+    // ── Drop target ──────────────────────────────────────────────────────────
+    li.addEventListener('dragover', e => {
+      if (!draggedHitId || draggedHitId === hit.id) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      list.querySelectorAll('.drag-target').forEach(el => el.classList.remove('drag-target'));
+      li.classList.add('drag-target');
+    });
+    li.addEventListener('dragleave', () => li.classList.remove('drag-target'));
+    li.addEventListener('drop', async e => {
+      e.preventDefault();
+      li.classList.remove('drag-target');
+      if (!draggedHitId || draggedHitId === hit.id) return;
+      try {
+        await client.createPin(q, draggedHitId, position, activeIndex);
+        flash('flash', `Pinned to position ${position}.`, 'ok');
+        loadPins();
+        runSearch();
+      } catch (err) {
+        flash('flash', `Pin failed: ${err.message}`, 'err');
+      }
+    });
+
+    const rank = document.createElement('span');
+    rank.className = 'rank';
+    rank.textContent = String(position);
+
+    const dragHandle = document.createElement('span');
+    dragHandle.className = 'drag-handle';
+    dragHandle.textContent = ':::';
+    dragHandle.title = 'Drag to pin at a different position';
+
+    const main = document.createElement('div');
+    main.className = 'hit-main';
+
+    const idEl = document.createElement('div');
+    idEl.className = 'hit-id';
+    idEl.textContent = hit.id;
+
+    const textEl = document.createElement('div');
+    textEl.className = 'hit-text';
+    textEl.textContent = hit.text ?? hit.metadata?.title ?? hit.id;
+
+    main.append(idEl, textEl);
+
+    const actions = document.createElement('div');
+    actions.className = 'hit-actions';
+
+    // Pin toggle
+    const isPinned = !!activeOverrides.pinned[hit.id];
+    const pinBtn = document.createElement('button');
+    pinBtn.className = `btn btn-ghost btn-sm${isPinned ? ' act-active' : ''}`;
+    pinBtn.textContent = isPinned ? 'Unpin' : 'Pin';
+    pinBtn.addEventListener('click', async () => {
+      if (isPinned) {
+        await client.deletePin(activeOverrides.pinned[hit.id], activeIndex);
+        loadPins();
+        runSearch();
+      } else {
+        showPinForm(q, hit.id);
+      }
+    });
+
+    // Sponsor toggle
+    const isSponsored = !!activeOverrides.sponsored[hit.id];
+    const sponsorBtn = document.createElement('button');
+    sponsorBtn.className = `btn btn-ghost btn-sm${isSponsored ? ' act-active' : ''}`;
+    sponsorBtn.textContent = isSponsored ? 'Unsponsor' : 'Sponsor';
+    sponsorBtn.addEventListener('click', async () => {
+      if (isSponsored) {
+        await client.deleteSponsored(activeOverrides.sponsored[hit.id], activeIndex);
+        loadSponsored();
+        runSearch();
+      } else {
+        showSponsorForm(q, hit.id);
+      }
+    });
+
+    // Suppress button
+    const suppressBtn = document.createElement('button');
+    suppressBtn.className = 'btn btn-ghost btn-sm';
+    suppressBtn.textContent = 'Suppress';
+    suppressBtn.addEventListener('click', async () => {
+      await client.createSuppression(q, hit.id, activeIndex);
+      loadSuppressions();
+      runSearch();
+    });
+
+    actions.append(pinBtn, sponsorBtn, suppressBtn);
+    li.append(dragHandle, rank, main, actions);
+    list.appendChild(li);
+  });
+}
+
+// ── Pin form ─────────────────────────────────────────────────────────────────
+
+function showPinForm(q, productId) {
+  const card = document.getElementById('pin-form-card');
+  document.getElementById('pin-query').value      = q;
+  document.getElementById('pin-product-id').value = productId;
+  document.getElementById('pin-position').value   = '1';
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth' });
+}
+
+document.getElementById('pin-save-btn').addEventListener('click', async () => {
+  const q   = document.getElementById('pin-query').value.trim();
+  const pid = document.getElementById('pin-product-id').value.trim();
+  const pos = parseInt(document.getElementById('pin-position').value, 10);
+  try {
+    await client.createPin(q, pid, pos, activeIndex);
+    document.getElementById('pin-form-card').style.display = 'none';
+    flash('flash', 'Pin saved.', 'ok');
+    loadPins();
+    runSearch();
+  } catch (e) {
+    flash('flash', `Pin failed: ${e.message}`, 'err');
+  }
+});
+document.getElementById('pin-cancel-btn').addEventListener('click', () => {
+  document.getElementById('pin-form-card').style.display = 'none';
+});
+
+// ── Sponsor form ──────────────────────────────────────────────────────────────
+
+function showSponsorForm(q, productId) {
+  const card = document.getElementById('sponsor-form-card');
+  document.getElementById('spon-pattern').value    = q;
+  document.getElementById('spon-product-id').value = productId;
+  document.getElementById('spon-position').value   = '1';
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth' });
+}
+
+document.getElementById('spon-save-btn').addEventListener('click', async () => {
+  const pattern    = document.getElementById('spon-pattern').value.trim();
+  const productId  = document.getElementById('spon-product-id').value.trim();
+  const slotPos    = parseInt(document.getElementById('spon-position').value, 10);
+  const startDate  = document.getElementById('spon-start').value || null;
+  const endDate    = document.getElementById('spon-end').value   || null;
+  try {
+    await client.createSponsored(
+      { query_pattern: pattern, product_id: productId, slot_position: slotPos,
+        start_date: startDate, end_date: endDate },
+      activeIndex
+    );
+    document.getElementById('sponsor-form-card').style.display = 'none';
+    flash('flash', 'Sponsored slot saved.', 'ok');
+    loadSponsored();
+    runSearch();
+  } catch (e) {
+    flash('flash', `Sponsor failed: ${e.message}`, 'err');
+  }
+});
+document.getElementById('spon-cancel-btn').addEventListener('click', () => {
+  document.getElementById('sponsor-form-card').style.display = 'none';
+});
+
+// ── Pins tab ─────────────────────────────────────────────────────────────────
+
+async function loadPins() {
+  const tbody = document.getElementById('pins-tbody');
+  try {
+    const data = await client.listPins(activeIndex);
+    const pins = data.pins ?? data;
+    if (!pins.length) { setEmpty(tbody, 4, 'No pins.'); return; }
+    tbody.replaceChildren();
+    pins.forEach(p => {
+      const tr = document.createElement('tr');
+      tdMono(tr, p.query);
+      tdMono(tr, p.product_id);
+      td(tr, String(p.position));
+      const tdA = document.createElement('td');
+      const del = deleteBtn(() => deleteRow(client.deletePin.bind(client, p.id, activeIndex), loadPins, loadPins));
+      tdA.appendChild(del);
+      tr.appendChild(tdA);
+      tbody.appendChild(tr);
+    });
+  } catch (e) { setEmpty(tbody, 4, `Error: ${e.message}`); }
+}
+
+// ── Sponsored tab ─────────────────────────────────────────────────────────────
+
+async function loadSponsored() {
+  const tbody = document.getElementById('sponsored-tbody');
+  try {
+    const data = await client.listSponsored(activeIndex);
+    const slots = data.sponsored ?? data;
+    if (!slots.length) { setEmpty(tbody, 5, 'No sponsored slots.'); return; }
+    tbody.replaceChildren();
+    slots.forEach(s => {
+      const tr = document.createElement('tr');
+      tdMono(tr, s.query_pattern);
+      tdMono(tr, s.product_id);
+      td(tr, String(s.slot_position ?? 1));
+      td(tr, [s.start_date, s.end_date].filter(Boolean).join(' → ') || 'always');
+      const tdA = document.createElement('td');
+      tdA.appendChild(deleteBtn(() => deleteRow(client.deleteSponsored.bind(client, s.id, activeIndex), loadSponsored, loadSponsored)));
+      tr.appendChild(tdA);
+      tbody.appendChild(tr);
+    });
+  } catch (e) { setEmpty(tbody, 5, `Error: ${e.message}`); }
+}
+
+// ── Suppressions tab ──────────────────────────────────────────────────────────
+
+async function loadSuppressions() {
+  const tbody = document.getElementById('suppressions-tbody');
+  try {
+    const data = await client.listSuppressions(activeIndex);
+    const sups = data.suppressions ?? data;
+    if (!sups.length) { setEmpty(tbody, 3, 'No suppressions.'); return; }
+    tbody.replaceChildren();
+    sups.forEach(s => {
+      const tr = document.createElement('tr');
+      tdMono(tr, s.query);
+      tdMono(tr, s.product_id);
+      const tdA = document.createElement('td');
+      tdA.appendChild(deleteBtn(() => deleteRow(client.deleteSuppression.bind(client, s.id, activeIndex), loadSuppressions, loadSuppressions)));
+      tr.appendChild(tdA);
+      tbody.appendChild(tr);
+    });
+  } catch (e) { setEmpty(tbody, 3, `Error: ${e.message}`); }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function td(tr, text) {
+  const el = document.createElement('td');
+  el.textContent = text;
+  tr.appendChild(el);
+}
+function tdMono(tr, text) {
+  const el = document.createElement('td');
+  el.className = 'mono';
+  el.textContent = text;
+  tr.appendChild(el);
+}
+function deleteBtn(onClick) {
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-danger btn-sm';
+  btn.textContent = 'delete';
+  btn.addEventListener('click', onClick);
+  return btn;
+}
+async function deleteRow(deleteFn, ...reloaders) {
+  try {
+    await deleteFn();
+    reloaders.forEach(fn => fn());
+    flash('flash', 'Deleted.', 'ok');
+  } catch (e) {
+    flash('flash', `Delete failed: ${e.message}`, 'err');
+  }
+}
+function setEmpty(tbody, cols, msg) {
+  const tr = document.createElement('tr');
+  const tdEl = document.createElement('td');
+  tdEl.colSpan = cols;
+  tdEl.className = 'empty-state';
+  tdEl.textContent = msg;
+  tr.appendChild(tdEl);
+  tbody.replaceChildren(tr);
+}
+
+loadPins();
+loadSponsored();
+loadSuppressions();
+</script>

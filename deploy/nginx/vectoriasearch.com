@@ -2,9 +2,10 @@
 # Managed by deploy/deploy.sh — do not edit manually on the server.
 #
 # Domains:
-#   vectoriasearch.com / www  →  marketing website (static files)
-#   demo.vectoriasearch.com   →  demo store (static) + API proxy → 127.0.0.1:7700
-#   a.vectoriasearch.com →  Algolia-compatible adapter → 127.0.0.1:8108
+#   vectoriasearch.com / www      →  marketing website (static files)
+#   demo.vectoriasearch.com       →  demo store (static) + API proxy → 127.0.0.1:7700
+#   platform.vectoriasearch.com   →  SaaS console (static) — JS calls demo directly
+#   a.vectoriasearch.com          →  Algolia-compatible adapter → 127.0.0.1:8108
 
 # ── HTTP → HTTPS redirect for all vectoriasearch.com domains ───────────────
 server {
@@ -12,6 +13,7 @@ server {
     listen [::]:80;
     server_name vectoriasearch.com www.vectoriasearch.com
                 demo.vectoriasearch.com
+                platform.vectoriasearch.com
                 a.vectoriasearch.com;
 
     location /.well-known/acme-challenge/ {
@@ -187,5 +189,55 @@ server {
         proxy_connect_timeout 30s;
         proxy_send_timeout    60s;
         proxy_read_timeout    60s;
+    }
+}
+
+# ── platform.vectoriasearch.com — SaaS admin console (static) ─────────────
+# Pure static site. The console JS calls demo.vectoriasearch.com directly.
+# No API proxy here — CORS is handled by CorsLayer::permissive() on the API.
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name platform.vectoriasearch.com;
+
+    ssl_certificate     /etc/letsencrypt/live/vectoriasearch.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/vectoriasearch.com/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/vectoriasearch.com/chain.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';
+    ssl_prefer_server_ciphers off;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:VecSSL:10m;
+    ssl_session_tickets off;
+    ssl_stapling on;
+    ssl_stapling_verify on;
+    resolver 8.8.8.8 8.8.4.4 valid=300s;
+
+    root /opt/apps/vectoria/platform;
+    index index.html;
+
+    access_log /var/log/nginx/platform.vectoriasearch.com-access.log combined;
+    error_log  /var/log/nginx/platform.vectoriasearch.com-error.log warn;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    # connect-src must be open: the console connects to whatever server URL the user configured.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src *; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'" always;
+
+    # Admin console JS/CSS: no-cache so updates deploy immediately.
+    # (Immutable would require content-hashed filenames to avoid stale JS after deploys.)
+    location ~* \.(css|js)$ {
+        add_header Cache-Control "no-cache, must-revalidate";
+    }
+
+    location ~* \.(woff2?|png|jpg|jpeg|svg|ico)$ {
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location / {
+        try_files $uri $uri/ $uri.html =404;
     }
 }

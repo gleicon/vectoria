@@ -6,7 +6,8 @@
 #
 # Usage:
 #   ./deploy/deploy.sh               # full deploy
-#   ./deploy/deploy.sh --site-only   # sync website + webstore, reload nginx only
+#   ./deploy/deploy.sh --site-only   # sync website + webstore + platform, reload nginx only
+#   ./deploy/deploy.sh --platform    # sync platform console only, reload nginx
 #   ./deploy/deploy.sh --algolia     # redeploy vectoria-algolia only
 
 set -euo pipefail
@@ -23,6 +24,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 MODE="full"
 [[ "${1:-}" == "--site-only"  ]] && MODE="site"
+[[ "${1:-}" == "--platform"   ]] && MODE="platform"
 [[ "${1:-}" == "--algolia"    ]] && MODE="algolia"
 
 echo "==> Deploying vectoria ($MODE) to $REMOTE_HOST"
@@ -61,6 +63,20 @@ if [[ "$MODE" == "full" || "$MODE" == "site" ]]; then
   "
 fi
 
+# ── Sync platform console ──────────────────────────────────────────────────
+if [[ "$MODE" == "full" || "$MODE" == "site" || "$MODE" == "platform" ]]; then
+  echo "[sync] platform console..."
+  rsync -az --checksum --delete \
+    -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
+    "$REPO_ROOT/examples/saas-console/" \
+    "$REMOTE_USER@$REMOTE_HOST:$APP_DIR/platform/"
+
+  # Overwrite config.js with the production API URL (rsync would restore the empty dev default)
+  $SSH "
+    echo \"window.VECTORIA_DEFAULT_URL = 'https://demo.vectoriasearch.com';\" > $APP_DIR/platform/js/config.js
+  "
+fi
+
 # ── Sync Rust source (needed for docker build) ─────────────────────────────
 if [[ "$MODE" == "full" ]]; then
   echo "[sync] rust source..."
@@ -72,6 +88,7 @@ if [[ "$MODE" == "full" ]]; then
     --exclude='*.env' \
     --exclude='webstore/' \
     --exclude='website/' \
+    --exclude='platform/' \
     --exclude='data/' \
     --exclude='logs/' \
     --exclude='vectoria-algolia/' \
@@ -81,7 +98,7 @@ if [[ "$MODE" == "full" ]]; then
 fi
 
 # ── Update nginx config if changed ────────────────────────────────────────
-if [[ "$MODE" == "full" || "$MODE" == "site" ]]; then
+if [[ "$MODE" == "full" || "$MODE" == "site" || "$MODE" == "platform" ]]; then
   echo "[nginx] checking config..."
   $SSH "
     if ! diff -q $APP_DIR/deploy/nginx/vectoriasearch.com \
@@ -99,10 +116,16 @@ fi
 # ── Rebuild + restart vectoria-server ─────────────────────────────────────
 if [[ "$MODE" == "full" ]]; then
   echo "[docker] rebuilding vectoria-server..."
+  CARGO_VERSION=$(grep '^version' "$REPO_ROOT/Cargo.toml" | head -1 | sed 's/.*"\(.*\)"/\1/')
   $SSH "
     cd $APP_DIR
+    sudo docker build \
+      --build-arg CARGO_VERSION=${CARGO_VERSION} \
+      --target vectoria-full \
+      -t vectoria:full . \
+      -f Dockerfile
     sudo docker compose -f deploy/docker-compose.prod.yml --env-file .env \
-      up -d --build --remove-orphans
+      up -d --no-build --force-recreate vectoria-server
     echo '  vectoria-server restarted.'
   "
 fi
@@ -150,4 +173,5 @@ echo ""
 echo "Deploy complete."
 echo "  https://vectoriasearch.com"
 echo "  https://demo.vectoriasearch.com"
+echo "  https://platform.vectoriasearch.com"
 echo "  https://a.vectoriasearch.com"

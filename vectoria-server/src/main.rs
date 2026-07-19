@@ -5,9 +5,11 @@ mod rate_limit;
 mod routes;
 mod state;
 mod storage_factory;
+mod tenants;
 
 use anyhow::Result;
 use axum::{
+    extract::DefaultBodyLimit,
     middleware,
     routing::{delete, get, post, put},
     Router,
@@ -53,7 +55,6 @@ async fn main() -> Result<()> {
     let api_key = cfg.ensure_api_key();
 
     tracing::info!("vectoria v{}", env!("CARGO_PKG_VERSION"));
-    eprintln!("api_key: {}", api_key);
 
     if cfg.embedding.provider == "local" {
         let skip = args.skip_consent || cfg.server.skip_consent;
@@ -142,6 +143,21 @@ async fn main() -> Result<()> {
         rate_limit::new_limiter(rps)
     });
 
+    // Derive sibling directories from the storage path: `./vectoria.db` → `./indexes/`, `./tenants.json`
+    let data_root = cfg.storage.path.parent()
+        .unwrap_or(std::path::Path::new("."))
+        .to_path_buf();
+    let named_indexes_dir = if cfg.index.vector_backend.starts_with("edgestore") {
+        Some(data_root.join("indexes"))
+    } else {
+        None
+    };
+    let tenant_store_path = data_root.join("tenants.json");
+    let tenant_store = Arc::new(match tenants::TenantStore::load(tenant_store_path) {
+        Ok(s) => s,
+        Err(e) => { tracing::warn!("tenant store failed to load, starting empty: {e}"); tenants::TenantStore::empty() }
+    });
+
     let registry = Arc::new(IndexRegistry::new(
         Arc::clone(&engine),
         Arc::clone(&embedding),
@@ -149,7 +165,10 @@ async fn main() -> Result<()> {
         Some(query_cache_ttl),
         Some(query_cache_max),
         cfg.embedding.fields.clone(),
+        named_indexes_dir,
     ));
+
+    registry.load_persisted().await;
 
     let tenant_keys: std::collections::HashMap<String, String> = cfg
         .tenants
@@ -164,6 +183,7 @@ async fn main() -> Result<()> {
         registry,
         api_key: api_key.clone(),
         tenant_keys: std::sync::Arc::new(tenant_keys),
+        tenant_store,
         limiter,
     };
 
@@ -179,17 +199,52 @@ async fn main() -> Result<()> {
         .route("/events", post(routes::events::record_event))
         .route("/stats", get(routes::admin::stats))
         .route("/admin/reindex", post(routes::admin::reindex))
-        .route("/indexes", get(routes::indexes::list_indexes))
-        .route("/indexes", post(routes::indexes::create_index))
-        .route("/indexes/{name}", delete(routes::indexes::delete_index))
+        .route("/admin/aggregate", post(routes::admin::trigger_aggregation))
+        .route("/admin/overrides", get(routes::admin::list_overrides))
+        .route("/admin/training-export", get(routes::admin::export_overrides))
+        .route("/admin/training-import", post(routes::admin::import_overrides))
+        .route("/admin/pins", get(routes::pins::list_pins))
+        .route("/admin/pins", post(routes::pins::create_pin))
+        .route("/admin/pins/{id}", delete(routes::pins::delete_pin))
+        .route("/admin/sponsored", get(routes::sponsored::list_sponsored))
+        .route("/admin/sponsored", post(routes::sponsored::create_sponsored))
+        .route("/admin/sponsored/{id}", delete(routes::sponsored::delete_sponsored))
+        .route("/admin/suppressions", get(routes::suppressions::list_suppressions))
+        .route("/admin/suppressions", post(routes::suppressions::create_suppression))
+        .route("/admin/suppressions/{id}", delete(routes::suppressions::delete_suppression))
+        .route("/admin/tenants", get(routes::tenants::list_tenants))
+        .route("/admin/tenants", post(routes::tenants::create_tenant))
+        .route("/admin/tenants/{name}", delete(routes::tenants::delete_tenant))
+        .route("/admin/tenants/{name}/indexes", get(routes::tenants::list_tenant_indexes))
+        .route("/admin/tenants/{name}/rotate-key", post(routes::tenants::rotate_key))
         .route("/products/{id}/related", get(routes::products::related_products))
         .layer(middleware::from_fn(auth::require_admin));
 
     // Tenant-accessible routes: API key auth only; handlers enforce namespace scoping.
+    // Per-index admin routes are here (not under require_admin) because tenants need
+    // to manage their own index's pins, sponsored slots, and suppressions.
     let tenant_routes = Router::new()
+        .route("/indexes", get(routes::indexes::list_indexes))
+        .route("/indexes", post(routes::indexes::create_index))
+        .route("/indexes/{name}", delete(routes::indexes::delete_index))
         .route("/indexes/{name}/products", post(routes::indexes::index_product))
         .route("/indexes/{name}/search", post(routes::indexes::search))
         .route("/indexes/{name}/similar", post(routes::indexes::similar))
+        .route("/indexes/{name}/admin/pins", get(routes::index_admin::list_pins))
+        .route("/indexes/{name}/admin/pins", post(routes::index_admin::create_pin))
+        .route("/indexes/{name}/admin/pins/{id}", delete(routes::index_admin::delete_pin))
+        .route("/indexes/{name}/admin/sponsored", get(routes::index_admin::list_sponsored))
+        .route("/indexes/{name}/admin/sponsored", post(routes::index_admin::create_sponsored))
+        .route("/indexes/{name}/admin/sponsored/{id}", delete(routes::index_admin::delete_sponsored))
+        .route("/indexes/{name}/admin/suppressions", get(routes::index_admin::list_suppressions))
+        .route("/indexes/{name}/admin/suppressions", post(routes::index_admin::create_suppression))
+        .route("/indexes/{name}/admin/suppressions/{id}", delete(routes::index_admin::delete_suppression))
+        .route("/indexes/{name}/admin/reindex", post(routes::index_admin::reindex))
+        .route("/indexes/{name}/admin/stats", get(routes::index_admin::stats))
+        .route("/indexes/{name}/admin/overrides", get(routes::index_admin::list_overrides))
+        .route("/indexes/{name}/admin/aggregate", post(routes::index_admin::trigger_aggregation))
+        .route("/indexes/{name}/admin/training-export", get(routes::index_admin::export_overrides))
+        .route("/indexes/{name}/admin/training-import", post(routes::index_admin::import_overrides))
         .route("/users/{id}/recommendations", get(routes::users::get_recommendations));
 
     let protected = Router::new()
@@ -205,6 +260,7 @@ async fn main() -> Result<()> {
         .merge(public)
         .layer(middleware::from_fn_with_state(state.clone(), rate_limit::rate_limit_middleware))
         .with_state(state)
+        .layer(DefaultBodyLimit::max(10 * 1024 * 1024))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http());
 

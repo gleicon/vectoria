@@ -15,8 +15,17 @@ pub struct CreateIndexRequest {
     pub name: String,
 }
 
-pub async fn list_indexes(State(state): State<AppState>) -> impl IntoResponse {
-    Json(serde_json::json!({"indexes": state.registry.list()}))
+pub async fn list_indexes(
+    State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
+) -> impl IntoResponse {
+    let names = match principal {
+        // Admin sees system indexes only (flat keys, no '/').
+        // Tenant-namespaced indexes are visible via GET /admin/tenants/{name}/indexes.
+        Principal::Admin => state.registry.list().into_iter().filter(|k| !k.contains('/')).collect(),
+        Principal::Tenant(ref t) => state.registry.list_for_tenant(t),
+    };
+    Json(serde_json::json!({"indexes": names}))
 }
 
 fn validate_index_name(name: &str) -> Result<(), &'static str> {
@@ -31,12 +40,17 @@ fn validate_index_name(name: &str) -> Result<(), &'static str> {
 
 pub async fn create_index(
     State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
     Json(req): Json<CreateIndexRequest>,
 ) -> impl IntoResponse {
     if let Err(e) = validate_index_name(&req.name) {
         return (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": e}))).into_response();
     }
-    match state.registry.create(&req.name).await {
+    let key = match &principal {
+        Principal::Admin => req.name.clone(),
+        Principal::Tenant(t) => format!("{t}/{}", req.name),
+    };
+    match state.registry.create(&key).await {
         Ok(()) => (StatusCode::CREATED, Json(serde_json::json!({"name": req.name, "status": "created"}))).into_response(),
         Err(CreateIndexError::AlreadyExists) => (StatusCode::CONFLICT, Json(serde_json::json!({"error": "index already exists"}))).into_response(),
         Err(CreateIndexError::LimitReached) => (StatusCode::UNPROCESSABLE_ENTITY, Json(serde_json::json!({"error": "index limit reached (max 100 named indexes)"}))).into_response(),
@@ -46,34 +60,33 @@ pub async fn create_index(
 
 pub async fn delete_index(
     State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
     Path(name): Path<String>,
 ) -> impl IntoResponse {
-    match state.registry.delete(&name) {
-        Ok(true) => Json(serde_json::json!({"status": "deleted"})).into_response(),
+    let key = match &principal {
+        Principal::Admin => name.clone(),
+        Principal::Tenant(t) => format!("{t}/{name}"),
+    };
+    match state.registry.delete(&key) {
+        Ok(true) => StatusCode::NO_CONTENT.into_response(),
         Ok(false) => (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "index not found"}))).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": e}))).into_response(),
     }
 }
 
-/// Resolve a named index, enforcing tenant namespace isolation.
-///
-/// Admin: any index by name.
-/// Tenant: only the index whose name matches their tenant name.
-///   Wrong namespace → 403 (not 404, to avoid namespace enumeration).
+/// Resolve a named index using implicit tenant namespacing.
+/// Admin targets any key directly. Tenant key is prefixed with `{tenant}/` automatically.
+/// Returns 404 for missing or out-of-namespace indexes (no 403 — avoids namespace enumeration).
 fn resolve_index_for_principal(
     state: &AppState,
     principal: &Principal,
     name: &str,
 ) -> Result<Arc<SearchEngine>, Response> {
-    if let Principal::Tenant(tenant_name) = principal {
-        if tenant_name != name {
-            return Err((
-                StatusCode::FORBIDDEN,
-                Json(serde_json::json!({"error": "access denied for this index namespace"})),
-            ).into_response());
-        }
-    }
-    state.registry.get(name).ok_or_else(|| {
+    let key = match principal {
+        Principal::Admin => name.to_string(),
+        Principal::Tenant(t) => format!("{t}/{name}"),
+    };
+    state.registry.get(&key).ok_or_else(|| {
         (StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "index not found"}))).into_response()
     })
 }

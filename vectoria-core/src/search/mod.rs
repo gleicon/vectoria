@@ -9,12 +9,14 @@ pub mod spell;
 use crate::{
     embedding::EmbeddingProvider,
     model::{
-        build_product_text, Event, Hit, Product, ProductStatus, QueryContext, RankingWeights,
-        SearchMode, SearchRequest, SearchResponse, SimilarRequest,
+        build_product_text, Event, Hit, OverrideExport, Pin, Product, ProductStatus, QueryContext,
+        RankingWeights, SearchMode, SearchRequest, SearchResponse, SimilarRequest,
+        SponsoredSlot, Suppression,
     },
     storage::StorageEngine,
     vector::VectorIndex,
 };
+use chrono::{DateTime, Utc};
 use anyhow::{bail, Result};
 use bm25_index::Bm25Index;
 use llm_rewriter::LlmRewriter;
@@ -243,6 +245,14 @@ impl SearchEngine {
                 base_q
             };
 
+            // In BM25-only mode, no semantic search has populated candidate_scores yet.
+            // Pre-seed it from the sparse BM25 hits so expansion can fetch their texts.
+            if candidate_scores.is_empty() {
+                for (id, _) in &bm25_results {
+                    candidate_scores.entry(id.clone()).or_default();
+                }
+            }
+
             let expanded_q = if bm25_results.len() < (limit / 2).max(1)
                 && !candidate_scores.is_empty()
             {
@@ -338,7 +348,6 @@ impl SearchEngine {
             }
         }
 
-        let total = hits.len();
         let aggregations = req.aggregate.as_ref().map(|fields| {
             let capped: Vec<String> = fields.iter().take(MAX_AGGREGATE_FIELDS).cloned().collect();
             compute_aggregations(&hits, &capped)
@@ -349,6 +358,13 @@ impl SearchEngine {
         } else {
             None
         };
+
+        // Phase 2: apply admin overrides (suppressions → pins → sponsored).
+        // Applied after scoring/clustering so organic ranking is computed normally;
+        // overrides are deterministic and bypass the ranking formula entirely.
+        hits = apply_overrides(hits, &req.q, &*self.storage).await;
+
+        let total = hits.len();
         let page_hits: Vec<Hit> = hits.into_iter().skip(offset).take(limit).collect();
 
         let response = SearchResponse {
@@ -411,6 +427,13 @@ impl SearchEngine {
 
     pub async fn record_event(&self, event: Event) -> Result<()> {
         self.storage.put_event(&event).await
+    }
+
+    /// Run one aggregation cycle immediately (updates popularity + query-CTR signals).
+    /// Normally the aggregation loop fires every `aggregation_interval_secs`; call this
+    /// to apply training events without waiting.
+    pub async fn trigger_aggregation(&self) -> Result<()> {
+        crate::aggregation::aggregate_once_for_test(Arc::clone(&self.storage)).await
     }
 
     /// Return product recommendations for a user based on their click/purchase history.
@@ -591,6 +614,156 @@ impl SearchEngine {
         self.vector_index.flush().await?;
         Ok(ReindexReport { reindexed, errors })
     }
+
+    fn clear_query_cache(&self) {
+        if let Some(cache) = &self.query_cache {
+            cache.clear();
+        }
+    }
+
+    // ── Phase 2: Pins ────────────────────────────────────────────────────────
+
+    pub async fn create_pin(&self, query: String, product_id: String, position: usize) -> Result<Pin> {
+        // Evict any existing pin for the same (query, product_id) — upsert by logical key.
+        let existing = self.storage.list_pins().await?;
+        for old in existing.iter().filter(|p| p.query == query && p.product_id == product_id) {
+            self.storage.delete_pin(&old.id).await?;
+        }
+        let pin = Pin::new(query, product_id, position.max(1));
+        self.storage.put_pin(&pin).await?;
+        self.clear_query_cache();
+        Ok(pin)
+    }
+
+    pub async fn delete_pin(&self, id: &str) -> Result<()> {
+        self.storage.delete_pin(id).await?;
+        self.clear_query_cache();
+        Ok(())
+    }
+
+    pub async fn list_pins(&self) -> Result<Vec<Pin>> {
+        self.storage.list_pins().await
+    }
+
+    // ── Phase 2: Sponsored ───────────────────────────────────────────────────
+
+    pub async fn create_sponsored(
+        &self,
+        query_pattern: String,
+        product_id: String,
+        position: usize,
+        label: String,
+        start_at: Option<DateTime<Utc>>,
+        end_at: Option<DateTime<Utc>>,
+    ) -> Result<SponsoredSlot> {
+        let mut slot = SponsoredSlot::new(query_pattern, product_id, position.max(1), label);
+        slot.start_at = start_at;
+        slot.end_at = end_at;
+        self.storage.put_sponsored(&slot).await?;
+        self.clear_query_cache();
+        Ok(slot)
+    }
+
+    pub async fn delete_sponsored(&self, id: &str) -> Result<()> {
+        self.storage.delete_sponsored(id).await?;
+        self.clear_query_cache();
+        Ok(())
+    }
+
+    pub async fn list_sponsored(&self) -> Result<Vec<SponsoredSlot>> {
+        self.storage.list_sponsored().await
+    }
+
+    // ── Phase 2: Suppressions ────────────────────────────────────────────────
+
+    pub async fn create_suppression(&self, query: String, product_id: String) -> Result<Suppression> {
+        let sup = Suppression::new(query, product_id);
+        self.storage.put_suppression(&sup).await?;
+        self.clear_query_cache();
+        Ok(sup)
+    }
+
+    pub async fn delete_suppression(&self, id: &str) -> Result<()> {
+        self.storage.delete_suppression(id).await?;
+        self.clear_query_cache();
+        Ok(())
+    }
+
+    pub async fn list_suppressions(&self) -> Result<Vec<Suppression>> {
+        self.storage.list_suppressions().await
+    }
+
+    /// Returns the subset of overrides that are currently active for `query`.
+    /// Uses the same matching logic as `apply_overrides` so the UI can show
+    /// toggle buttons without re-implementing any algorithm client-side.
+    pub async fn active_overrides_for_query(
+        &self,
+        query: &str,
+    ) -> Result<(Vec<Pin>, Vec<SponsoredSlot>, Vec<Suppression>)> {
+        let now = Utc::now();
+        let pins = self.storage.list_pins().await?
+            .into_iter()
+            .filter(|p| p.query == query)
+            .collect();
+        let sponsored = self.storage.list_sponsored().await?
+            .into_iter()
+            .filter(|s| {
+                query_matches_pattern(query, &s.query_pattern)
+                    && s.start_at.map_or(true, |t| t <= now)
+                    && s.end_at.map_or(true, |t| t > now)
+            })
+            .collect();
+        let suppressions = self.storage.list_suppressions().await?
+            .into_iter()
+            .filter(|s| s.query == query)
+            .collect();
+        Ok((pins, sponsored, suppressions))
+    }
+
+    // ── Phase 2: Export / Import ─────────────────────────────────────────────
+
+    pub async fn export_overrides(&self) -> Result<OverrideExport> {
+        Ok(OverrideExport {
+            pins: self.storage.list_pins().await?,
+            sponsored: self.storage.list_sponsored().await?,
+            suppressions: self.storage.list_suppressions().await?,
+            exported_at: Utc::now(),
+        })
+    }
+
+    pub async fn import_overrides(&self, data: OverrideExport) -> Result<ImportReport> {
+        let mut imported = 0usize;
+
+        if !data.pins.is_empty() {
+            // Read existing pins once; evict any that conflict with incoming (query, product_id).
+            let existing = self.storage.list_pins().await?;
+            let incoming_keys: HashSet<(&str, &str)> = data.pins.iter()
+                .map(|p| (p.query.as_str(), p.product_id.as_str()))
+                .collect();
+            for old in existing.iter().filter(|p| incoming_keys.contains(&(p.query.as_str(), p.product_id.as_str()))) {
+                self.storage.delete_pin(&old.id).await?;
+            }
+            for pin in &data.pins {
+                if pin.query.is_empty() || pin.product_id.is_empty() { continue; }
+                let p = Pin::new(pin.query.clone(), pin.product_id.clone(), pin.position.max(1));
+                self.storage.put_pin(&p).await?;
+                imported += 1;
+            }
+        }
+
+        for slot in data.sponsored {
+            if slot.query_pattern.is_empty() || slot.product_id.is_empty() { continue; }
+            self.storage.put_sponsored(&slot).await?;
+            imported += 1;
+        }
+        for sup in data.suppressions {
+            if sup.query.is_empty() || sup.product_id.is_empty() { continue; }
+            self.storage.put_suppression(&sup).await?;
+            imported += 1;
+        }
+        self.clear_query_cache();
+        Ok(ImportReport { imported })
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -610,4 +783,79 @@ pub struct EngineStats {
 pub struct ReindexReport {
     pub reindexed: usize,
     pub errors: usize,
+}
+
+#[derive(serde::Serialize)]
+pub struct ImportReport {
+    pub imported: usize,
+}
+
+/// Apply Phase 2 admin overrides to a ranked hit list.
+/// Order: suppressions → pins → sponsored.
+async fn apply_overrides(
+    mut hits: Vec<Hit>,
+    query: &str,
+    storage: &dyn StorageEngine,
+) -> Vec<Hit> {
+    let now = Utc::now();
+
+    // Suppressions: remove hidden products for this query.
+    if let Ok(suppressions) = storage.list_suppressions().await {
+        let suppressed: HashSet<String> = suppressions
+            .into_iter()
+            .filter(|s| s.query == query)
+            .map(|s| s.product_id)
+            .collect();
+        if !suppressed.is_empty() {
+            hits.retain(|h| !suppressed.contains(&h.id));
+        }
+    }
+
+    // Pins: force a product to a specific 1-indexed position.
+    if let Ok(pins) = storage.list_pins().await {
+        let mut query_pins: Vec<Pin> = pins.into_iter().filter(|p| p.query == query).collect();
+        // Process lowest position first: each insertion shifts later elements right,
+        // so applying lower positions before higher ones keeps all target positions correct.
+        query_pins.sort_by_key(|p| p.position);
+        for pin in query_pins {
+            if let Some(idx) = hits.iter().position(|h| h.id == pin.product_id) {
+                let hit = hits.remove(idx);
+                let target = pin.position.saturating_sub(1).min(hits.len());
+                hits.insert(target, hit);
+            }
+        }
+    }
+
+    // Sponsored: inject advertiser products at fixed positions.
+    if let Ok(sponsored) = storage.list_sponsored().await {
+        let mut active: Vec<SponsoredSlot> = sponsored
+            .into_iter()
+            .filter(|s| {
+                query_matches_pattern(query, &s.query_pattern)
+                    && s.start_at.map_or(true, |t| t <= now)
+                    && s.end_at.map_or(true, |t| t > now)
+            })
+            .collect();
+        // Process lowest position first so each insertion lands at the correct final index.
+        active.sort_by_key(|s| s.position);
+        for slot in active {
+            if let Ok(Some(product)) = storage.get_product(&slot.product_id).await {
+                hits.retain(|h| h.id != slot.product_id);
+                let target = slot.position.saturating_sub(1).min(hits.len());
+                let mut meta = product.metadata.clone();
+                meta["sponsored"] = serde_json::json!(true);
+                if !slot.label.is_empty() {
+                    meta["sponsored_label"] = serde_json::json!(slot.label);
+                }
+                hits.insert(target, Hit { id: product.id, score: 0.0, metadata: meta, explain: None });
+            }
+        }
+    }
+
+    hits
+}
+
+/// Match a query against a pattern: exact match or query starts with pattern (prefix).
+fn query_matches_pattern(query: &str, pattern: &str) -> bool {
+    query == pattern || query.starts_with(pattern)
 }

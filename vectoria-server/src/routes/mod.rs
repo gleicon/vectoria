@@ -1,6 +1,11 @@
 pub mod admin;
 pub mod events;
+pub mod index_admin;
 pub mod indexes;
+pub mod pins;
 pub mod products;
 pub mod search;
+pub mod sponsored;
+pub mod suppressions;
+pub mod tenants;
 pub mod users;

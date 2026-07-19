@@ -18,10 +18,16 @@ WANDS_LABELS    := $(WANDS_DIR)/label.csv
 WANDS_JUDGES    := $(WANDS_DIR)/judges.ndjson
 WANDS_MAX       := 42994
 
+CONSOLE_PORT  := 8889
+TENANT        :=
+INDEX_NAME    := $(or $(INDEX_NAME),$(TENANT))
+
 .PHONY: help build test server server-bg kill esci-download esci-import esci-judges bench webstore clean \
         publish publish-dry-run tag version \
         wands-download wands-import wands-judges wands-bench \
-        wasm-build wasm-pack
+        wasm-build wasm-pack \
+        admin-seed admin-panel admin-demo \
+        saas-console
 
 VERSION       := $(shell cargo metadata --no-deps --format-version 1 | python3 -c "import sys,json; print(json.load(sys.stdin)['packages'][0]['version'])" 2>/dev/null || grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
 
@@ -32,6 +38,15 @@ help:
 	@echo "    make server-bg      start server in background"
 	@echo "    make esci-import    download ESCI data and import ($(MAX_PRODUCTS) products)"
 	@echo "    make webstore       serve demo store at http://localhost:$(WEBSTORE_PORT)"
+	@echo ""
+	@echo "  Admin panel (default index):"
+	@echo "    make admin-demo API_KEY=<key>   server + seed + panel in one shot"
+	@echo "    make admin-seed API_KEY=<key>   seed 8 demo products (no ESCI needed)"
+	@echo "    make admin-panel                serve panel at http://localhost:$(ADMIN_PORT)/vectoria-admin.html"
+	@echo ""
+	@echo "  SaaS console:"
+	@echo "    make saas-console                               serve console at http://localhost:$(CONSOLE_PORT)"
+	@echo "    make esci-import INDEX_NAME=<n> API_KEY=<key>  import ESCI into a named index"
 	@echo ""
 	@echo "  All targets:"
 	@echo "    test                run full test suite (no server, no model download)"
@@ -146,7 +161,22 @@ esci-import: esci-download
 		--locale $(LOCALE) \
 		--max-products $(MAX_PRODUCTS) \
 		--server $(SERVER) \
-		--api-key $(API_KEY)
+		--api-key $(API_KEY) \
+		$(if $(INDEX_NAME),--index $(INDEX_NAME),)
+
+# Alias: TENANT=<name> maps to INDEX_NAME for tenant imports.
+# Usage: make tenant-import TENANT=shoestore API_KEY=vtk_... SERVER=https://demo.vectoriasearch.com
+tenant-import: esci-download
+	@curl -sf $(SERVER)/health >/dev/null 2>&1 || \
+		(echo "Error: server not running at $(SERVER). Run 'make server-bg' first."; exit 1)
+	cargo run --example esci_import -p vectoria-cli -- \
+		$(PRODUCTS) $(EXAMPLES) \
+		--import \
+		--locale $(LOCALE) \
+		--max-products $(MAX_PRODUCTS) \
+		--server $(SERVER) \
+		--api-key $(API_KEY) \
+		--index $(INDEX_NAME)
 
 esci-judges: esci-download
 	@curl -sf $(SERVER)/health >/dev/null 2>&1 || \
@@ -169,6 +199,50 @@ bench: $(JUDGES)
 		bench $(JUDGES) --mode all
 
 $(JUDGES): esci-judges
+
+# ── Admin panel ────────────────────────────────────────────────────────────
+
+ADMIN_PORT := 8888
+
+# Seed 8 demo products for admin panel testing (no ESCI data required).
+# Uses the API_KEY variable — set it to your server's key or override on the command line:
+#   make admin-seed API_KEY=<your-key>
+admin-seed:
+	@curl -sf $(SERVER)/health >/dev/null 2>&1 || \
+		(echo "Error: server not running at $(SERVER). Run 'make server-bg' first."; exit 1)
+	@echo "Seeding demo products..."
+	@for i in 1 2 3 4 5 6 7 8; do \
+		curl -sX POST $(SERVER)/products \
+			-H "Authorization: Bearer $(API_KEY)" \
+			-H "Content-Type: application/json" \
+			-d "{\"id\":\"p$$i\",\"text\":\"running shoe model $$i lightweight breathable\",\"metadata\":{\"title\":\"Shoe Model $$i\",\"brand\":\"Brand$$i\",\"price\":$$((i*20+60)),\"category\":\"footwear\"}}" \
+		&& echo "  p$$i indexed"; \
+	done
+	@echo "Done. Search for 'running shoe' in the admin panel."
+
+# Serve the admin panel at http://localhost:$(ADMIN_PORT)/vectoria-admin.html
+admin-panel:
+	@echo "Admin panel: http://localhost:$(ADMIN_PORT)/vectoria-admin.html"
+	@echo "Vectoria:    $(SERVER)  |  API key: $(API_KEY)"
+	python3 -m http.server $(ADMIN_PORT) --directory examples/admin-panel
+
+# Start server in background, seed data, and serve admin panel in one command.
+# Override API_KEY if your server uses a custom key:
+#   make admin-demo API_KEY=<your-key>
+admin-demo:
+	./scripts/admin-demo.sh $(API_KEY)
+
+# ── SaaS console ───────────────────────────────────────────────────────────
+
+# Serve the SaaS console at http://localhost:$(CONSOLE_PORT).
+# To load real ESCI data into a named index after creating a tenant:
+#   make esci-import INDEX_NAME=<name> API_KEY=<vtk-key>
+saas-console:
+	@echo "SaaS Console: http://localhost:$(CONSOLE_PORT)"
+	@echo "Vectoria:     $(SERVER)  |  admin key: $(API_KEY)"
+	@echo "To load demo data into a tenant index:"
+	@echo "  make tenant-seed API_KEY=<tenant-vtk-key> INDEX_NAME=<name>"
+	python3 -m http.server $(CONSOLE_PORT) --directory examples/saas-console
 
 # ── Webstore ───────────────────────────────────────────────────────────────
 

@@ -20,6 +20,9 @@ const NS_USERS: &[u8] = b"users";
 const NS_USER_EVENTS: &[u8] = b"userevents";
 // Key: {from_id}\x00{rel_type}\x00{to_id}, Value: u64 LE co-occurrence count.
 const NS_RELATIONS: &[u8] = b"relations";
+const NS_PINS: &[u8] = b"pins";
+const NS_SPONSORED: &[u8] = b"sponsored";
+const NS_SUPPRESSIONS: &[u8] = b"suppressions";
 
 const MAX_QUERY_BYTES: usize = 512;
 // user_id is caller-supplied; cap it to prevent storage key amplification.
@@ -462,6 +465,95 @@ impl StorageEngine for EdgeStoreStorage {
         })
         .await??;
         Ok(())
+    }
+
+    // ── Pins ─────────────────────────────────────────────────────────────────
+
+    async fn put_pin(&self, pin: &crate::model::Pin) -> Result<()> {
+        let key = pin.id.as_bytes().to_vec();
+        let value = encode(pin)?;
+        let engine = Arc::clone(&self.engine);
+        tokio::task::spawn_blocking(move || engine.lock().unwrap().put(NS_PINS, &key, &value))
+            .await?
+            .context("put_pin failed")?;
+        Ok(())
+    }
+
+    async fn delete_pin(&self, id: &str) -> Result<()> {
+        let key = id.as_bytes().to_vec();
+        let engine = Arc::clone(&self.engine);
+        tokio::task::spawn_blocking(move || engine.lock().unwrap().delete(NS_PINS, &key))
+            .await?
+            .context("delete_pin failed")?;
+        Ok(())
+    }
+
+    async fn list_pins(&self) -> Result<Vec<crate::model::Pin>> {
+        let engine = Arc::clone(&self.engine);
+        let pairs = tokio::task::spawn_blocking(move || engine.lock().unwrap().prefix(NS_PINS, b""))
+            .await??;
+        pairs.into_iter().map(|(_, v)| decode(&v)).collect()
+    }
+
+    // ── Sponsored ─────────────────────────────────────────────────────────────
+
+    async fn put_sponsored(&self, slot: &crate::model::SponsoredSlot) -> Result<()> {
+        let key = slot.id.as_bytes().to_vec();
+        let value = encode(slot)?;
+        let engine = Arc::clone(&self.engine);
+        tokio::task::spawn_blocking(move || engine.lock().unwrap().put(NS_SPONSORED, &key, &value))
+            .await?
+            .context("put_sponsored failed")?;
+        Ok(())
+    }
+
+    async fn delete_sponsored(&self, id: &str) -> Result<()> {
+        let key = id.as_bytes().to_vec();
+        let engine = Arc::clone(&self.engine);
+        tokio::task::spawn_blocking(move || engine.lock().unwrap().delete(NS_SPONSORED, &key))
+            .await?
+            .context("delete_sponsored failed")?;
+        Ok(())
+    }
+
+    async fn list_sponsored(&self) -> Result<Vec<crate::model::SponsoredSlot>> {
+        let engine = Arc::clone(&self.engine);
+        let pairs =
+            tokio::task::spawn_blocking(move || engine.lock().unwrap().prefix(NS_SPONSORED, b""))
+                .await??;
+        pairs.into_iter().map(|(_, v)| decode(&v)).collect()
+    }
+
+    // ── Suppressions ──────────────────────────────────────────────────────────
+
+    async fn put_suppression(&self, sup: &crate::model::Suppression) -> Result<()> {
+        let key = sup.id.as_bytes().to_vec();
+        let value = encode(sup)?;
+        let engine = Arc::clone(&self.engine);
+        tokio::task::spawn_blocking(move || {
+            engine.lock().unwrap().put(NS_SUPPRESSIONS, &key, &value)
+        })
+        .await?
+        .context("put_suppression failed")?;
+        Ok(())
+    }
+
+    async fn delete_suppression(&self, id: &str) -> Result<()> {
+        let key = id.as_bytes().to_vec();
+        let engine = Arc::clone(&self.engine);
+        tokio::task::spawn_blocking(move || engine.lock().unwrap().delete(NS_SUPPRESSIONS, &key))
+            .await?
+            .context("delete_suppression failed")?;
+        Ok(())
+    }
+
+    async fn list_suppressions(&self) -> Result<Vec<crate::model::Suppression>> {
+        let engine = Arc::clone(&self.engine);
+        let pairs = tokio::task::spawn_blocking(move || {
+            engine.lock().unwrap().prefix(NS_SUPPRESSIONS, b"")
+        })
+        .await??;
+        pairs.into_iter().map(|(_, v)| decode(&v)).collect()
     }
 }
 

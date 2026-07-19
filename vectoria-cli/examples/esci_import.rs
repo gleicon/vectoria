@@ -43,6 +43,9 @@ struct Args {
     pub server: String,
     #[arg(long, default_value = "")]
     pub api_key: String,
+    /// Named index to import into. When set, posts to /indexes/{name}/products instead of /products.
+    #[arg(long)]
+    pub index: Option<String>,
 }
 
 #[tokio::main]
@@ -59,8 +62,12 @@ async fn main() -> Result<()> {
     println!("  {} products loaded", products.len());
 
     if args.import {
-        println!("Importing products into {}...", args.server);
-        import_products(&products, &args.server, &args.api_key, args.batch_size).await?;
+        let target = match &args.index {
+            Some(name) => format!("{}/indexes/{}/products", args.server, name),
+            None       => format!("{}/products", args.server),
+        };
+        println!("Importing products into {}...", target);
+        import_products(&products, &target, &args.api_key, args.batch_size).await?;
         println!("  Import complete.");
     }
 
@@ -137,9 +144,8 @@ fn load_products(path: &PathBuf, locale_filter: Option<&str>, max: usize) -> Res
     Ok(products)
 }
 
-async fn import_products(products: &HashMap<String, EsciProduct>, server: &str, api_key: &str, batch_size: usize) -> Result<()> {
+async fn import_products(products: &HashMap<String, EsciProduct>, url: &str, api_key: &str, batch_size: usize) -> Result<()> {
     let client = reqwest::Client::new();
-    let url = format!("{}/products", server);
     let mut count = 0usize;
     let mut errors = 0usize;
     let mut batch: Vec<serde_json::Value> = Vec::with_capacity(batch_size);
@@ -172,7 +178,24 @@ async fn flush_batch(client: &reqwest::Client, url: &str, api_key: &str, batch: 
     for body in batch.drain(..) {
         match client.post(url).bearer_auth(api_key).json(&body).send().await {
             Ok(r) if r.status().is_success() => *count += 1,
-            _ => *errors += 1,
+            Ok(r) => {
+                let status = r.status();
+                // Abort immediately on auth/not-found errors — retrying won't help.
+                if status == reqwest::StatusCode::UNAUTHORIZED {
+                    eprintln!("error: 401 Unauthorized — check your API key (--api-key)");
+                    std::process::exit(1);
+                }
+                if status == reqwest::StatusCode::NOT_FOUND {
+                    eprintln!("error: 404 Not Found — does the index exist? (--index <name>)");
+                    std::process::exit(1);
+                }
+                eprintln!("warning: HTTP {} for one product", status);
+                *errors += 1;
+            }
+            Err(e) => {
+                eprintln!("error: request failed: {}", e);
+                *errors += 1;
+            }
         }
     }
 }

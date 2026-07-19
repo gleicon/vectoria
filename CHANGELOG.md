@@ -4,6 +4,31 @@ All notable changes to Vectoria. Follows [Keep a Changelog](https://keepachangel
 
 ---
 
+## [0.1.15] — 2026-07-19
+
+### Fixed
+- **BM25 single-result bug**: `SearchMode::Bm25` returned only 1 result for queries like "shoes" while hybrid/semantic returned 15+. Root cause: `expand_query_terms()` was gated on `!candidate_scores.is_empty()`, but in BM25-only mode no semantic search runs so `candidate_scores` was always empty at expansion time. Fix: pre-seed `candidate_scores` from the sparse BM25 hits before the expansion check so term enrichment fires correctly in BM25-only mode.
+- **TOCTOU race in `TenantStore::create()`**: `exists()` released its read lock before `create()` acquired write locks, allowing two concurrent creates with the same name to both succeed. Fixed by checking inside the write lock. Also enforced consistent lock ordering (`by_key` before `by_name`) to match `rotate_key()` and prevent deadlock.
+
+### Security
+- **Admin key leak**: removed `eprintln!("api_key: {}", api_key)` from server startup — admin key was printed to Docker container logs in plaintext.
+- **CSP header** on `platform.vectoriasearch.com`: `default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src *; frame-ancestors 'none'`. Blocks clickjacking and external script injection. `connect-src *` required because the console connects to user-configured server URLs.
+
+### Console (examples/saas-console)
+- **Login session fix**: when `VECTORIA_DEFAULT_URL` is set (production platform), saved session data is no longer restored on the login page. Prevents stale `localhost` URLs from prior dev sessions silently blocking HTTPS platform users with a mixed-content error.
+- **Tenant-detail load-data panel**: collapsible "load data ▾" per index card. Includes upsert behavior note, which metadata fields are actually indexed for search vs stored-only, single-product curl example, and bash loop for bulk JSONL loading. No Makefile dependency — customer-facing only.
+- **JS/CSS cache fix**: changed nginx `Cache-Control` for platform console JS/CSS from `public, immutable` (7-day no-revalidation) to `no-cache, must-revalidate`. Stale `nav.js` was silently blocking button event listeners after deploys.
+
+### Docs
+- **Product schema section** in `docs/api.md`: documents `text` field vs metadata field indexing fallback, exactly which 5 metadata fields (`title`, `name`, `brand`, `category`, `description`) + `attributes.*` are indexed for BM25/vector, and that all other fields are stored-only and filter-only. Special fields table: `margin`, `in_stock`, `price`.
+- **Tenant namespace isolation** clarified in `docs/api.md`: tenant key scopes URL index name automatically (`{tenant}/{index}` internally); cross-namespace access returns 404 not 403 (avoids namespace enumeration).
+- **`examples/saas-console/NOTES.md`** rewritten: full security model, session management, CSP rationale, deploy wiring, split-to-own-repo guide, production hardening checklist.
+
+### Deploy
+- Added `VECTORIA_RATE_LIMIT_PER_SECOND: ${VECTORIA_RATE_LIMIT_PER_SECOND:-100}` default to `deploy/docker-compose.prod.yml`.
+
+---
+
 ## [0.1.14] — 2026-07-15
 
 ### Added
