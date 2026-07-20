@@ -45,6 +45,7 @@
         <button class="btn btn-primary" id="search-btn">Search</button>
       </div>
 
+      <div id="query-quality"></div>
       <div id="suppressed-strip"></div>
       <ul class="results mt-2" id="results-list"></ul>
 
@@ -292,10 +293,121 @@ async function runSearch() {
     (overrideData.active_suppressions ?? []).forEach(s => { activeOverrides.suppressed[s.product_id] = s.id; });
 
     renderSuppressedStrip(overrideData.active_suppressions ?? []);
-    renderResults(searchData.results ?? searchData.hits ?? [], q);
+    const hits = searchData.results ?? searchData.hits ?? [];
+    renderQueryQuality(hits, mode);
+    renderResults(hits, q);
   } catch (e) {
     flash('flash', `Search failed: ${e.message}`, 'err');
   }
+}
+
+// ── Query quality assessment ──────────────────────────────────────────────────
+
+function renderQueryQuality(hits, mode) {
+  const container = document.getElementById('query-quality');
+  container.replaceChildren();
+  if (!hits.length) return;
+
+  const explained = hits.filter(h => h.explain);
+  if (!explained.length) return;
+
+  const getFactor = (h, name) =>
+    (h.explain?.factors ?? []).find(f => f.factor === name)?.score ?? 0;
+
+  const maxSemantic = Math.max(...explained.map(h => getFactor(h, 'semantic_similarity')));
+  const maxBm25     = Math.max(...explained.map(h => getFactor(h, 'bm25')));
+  const multiSource = explained.filter(h => (h.explain?.match_sources ?? []).length > 1).length;
+  const ctx         = explained[0]?.explain?.query_context ?? {};
+  const expanded    = ctx.query_expanded ?? false;
+
+  // Determine quality level and issues
+  const issues = [];
+  let level = 'good'; // good | warn | poor
+
+  if (mode !== 'bm25' && maxSemantic < 0.75) {
+    level = maxSemantic < 0.60 ? 'poor' : 'warn';
+    issues.push({
+      icon: '△',
+      text: `Semantic confidence low (max ${maxSemantic.toFixed(2)} · threshold 0.75). ` +
+        'No product in this index is strongly related to this query. ' +
+        'Results shown are the nearest vectors found, but may not be topically relevant. ' +
+        'To fix: load more on-topic products into this index and reindex.',
+    });
+  }
+  if (mode !== 'semantic' && maxBm25 < 0.15) {
+    if (level === 'good') level = 'warn';
+    issues.push({
+      icon: '△',
+      text: `Sparse keyword coverage (BM25 max ${maxBm25.toFixed(2)}). ` +
+        'Few products in this index contain these exact terms. ' +
+        'Results rely on semantic similarity or term expansion. ' +
+        'To fix: add products whose text fields include the relevant terms.',
+    });
+  }
+  if (mode === 'hybrid' && maxSemantic >= 0.10 && maxBm25 >= 0.10 && multiSource === 0) {
+    if (level === 'good') level = 'warn';
+    issues.push({
+      icon: '△',
+      text: 'Signal disagreement: BM25 and vector search returned completely different products. ' +
+        'This often means some products have text but no vector, or vice versa — ' +
+        'trigger a full reindex to ensure all products have both.',
+    });
+  }
+  if (expanded) {
+    issues.push({
+      icon: '⤷',
+      text: `Query expanded to "${ctx.effective_query}" because initial keyword results were sparse. ` +
+        'Expansion terms come from semantically similar products already in the index.',
+    });
+  }
+  if (!issues.length && level === 'good') {
+    issues.push({ icon: '✓', text: 'Good index coverage for this query — both keyword and semantic signals agree.' });
+  }
+
+  const panel = document.createElement('div');
+  panel.className = `query-quality quality-${level}`;
+
+  const header = document.createElement('div');
+  header.className = 'qqa-header';
+  const badge = document.createElement('span');
+  badge.className = 'qqa-badge';
+  badge.textContent = level === 'good' ? 'Coverage: Good' : level === 'warn' ? 'Coverage: Partial' : 'Coverage: Poor';
+  const stats = document.createElement('span');
+  stats.className = 'qqa-stats';
+  stats.textContent = `semantic max ${maxSemantic.toFixed(2)} · bm25 max ${maxBm25.toFixed(2)} · ${multiSource}/${explained.length} multi-source`;
+  const toggle = document.createElement('button');
+  toggle.className = 'qqa-toggle';
+  toggle.textContent = 'details ▾';
+  header.append(badge, stats, toggle);
+  panel.appendChild(header);
+
+  const detail = document.createElement('div');
+  detail.className = 'qqa-detail';
+  issues.forEach(issue => {
+    const row = document.createElement('div');
+    row.className = 'qqa-issue';
+    const icon = document.createElement('span');
+    icon.className = 'qqa-icon';
+    icon.textContent = issue.icon;
+    const text = document.createElement('span');
+    text.textContent = issue.text;
+    row.append(icon, text);
+    detail.appendChild(row);
+  });
+  panel.appendChild(detail);
+
+  toggle.addEventListener('click', () => {
+    const open = detail.classList.toggle('open');
+    toggle.textContent = open ? 'details ▴' : 'details ▾';
+  });
+
+  // Auto-expand when coverage is poor or warn
+  if (level !== 'good') {
+    detail.classList.add('open');
+    toggle.textContent = 'details ▴';
+  }
+
+  container.appendChild(panel);
 }
 
 function renderSuppressedStrip(suppressions) {

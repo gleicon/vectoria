@@ -181,6 +181,40 @@ input::placeholder { color: var(--muted); }
 .results .hit-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .results .act-active { background: color-mix(in srgb,var(--warn) 20%,transparent); color: var(--warn); border-color: var(--warn); }
 
+/* ── Query quality assessment ──────────────────────────────────────────────── */
+.query-quality {
+  margin: 0.5rem 0 0.25rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+  overflow: hidden;
+}
+.quality-good  { border-color: color-mix(in srgb, var(--ok) 40%, var(--border)); }
+.quality-warn  { border-color: color-mix(in srgb, var(--warn) 40%, var(--border)); }
+.quality-poor  { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.qqa-header {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.4rem 0.75rem;
+  background: color-mix(in srgb, var(--bg-alt,#1a1a2e) 80%, transparent);
+}
+.qqa-badge {
+  font-family: var(--font); font-size: 0.7rem; font-weight: 600;
+  padding: 2px 8px; border-radius: 99px;
+}
+.quality-good  .qqa-badge { background: color-mix(in srgb,var(--ok) 20%,transparent);     color: var(--ok); }
+.quality-warn  .qqa-badge { background: color-mix(in srgb,var(--warn) 20%,transparent);   color: var(--warn); }
+.quality-poor  .qqa-badge { background: color-mix(in srgb,var(--danger) 20%,transparent); color: var(--danger); }
+.qqa-stats { flex: 1; color: var(--muted); font-family: var(--font); font-size: 0.7rem; }
+.qqa-toggle { background: none; border: none; color: var(--muted); font-size: 0.7rem; cursor: pointer; padding: 2px 4px; }
+.qqa-toggle:hover { color: var(--text); }
+.qqa-detail { display: none; padding: 0.5rem 0.75rem 0.6rem; border-top: 1px solid var(--border); }
+.qqa-detail.open { display: block; }
+.qqa-issue { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.2rem; color: var(--muted); line-height: 1.4; }
+.qqa-icon { flex-shrink: 0; font-size: 0.75rem; }
+.quality-good  .qqa-icon { color: var(--ok); }
+.quality-warn  .qqa-icon { color: var(--warn); }
+.quality-poor  .qqa-icon { color: var(--danger); }
+
 /* ── Explain panel ─────────────────────────────────────────────────────────── */
 .explain-panel {
   width: 100%;

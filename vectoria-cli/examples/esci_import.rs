@@ -46,6 +46,9 @@ struct Args {
     /// Named index to import into. When set, posts to /indexes/{name}/products instead of /products.
     #[arg(long)]
     pub index: Option<String>,
+    /// Only import products whose title contains at least one of these comma-separated keywords (case-insensitive).
+    #[arg(long)]
+    pub keyword: Option<String>,
 }
 
 #[tokio::main]
@@ -56,8 +59,11 @@ async fn main() -> Result<()> {
         anyhow::bail!("Specify --import, --judges <path>, or both.");
     }
 
+    let keywords: Option<Vec<String>> = args.keyword.as_ref().map(|kw|
+        kw.split(',').map(|k| k.trim().to_lowercase()).filter(|k| !k.is_empty()).collect()
+    );
     println!("Loading ESCI products from {:?}...", args.products_file);
-    let products = load_products(&args.products_file, args.locale.as_deref(), args.max_products)
+    let products = load_products(&args.products_file, args.locale.as_deref(), args.max_products, keywords.as_deref())
         .context("failed to load ESCI products")?;
     println!("  {} products loaded", products.len());
 
@@ -110,7 +116,7 @@ fn get_str_col<'a>(batch: &'a arrow::record_batch::RecordBatch, name: &str) -> O
         .and_then(|c| c.as_any().downcast_ref::<arrow::array::StringArray>())
 }
 
-fn load_products(path: &PathBuf, locale_filter: Option<&str>, max: usize) -> Result<HashMap<String, EsciProduct>> {
+fn load_products(path: &PathBuf, locale_filter: Option<&str>, max: usize, keywords: Option<&[String]>) -> Result<HashMap<String, EsciProduct>> {
     let file = File::open(path).with_context(|| format!("cannot open {:?}", path))?;
     let reader = ParquetRecordBatchReaderBuilder::try_new(file)?.build()?;
     let mut products: HashMap<String, EsciProduct> = HashMap::new();
@@ -131,6 +137,10 @@ fn load_products(path: &PathBuf, locale_filter: Option<&str>, max: usize) -> Res
             if let Some(lf) = locale_filter { if locale != lf { continue; } }
             let id = ids.value(i).to_string();
             if id.is_empty() { continue; }
+            let title_lower = titles.value(i).to_lowercase();
+            if let Some(kws) = keywords {
+                if !kws.iter().any(|k| title_lower.contains(k.as_str())) { continue; }
+            }
             products.insert(id.clone(), EsciProduct {
                 id,
                 title: titles.value(i).to_string(),

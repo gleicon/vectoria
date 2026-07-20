@@ -162,10 +162,11 @@ esci-import: esci-download
 		--max-products $(MAX_PRODUCTS) \
 		--server $(SERVER) \
 		--api-key $(API_KEY) \
-		$(if $(INDEX_NAME),--index $(INDEX_NAME),)
+		$(if $(INDEX_NAME),--index $(INDEX_NAME),) \
+		$(if $(KEYWORD),--keyword $(KEYWORD),)
 
 # Alias: TENANT=<name> maps to INDEX_NAME for tenant imports.
-# Usage: make tenant-import TENANT=shoestore API_KEY=vtk_... SERVER=https://demo.vectoriasearch.com
+# Usage: make tenant-import TENANT=shoestore API_KEY=vtk_... SERVER=https://demo.vectoriasearch.com KEYWORD=shoe,sneaker
 tenant-import: esci-download
 	@curl -sf $(SERVER)/health >/dev/null 2>&1 || \
 		(echo "Error: server not running at $(SERVER). Run 'make server-bg' first."; exit 1)
@@ -176,7 +177,8 @@ tenant-import: esci-download
 		--max-products $(MAX_PRODUCTS) \
 		--server $(SERVER) \
 		--api-key $(API_KEY) \
-		--index $(INDEX_NAME)
+		--index $(INDEX_NAME) \
+		$(if $(KEYWORD),--keyword $(KEYWORD),)
 
 esci-judges: esci-download
 	@curl -sf $(SERVER)/health >/dev/null 2>&1 || \
