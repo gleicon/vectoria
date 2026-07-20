@@ -88,9 +88,9 @@ export class VectoriaClient {
 
   // ── Search ──────────────────────────────────────────────────────────────────
 
-  async search(q, { limit = 15, mode = 'hybrid' } = {}, indexName = null) {
+  async search(q, { limit = 15, mode = 'hybrid', explain = false } = {}, indexName = null) {
     const path = indexName ? `/indexes/${encodeURIComponent(indexName)}/search` : '/search';
-    return this._req('POST', path, { q, limit, mode });
+    return this._req('POST', path, { q, limit, mode, explain });
   }
 
   // ── Overrides ────────────────────────────────────────────────────────────────

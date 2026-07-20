@@ -279,7 +279,7 @@ async function runSearch() {
 
   try {
     const [searchData, overrideData] = await Promise.all([
-      client.search(q, { limit: 15, mode }, activeIndex),
+      client.search(q, { limit: 15, mode, explain: true }, activeIndex),
       client.getOverrides(activeIndex, q).catch(() => ({})),
     ]);
 
@@ -446,10 +446,145 @@ function renderResults(hits, q) {
       runSearch();
     });
 
-    actions.append(pinBtn, sponsorBtn, suppressBtn);
+    // Explain toggle
+    const explainBtn = document.createElement('button');
+    explainBtn.className = 'btn btn-ghost btn-sm';
+    explainBtn.textContent = 'Why?';
+    explainBtn.title = 'Show score breakdown';
+    explainBtn.addEventListener('click', () => {
+      const panel = li.querySelector('.explain-panel');
+      if (panel) {
+        panel.remove();
+        explainBtn.classList.remove('act-active');
+      } else {
+        explainBtn.classList.add('act-active');
+        li.appendChild(buildExplainPanel(hit.explain, hit.score));
+      }
+    });
+
+    actions.append(pinBtn, sponsorBtn, suppressBtn, explainBtn);
     li.append(dragHandle, rank, main, actions);
     list.appendChild(li);
   });
+}
+
+function buildExplainPanel(breakdown, totalScore) {
+  const panel = document.createElement('div');
+  panel.className = 'explain-panel';
+
+  if (!breakdown) {
+    const note = document.createElement('span');
+    note.className = 'explain-note';
+    note.textContent = 'No explain data (cached result). Re-run search to generate.';
+    panel.appendChild(note);
+    return panel;
+  }
+
+  // Query context
+  const ctx = breakdown.query_context;
+  const ctxRow = document.createElement('div');
+  ctxRow.className = 'explain-ctx';
+
+  const qLabel = document.createElement('span');
+  qLabel.className = 'explain-label';
+  qLabel.textContent = 'Query:';
+  const qCode = document.createElement('code');
+  qCode.textContent = ctx.effective_query || ctx.original_query;
+
+  const tags = [];
+  if (ctx.spell_corrected) tags.push('spell-corrected');
+  if (ctx.query_expanded)  tags.push('expanded');
+  if (ctx.llm_rewritten)   tags.push('llm-rewritten');
+  const tagsWrap = document.createElement('span');
+  tagsWrap.className = 'explain-tags';
+  tags.forEach(t => {
+    const s = document.createElement('span');
+    s.className = 'tag';
+    s.textContent = t;
+    tagsWrap.appendChild(s);
+  });
+
+  const srcLabel = document.createElement('span');
+  srcLabel.className = 'explain-label';
+  srcLabel.style.marginLeft = '1rem';
+  srcLabel.textContent = 'Retrieved by:';
+  const srcsWrap = document.createElement('span');
+  if (breakdown.match_sources.length) {
+    breakdown.match_sources.forEach(s => {
+      const sp = document.createElement('span');
+      sp.className = 'tag';
+      sp.textContent = s;
+      srcsWrap.appendChild(sp);
+    });
+  } else {
+    const sp = document.createElement('span');
+    sp.className = 'tag muted';
+    sp.textContent = 'none';
+    srcsWrap.appendChild(sp);
+  }
+
+  ctxRow.append(qLabel, ' ', qCode, ' ', tagsWrap, srcLabel, ' ', srcsWrap);
+  panel.appendChild(ctxRow);
+
+  // Factor table
+  const table = document.createElement('table');
+  table.className = 'explain-table';
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  ['Factor', 'Score', 'Weight', 'Contribution', ''].forEach(h => {
+    const th = document.createElement('th');
+    th.textContent = h;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  const maxContrib = Math.max(...breakdown.factors.map(f => f.contribution), 0.001);
+  breakdown.factors.forEach(f => {
+    if (f.weight === 0 && f.score === 0) return;
+    const tr = document.createElement('tr');
+    const barW = Math.round((f.contribution / maxContrib) * 80);
+
+    const tdName = document.createElement('td');
+    tdName.className = 'explain-factor';
+    tdName.textContent = f.factor.replace(/_/g, ' ');
+
+    const tdScore = document.createElement('td');
+    tdScore.className = 'explain-num';
+    tdScore.textContent = f.score.toFixed(3);
+
+    const tdWeight = document.createElement('td');
+    tdWeight.className = 'explain-num';
+    tdWeight.textContent = f.weight.toFixed(2);
+
+    const tdContrib = document.createElement('td');
+    tdContrib.className = 'explain-num';
+    tdContrib.textContent = f.contribution.toFixed(4);
+
+    const tdBar = document.createElement('td');
+    const bar = document.createElement('div');
+    bar.className = 'explain-bar';
+    bar.style.width = `${barW}px`;
+    tdBar.appendChild(bar);
+
+    tr.append(tdName, tdScore, tdWeight, tdContrib, tdBar);
+    tbody.appendChild(tr);
+  });
+
+  const totalRow = document.createElement('tr');
+  totalRow.className = 'explain-total';
+  ['total', '', '', totalScore.toFixed(4), ''].forEach((text, i) => {
+    const td = document.createElement('td');
+    if (i === 3) td.className = 'explain-num';
+    td.textContent = text;
+    totalRow.appendChild(td);
+  });
+  tbody.appendChild(totalRow);
+  table.appendChild(tbody);
+  panel.appendChild(table);
+
+  return panel;
 }
 
 // ── Pin form ─────────────────────────────────────────────────────────────────

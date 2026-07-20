@@ -38,6 +38,29 @@ export async function mountNav(containerId, activePage) {
 
   const linksDiv = document.createElement('div');
   linksDiv.className = 'links';
+
+  // When admin navigated into a tenant context, show a back link as the first nav item.
+  const prevKey      = sessionStorage.getItem('vt_prev_key');
+  const prevRole     = sessionStorage.getItem('vt_prev_role') || 'admin';
+  const prevTenant   = sessionStorage.getItem('vt_tenant_name');
+  if (prevKey) {
+    const backLink = document.createElement('a');
+    backLink.href = '#';
+    backLink.textContent = '← Admin';
+    backLink.className = 'nav-back';
+    backLink.addEventListener('click', e => {
+      e.preventDefault();
+      session.save(s.url, prevKey, prevRole, '');
+      sessionStorage.removeItem('vt_prev_key');
+      sessionStorage.removeItem('vt_prev_role');
+      sessionStorage.removeItem('vt_tenant_name');
+      redirect(prevTenant
+        ? `tenant-detail.html?tenant=${encodeURIComponent(prevTenant)}`
+        : 'admin.html');
+    });
+    linksDiv.appendChild(backLink);
+  }
+
   Object.entries(PAGES)
     .filter(([, p]) => p.roles.includes(s.role))
     .forEach(([key, p]) => {

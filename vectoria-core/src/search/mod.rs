@@ -246,10 +246,11 @@ impl SearchEngine {
             };
 
             // In BM25-only mode, no semantic search has populated candidate_scores yet.
-            // Pre-seed it from the sparse BM25 hits so expansion can fetch their texts.
+            // Pre-seed from BM25 hits and record their BM25 score so expand_query_terms
+            // can distinguish BM25-proven candidates from low-confidence vector candidates.
             if candidate_scores.is_empty() {
-                for (id, _) in &bm25_results {
-                    candidate_scores.entry(id.clone()).or_default();
+                for (id, score) in &bm25_results {
+                    candidate_scores.entry(id.clone()).or_default().bm25 = *score;
                 }
             }
 
@@ -538,9 +539,15 @@ impl SearchEngine {
         original_query: &str,
         candidates: &HashMap<String, CandidateScore>,
     ) -> Vec<String> {
+        // BM25-proven candidates (bm25 > 0) are text-relevant and safe for expansion.
+        // Vector-only candidates require a minimum cosine similarity — below 0.75 the
+        // model is not confident, and using their terms creates a feedback loop that
+        // inflates scores for noise results (e.g. "shoe" → Monkees record terms → BM25=1.0).
+        const MIN_SEMANTIC_EXPANSION: f32 = 0.75;
         let mut top: Vec<(&String, f32)> = candidates
             .iter()
-            .map(|(id, s)| (id, s.semantic))
+            .filter(|(_, s)| s.bm25 > 0.0 || s.semantic >= MIN_SEMANTIC_EXPANSION)
+            .map(|(id, s)| (id, s.semantic.max(s.bm25)))
             .collect();
         top.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         top.truncate(3);
