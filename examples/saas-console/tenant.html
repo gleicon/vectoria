@@ -324,14 +324,26 @@ function renderQueryQuality(hits, mode) {
   const issues = [];
   let level = 'good'; // good | warn | poor
 
-  if (mode !== 'bm25' && maxSemantic < 0.75) {
-    level = maxSemantic < 0.60 ? 'poor' : 'warn';
+  // Semantic warning: only when BM25 is also weak (< 0.50).
+  // If BM25 is strong, the index has the content — the embedding model's effective ceiling
+  // for product search (MultilingualE5Small, 384d) is ~0.75, so borderline semantic scores
+  // alongside a strong BM25 signal are normal, not a coverage failure.
+  if (mode !== 'bm25' && maxSemantic < 0.70 && maxBm25 < 0.50) {
+    level = maxSemantic < 0.55 ? 'poor' : 'warn';
     issues.push({
       icon: '△',
-      text: `Semantic confidence low (max ${maxSemantic.toFixed(2)} · threshold 0.75). ` +
-        'No product in this index is strongly related to this query. ' +
+      text: `Semantic confidence low (max ${maxSemantic.toFixed(2)}). ` +
+        'Few products in this index are semantically close to this query. ' +
         'Results shown are the nearest vectors found, but may not be topically relevant. ' +
         'To fix: load more on-topic products into this index and reindex.',
+    });
+  } else if (mode !== 'bm25' && maxSemantic < 0.70 && maxBm25 >= 0.50) {
+    // BM25 is strong — index has content, semantic score is at model ceiling for this query type
+    issues.push({
+      icon: 'ℹ',
+      text: `Semantic score borderline (max ${maxSemantic.toFixed(2)}). ` +
+        'Keyword matching is strong, so the index has relevant products. ' +
+        'The embedding model may have limited sensitivity for this query phrasing.',
     });
   }
   if (mode !== 'semantic' && maxBm25 < 0.15) {
