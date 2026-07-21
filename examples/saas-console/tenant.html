@@ -314,82 +314,124 @@ function renderQueryQuality(hits, mode) {
   const getFactor = (h, name) =>
     (h.explain?.factors ?? []).find(f => f.factor === name)?.score ?? 0;
 
-  const maxSemantic = Math.max(...explained.map(h => getFactor(h, 'semantic_similarity')));
-  const maxBm25     = Math.max(...explained.map(h => getFactor(h, 'bm25')));
-  const multiSource = explained.filter(h => (h.explain?.match_sources ?? []).length > 1).length;
-  const ctx         = explained[0]?.explain?.query_context ?? {};
-  const expanded    = ctx.query_expanded ?? false;
+  // ── Model-agnostic coverage metrics ──────────────────────────────────────
+  //
+  // Score gap: (maxScore - medianScore) / maxScore
+  //   Measures whether a clearly-better result exists. High gap = the index has
+  //   a strong match. Low gap = all results are equally distant — no good match.
+  //   This is independent of embedding model or score scale.
+  const allScores = hits.map(h => h.score).sort((a, b) => b - a);
+  const topScore    = allScores[0] ?? 0;
+  const medianScore = allScores[Math.floor(allScores.length / 2)] ?? 0;
+  const scoreGap    = topScore > 0.01 ? (topScore - medianScore) / topScore : 0;
 
-  // Determine quality level and issues
+  // BM25 presence rate: fraction of results with any BM25 signal.
+  //   Proxy for vocabulary coverage — how many indexed products contain query terms.
+  //   Model-agnostic: BM25 is pure term matching, no embedding involved.
+  const bm25Count = explained.filter(h => getFactor(h, 'bm25') > 0.01).length;
+  const bm25Rate  = explained.length > 0 ? bm25Count / explained.length : 0;
+
+  // Semantic presence rate: fraction of results with meaningful semantic signal.
+  //   Used only to detect retrieval imbalance, not as a quality threshold.
+  const semCount = explained.filter(h => getFactor(h, 'semantic_similarity') > 0.40).length;
+  const semRate  = explained.length > 0 ? semCount / explained.length : 0;
+
+  // Multi-source rate: fraction of results retrieved by BOTH BM25 and vector.
+  //   Zero in hybrid mode = signals are disjoint → reindex needed.
+  const multiSourceCount = explained.filter(h => (h.explain?.match_sources ?? []).length > 1).length;
+  const multiSourceRate  = explained.length > 0 ? multiSourceCount / explained.length : 0;
+
+  const ctx      = explained[0]?.explain?.query_context ?? {};
+  const expanded = ctx.query_expanded ?? false;
+
+  // ── Diagnose ─────────────────────────────────────────────────────────────
   const issues = [];
-  let level = 'good'; // good | warn | poor
+  let level = 'good';
 
-  // Semantic warning: only when BM25 is also weak (< 0.50).
-  // If BM25 is strong, the index has the content — the embedding model's effective ceiling
-  // for product search (MultilingualE5Small, 384d) is ~0.75, so borderline semantic scores
-  // alongside a strong BM25 signal are normal, not a coverage failure.
-  if (mode !== 'bm25' && maxSemantic < 0.70 && maxBm25 < 0.50) {
-    level = maxSemantic < 0.55 ? 'poor' : 'warn';
-    issues.push({
-      icon: '△',
-      text: `Semantic confidence low (max ${maxSemantic.toFixed(2)}). ` +
-        'Few products in this index are semantically close to this query. ' +
-        'Results shown are the nearest vectors found, but may not be topically relevant. ' +
-        'To fix: load more on-topic products into this index and reindex.',
-    });
-  } else if (mode !== 'bm25' && maxSemantic < 0.70 && maxBm25 >= 0.50) {
-    // BM25 is strong — index has content, semantic score is at model ceiling for this query type
-    issues.push({
-      icon: 'ℹ',
-      text: `Semantic score borderline (max ${maxSemantic.toFixed(2)}). ` +
-        'Keyword matching is strong, so the index has relevant products. ' +
-        'The embedding model may have limited sensitivity for this query phrasing.',
-    });
+  // Score gap: primary coverage signal.
+  // < 20% gap means the top result is barely better than median — catalog gap.
+  // < 8% gap means all results are essentially identical — very poor coverage.
+  if (topScore > 0.01) {
+    if (scoreGap < 0.08) {
+      level = 'poor';
+      issues.push({
+        icon: '△',
+        text: `No clear match (score gap ${pct(scoreGap)}). ` +
+          'All results score nearly the same — the index has no product that meaningfully ' +
+          'matches this query. Results shown are the nearest available, not genuinely relevant. ' +
+          'To fix: add products on-topic for this query.',
+      });
+    } else if (scoreGap < 0.20) {
+      if (level !== 'poor') level = 'warn';
+      issues.push({
+        icon: '△',
+        text: `Weak match differentiation (score gap ${pct(scoreGap)}). ` +
+          'The top result is only marginally better than lower results. ' +
+          'The index may have few products closely matching this query.',
+      });
+    }
   }
-  if (mode !== 'semantic' && maxBm25 < 0.15) {
-    if (level === 'good') level = 'warn';
+
+  // BM25 presence rate: vocabulary coverage.
+  // < 30% of results with BM25 signal means query terms are rare in the index.
+  if (mode !== 'semantic' && bm25Rate < 0.30) {
+    if (level !== 'poor') level = 'warn';
     issues.push({
       icon: '△',
-      text: `Sparse keyword coverage (BM25 max ${maxBm25.toFixed(2)}). ` +
-        'Few products in this index contain these exact terms. ' +
+      text: `Sparse keyword coverage (${pct(bm25Rate)} of results matched query terms). ` +
+        'Few indexed products contain the exact words in this query. ' +
         'Results rely on semantic similarity or term expansion. ' +
-        'To fix: add products whose text fields include the relevant terms.',
+        'To fix: add products whose text includes these keywords.',
     });
   }
-  if (mode === 'hybrid' && maxSemantic >= 0.10 && maxBm25 >= 0.10 && multiSource === 0) {
-    if (level === 'good') level = 'warn';
+
+  // Signal disagreement: both signals active but zero overlap → reindex gap.
+  if (mode === 'hybrid' && bm25Rate > 0.10 && semRate > 0.10 && multiSourceRate === 0) {
+    if (level !== 'poor') level = 'warn';
     issues.push({
       icon: '△',
-      text: 'Signal disagreement: BM25 and vector search returned completely different products. ' +
-        'This often means some products have text but no vector, or vice versa — ' +
-        'trigger a full reindex to ensure all products have both.',
+      text: 'Signal disagreement: BM25 and vector search retrieved completely different products. ' +
+        'This indicates some products have text but no vector, or vice versa. ' +
+        'Trigger a full reindex to rebuild both indexes from the same product set.',
     });
   }
+
+  // Query expansion: informational.
   if (expanded) {
     issues.push({
       icon: '⤷',
       text: `Query expanded to "${ctx.effective_query}" because initial keyword results were sparse. ` +
-        'Expansion terms come from semantically similar products already in the index.',
+        'Expansion terms are drawn from products already in the index.',
     });
   }
-  if (!issues.length && level === 'good') {
-    issues.push({ icon: '✓', text: 'Good index coverage for this query — both keyword and semantic signals agree.' });
+
+  if (!issues.length) {
+    issues.push({
+      icon: '✓',
+      text: `Good coverage (score gap ${pct(scoreGap)}, BM25 in ${pct(bm25Rate)} of results). ` +
+        'A clearly better result exists and keyword signals are present.',
+    });
   }
 
+  // ── Render ───────────────────────────────────────────────────────────────
   const panel = document.createElement('div');
   panel.className = `query-quality quality-${level}`;
 
   const header = document.createElement('div');
   header.className = 'qqa-header';
+
   const badge = document.createElement('span');
   badge.className = 'qqa-badge';
   badge.textContent = level === 'good' ? 'Coverage: Good' : level === 'warn' ? 'Coverage: Partial' : 'Coverage: Poor';
+
   const stats = document.createElement('span');
   stats.className = 'qqa-stats';
-  stats.textContent = `semantic max ${maxSemantic.toFixed(2)} · bm25 max ${maxBm25.toFixed(2)} · ${multiSource}/${explained.length} multi-source`;
+  stats.textContent = `score gap ${pct(scoreGap)} · BM25 coverage ${pct(bm25Rate)} · ${multiSourceCount}/${explained.length} multi-source`;
+
   const toggle = document.createElement('button');
   toggle.className = 'qqa-toggle';
   toggle.textContent = 'details ▾';
+
   header.append(badge, stats, toggle);
   panel.appendChild(header);
 
@@ -413,7 +455,6 @@ function renderQueryQuality(hits, mode) {
     toggle.textContent = open ? 'details ▴' : 'details ▾';
   });
 
-  // Auto-expand when coverage is poor or warn
   if (level !== 'good') {
     detail.classList.add('open');
     toggle.textContent = 'details ▴';
@@ -421,6 +462,8 @@ function renderQueryQuality(hits, mode) {
 
   container.appendChild(panel);
 }
+
+function pct(v) { return (v * 100).toFixed(0) + '%'; }
 
 function renderSuppressedStrip(suppressions) {
   const strip = document.getElementById('suppressed-strip');
