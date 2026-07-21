@@ -345,37 +345,52 @@ function renderQueryQuality(hits, mode) {
   const expanded = ctx.query_expanded ?? false;
 
   // ── Diagnose ─────────────────────────────────────────────────────────────
+  // Score gap alone is ambiguous — a low gap can mean two opposite things:
+  //   A) Generic query ("shoes" in a shoe store): ALL products score high and similarly
+  //      because many are relevant. Gap is small because everything matches. GOOD.
+  //   B) Catalog gap ("vinyl record" in a shoe store): ALL products score low and similarly
+  //      because nothing matches. Gap is small because nothing is relevant. POOR.
+  //
+  // The distinguishing signal is BM25 presence rate:
+  //   Low gap + high BM25 coverage → generic query, many products match → GOOD
+  //   Low gap + low BM25 coverage  → catalog gap, nothing matches     → POOR
   const issues = [];
   let level = 'good';
+  let genericQuery = false;
 
-  // Score gap: primary coverage signal.
-  // < 20% gap means the top result is barely better than median — catalog gap.
-  // < 8% gap means all results are essentially identical — very poor coverage.
   if (topScore > 0.01) {
     if (scoreGap < 0.08) {
-      level = 'poor';
-      issues.push({
-        icon: '△',
-        text: `No clear match (score gap ${pct(scoreGap)}). ` +
-          'All results score nearly the same — the index has no product that meaningfully ' +
-          'matches this query. Results shown are the nearest available, not genuinely relevant. ' +
-          'To fix: add products on-topic for this query.',
-      });
-    } else if (scoreGap < 0.20) {
+      if (bm25Rate < 0.30) {
+        // Low gap + no keyword signal = nothing in the index matches this query
+        level = 'poor';
+        issues.push({
+          icon: '△',
+          text: `No clear match (score gap ${pct(scoreGap)}, BM25 in ${pct(bm25Rate)} of results). ` +
+            'All results score nearly the same with minimal keyword coverage — ' +
+            'the index has no product that meaningfully matches this query. ' +
+            'Results shown are the nearest available, not genuinely relevant. ' +
+            'To fix: add products on-topic for this query.',
+        });
+      } else {
+        // Low gap + strong keyword signal = generic query hitting many relevant products
+        genericQuery = true;
+      }
+    } else if (scoreGap < 0.20 && bm25Rate < 0.30) {
+      // Moderate gap + low BM25 = partial coverage (some matches, but sparse)
       if (level !== 'poor') level = 'warn';
       issues.push({
         icon: '△',
-        text: `Weak match differentiation (score gap ${pct(scoreGap)}). ` +
-          'The top result is only marginally better than lower results. ' +
-          'The index may have few products closely matching this query.',
+        text: `Weak match differentiation (score gap ${pct(scoreGap)}, BM25 in ${pct(bm25Rate)} of results). ` +
+          'The top result is marginally better than lower results, and few products contain ' +
+          'the exact query terms. The index may have limited on-topic content.',
       });
     }
   }
 
-  // BM25 presence rate: vocabulary coverage.
-  // < 30% of results with BM25 signal means query terms are rare in the index.
-  if (mode !== 'semantic' && bm25Rate < 0.30) {
-    if (level !== 'poor') level = 'warn';
+  // Vocabulary gap: low BM25 coverage even when gap is acceptable.
+  // Only fires when the gap check above didn't already flag BM25.
+  if (mode !== 'semantic' && bm25Rate < 0.20 && level === 'good') {
+    level = 'warn';
     issues.push({
       icon: '△',
       text: `Sparse keyword coverage (${pct(bm25Rate)} of results matched query terms). ` +
@@ -406,11 +421,20 @@ function renderQueryQuality(hits, mode) {
   }
 
   if (!issues.length) {
-    issues.push({
-      icon: '✓',
-      text: `Good coverage (score gap ${pct(scoreGap)}, BM25 in ${pct(bm25Rate)} of results). ` +
-        'A clearly better result exists and keyword signals are present.',
-    });
+    if (genericQuery) {
+      issues.push({
+        icon: '✓',
+        text: `Broad query — many products match (BM25 in ${pct(bm25Rate)} of results, score gap ${pct(scoreGap)}). ` +
+          'All results are relevant; scores are close because the query is generic. ' +
+          'Use a more specific query to see stronger differentiation.',
+      });
+    } else {
+      issues.push({
+        icon: '✓',
+        text: `Good coverage (score gap ${pct(scoreGap)}, BM25 in ${pct(bm25Rate)} of results). ` +
+          'A clearly better result exists and keyword signals are present.',
+      });
+    }
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
