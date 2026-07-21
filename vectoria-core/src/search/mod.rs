@@ -606,12 +606,38 @@ impl SearchEngine {
             let products = self.storage.list_products(offset, BATCH).await?;
             if products.is_empty() { break; }
             let count = products.len();
-            for product in products {
+            for mut product in products {
+                // Pre-embed on the blocking thread pool so search queries aren't starved.
+                // Embedding is CPU-bound; running it in the async executor blocks all
+                // concurrent searches until reindex completes. spawn_blocking gives the
+                // OS scheduler a chance to run search queries between embeddings.
+                // index() skips embed when product.vector is already set.
+                let emb = Arc::clone(&self.embedding);
+                let text = product.text.clone()
+                    .unwrap_or_else(|| build_product_text(&product.metadata, self.field_weights.as_ref()));
+                let embed_result = tokio::task::spawn_blocking(move || {
+                    tokio::runtime::Handle::current().block_on(emb.embed(&text))
+                }).await;
+
+                match embed_result {
+                    Ok(Ok(vector)) => product.vector = Some(vector),
+                    Ok(Err(e)) => {
+                        errors += 1;
+                        tracing::warn!(error = %e, "reindex: embedding failed");
+                        continue;
+                    }
+                    Err(e) => {
+                        errors += 1;
+                        tracing::warn!("reindex: spawn_blocking panicked: {}", e);
+                        continue;
+                    }
+                }
+
                 match self.index(product).await {
                     Ok(_) => reindexed += 1,
                     Err(e) => {
                         errors += 1;
-                        tracing::warn!(error = %e, "reindex: skipped product");
+                        tracing::warn!(error = %e, "reindex: index failed");
                     }
                 }
             }
