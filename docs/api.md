@@ -18,7 +18,7 @@ No authentication required.
 
 Response:
 ```json
-{"status": "ok", "version": "0.1.11"}
+{"status": "ok", "version": "0.1.16"}
 ```
 
 ---
@@ -757,7 +757,7 @@ curl -sX POST http://localhost:7700/indexes/acme-corp/admin/pins \
 
 ```toml
 # Cargo.toml
-vectoria-core = "0.1.11"
+vectoria-core = "0.1.16"
 ```
 
 ### Async API
@@ -801,12 +801,12 @@ engine.stats()?;     // index stats
 
 ### Preloading an existing database
 
-Point the engine at an existing database directory and call `reindex_all()` after opening to rebuild the in-memory BM25 index and spell corrector from stored products. Storage and vector index share one engine at one path (0.1.11+).
+Point the engine at an existing database directory and call `reindex_all()` after opening to rebuild the in-memory BM25 index and spell corrector from stored products. Storage and vector index share one engine at one path.
 
 Add `edgestore` as a direct dependency alongside `vectoria-core`:
 
 ```toml
-vectoria-core = "0.1.11"
+vectoria-core = "0.1.16"
 edgestore = "1.0"
 ```
 
@@ -819,7 +819,7 @@ use vectoria_core::{
     vector::edgestore::EdgeStoreVectorIndex,
 };
 
-// Single engine shared between storage and vector index (0.1.11+)
+// Single engine shared between storage and vector index
 let engine_handle = Arc::new(Mutex::new(
     Engine::open(EdgestoreConfig::new("./vectoria"))?
 ));

@@ -4,6 +4,25 @@ All notable changes to Vectoria. Follows [Keep a Changelog](https://keepachangel
 
 ---
 
+## [0.1.16] — 2026-07-25
+
+### Added
+- **Multi-tenant SaaS routes**: `POST /admin/tenants`, `DELETE /admin/tenants/{name}`, `POST /admin/tenants/{name}/rotate-key`, `GET /admin/tenants` — atomically create an isolated index + scoped API key per tenant, persisted to disk.
+- **Admin override routes per named index**: pins, sponsored slots, and suppressions are now accessible at `/indexes/{name}/admin/*` so tenant keys can manage their own overrides without admin privileges.
+- **`POST /indexes/{name}/admin/reindex`**: re-embeds all products in a named index using `spawn_blocking`, keeping the async executor free for concurrent search queries during the operation.
+
+### Fixed
+- **`TenantStore::delete()` race condition**: the old implementation read `by_name` under a read lock, dropped it, then acquired `by_key.write()` and `by_name.write()` as separate operations. Two concurrent deletes of the same name could both succeed, and between the two write operations the maps were transiently inconsistent (`lookup_key()` returning `None` while `exists()` returned `true`). Fixed by acquiring both write locks atomically at the start in consistent order (`by_key` before `by_name`).
+- **`TenantStore::create()` rollback inconsistency**: on `save()` failure the rollback acquired `by_key.write()` and `by_name.write()` separately, creating the same inconsistency window. Fixed by holding both write locks for the duration of the rollback.
+- **LLM rewriter guard pattern**: `self.llm_rewriter.is_some() { ... .unwrap() }` replaced with `if let Some(rewriter) = &self.llm_rewriter`, eliminating the redundant guard + infallible unwrap pair.
+
+### Quality assessment (saas-console)
+- **Model-agnostic coverage metrics**: replaced the absolute cosine-threshold heuristic with a score-gap + BM25-presence-rate model. Score gap `(maxScore − medianScore) / maxScore` measures result differentiation without depending on embedding scale; BM25 presence rate measures vocabulary coverage. Low gap + high BM25 = broad query (informational, not a catalog gap); low gap + low BM25 = catalog gap; either low alone = soft warning.
+- **Spell-correction transparency**: when `query_context.spell_corrected = true`, the panel shows `"beatles" → "bates"` with a warning explaining results are for the corrected query, not the original.
+- **Generic query detection**: `"shoes"` with 29 hits no longer fires "Coverage: Poor" — high BM25 rate with a narrow score gap is correctly identified as a broad query with many relevant results.
+
+---
+
 ## [0.1.15] — 2026-07-19
 
 ### Fixed

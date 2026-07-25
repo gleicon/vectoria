@@ -85,29 +85,31 @@ impl TenantStore {
         drop(by_key);
         drop(by_name);
         if let Err(e) = self.save() {
-            self.by_key.write().unwrap().remove(&api_key);
-            self.by_name.write().unwrap().remove(name);
+            let mut by_key = self.by_key.write().unwrap();
+            let mut by_name = self.by_name.write().unwrap();
+            by_key.remove(&api_key);
+            by_name.remove(name);
             return Err(e);
         }
         Ok(tenant)
     }
 
     pub fn delete(&self, name: &str) -> anyhow::Result<bool> {
-        let key = self.by_name.read().unwrap().get(name).cloned();
-        if let Some(k) = key {
-            let removed = self.by_key.write().unwrap().remove(&k);
-            self.by_name.write().unwrap().remove(name);
-            if let Err(e) = self.save() {
-                if let Some(tenant) = removed {
-                    self.by_key.write().unwrap().insert(k.clone(), tenant);
-                    self.by_name.write().unwrap().insert(name.to_string(), k);
-                }
-                return Err(e);
-            }
-            Ok(true)
-        } else {
-            Ok(false)
+        // Lock order: by_key then by_name — matches create() and rotate_key().
+        let mut by_key = self.by_key.write().unwrap();
+        let mut by_name = self.by_name.write().unwrap();
+        let Some(k) = by_name.remove(name) else { return Ok(false) };
+        let removed = by_key.remove(&k);
+        drop(by_key);
+        drop(by_name);
+        if let Err(e) = self.save() {
+            let mut by_key = self.by_key.write().unwrap();
+            let mut by_name = self.by_name.write().unwrap();
+            if let Some(t) = removed { by_key.insert(k.clone(), t); }
+            by_name.insert(name.to_string(), k);
+            return Err(e);
         }
+        Ok(true)
     }
 
     pub fn rotate_key(&self, name: &str) -> anyhow::Result<Option<TenantInfo>> {

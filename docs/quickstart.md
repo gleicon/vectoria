@@ -102,7 +102,7 @@ Verify it is up:
 
 ```sh
 curl http://localhost:7700/health
-# {"status":"ok","version":"0.1.11"}
+# {"status":"ok","version":"0.1.16"}
 ```
 
 ---
@@ -250,7 +250,7 @@ cargo test --workspace
 Expected output:
 
 ```
-test result: ok. 57 passed; 0 failed; 0 ignored; 0 measured
+test result: ok. 97 passed; 0 failed; 0 ignored; 0 measured
 ```
 
 Scope to a specific area:
@@ -280,7 +280,7 @@ No HTTP server required. See [API reference — Embedded library](api.md#embedde
 
 ```toml
 [dependencies]
-vectoria-core = "0.1.11"
+vectoria-core = "0.1.16"
 ```
 
 ---
@@ -289,7 +289,7 @@ vectoria-core = "0.1.11"
 
 | Target | What it does |
 |---|---|
-| `make test` | Run full test suite (57 tests, no server, no model download) |
+| `make test` | Run full test suite (97 tests, no server, no model download) |
 | `make build` | `cargo build --release` for server + CLI |
 | `make server` | Start server in foreground |
 | `make server-bg` | Start server in background, wait until healthy |

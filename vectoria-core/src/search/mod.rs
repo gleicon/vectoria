@@ -230,14 +230,10 @@ impl SearchEngine {
             // LLM rewriting: fires when BM25 recall is low (< half the desired limit).
             // Rewrites the query into alternative phrasings to improve retrieval.
             // Only applies when a rewriter is configured; never blocks on errors.
-            let base_q = if bm25_results.len() < limit.max(1)
-                && !spell_corrected
-                && self.llm_rewriter.is_some()
-            {
-                let rewritten = self.llm_rewriter.as_ref().unwrap().rewrite(&base_q).await;
-                if rewritten != base_q {
-                    llm_rewritten = true;
-                    rewritten
+            let base_q = if bm25_results.len() < limit.max(1) && !spell_corrected {
+                if let Some(rewriter) = &self.llm_rewriter {
+                    let rewritten = rewriter.rewrite(&base_q).await;
+                    if rewritten != base_q { llm_rewritten = true; rewritten } else { base_q }
                 } else {
                     base_q
                 }
