@@ -294,7 +294,7 @@ async function runSearch() {
 
     renderSuppressedStrip(overrideData.active_suppressions ?? []);
     const hits = searchData.results ?? searchData.hits ?? [];
-    renderQueryQuality(hits, mode);
+    renderQueryQuality(hits, mode, searchData.scan_stats ?? null);
     renderResults(hits, q);
   } catch (e) {
     flash('flash', `Search failed: ${e.message}`, 'err');
@@ -303,7 +303,7 @@ async function runSearch() {
 
 // ── Query quality assessment ──────────────────────────────────────────────────
 
-function renderQueryQuality(hits, mode) {
+function renderQueryQuality(hits, mode, scanStats) {
   const container = document.getElementById('query-quality');
   container.replaceChildren();
   if (!hits.length) return;
@@ -444,6 +444,52 @@ function renderQueryQuality(hits, mode) {
     });
   }
 
+  // ── scan_stats: ground-truth index diagnostics (EdgeStore only) ─────────
+  // scan_stats.bytes_scanned and items_examined come directly from the storage
+  // layer and are more precise than per-hit BM25 rates:
+  //   bytes_scanned = 0  → no text index built at all
+  //   bytes_scanned > 0, items_examined = 0  → index exists but query term
+  //                       is absent from every product (catalog vocabulary gap)
+  //   bytes_scanned > 0, items_examined > 0  → index has matches; check ranking
+  if (scanStats && mode !== 'semantic') {
+    if (scanStats.bytes_scanned === 0) {
+      // No text index — BM25 path is completely disabled; insert at front.
+      level = 'warn';
+      issues.unshift({
+        icon: '⚠',
+        text: 'Text index not built. Keyword search is disabled for this index. ' +
+          'Open Admin → Index, select this index, and click Reindex to build the text index. ' +
+          'Until then, results rely solely on vector similarity.',
+      });
+    } else if (scanStats.items_examined === 0) {
+      // Index exists and was searched — zero products contain any of the query terms.
+      // This is a confirmed catalog vocabulary gap, not a ranking issue.
+      level = 'poor';
+      // Replace a generic "no clear match" issue with a more actionable one if present.
+      const genericIdx = issues.findIndex(i => i.text.startsWith('No clear match'));
+      const catalogIssue = {
+        icon: '△',
+        text: `Catalog vocabulary gap: the text index (${formatBytes(scanStats.bytes_scanned)}) ` +
+          `was searched and found zero keyword matches for this query. ` +
+          `The term does not appear in any product title or description. ` +
+          `To fix: add or update products so their text contains the query term, then reindex.`,
+      };
+      if (genericIdx >= 0) issues.splice(genericIdx, 1, catalogIssue);
+      else issues.push(catalogIssue);
+    } else if (scanStats.items_examined > 0 && bm25Rate < 0.20) {
+      // Index has keyword matches but they're ranked below the top results.
+      // Semantic similarity is dominating. Enriching descriptions improves keyword ranking.
+      if (level === 'good') level = 'warn';
+      issues.push({
+        icon: '⤷',
+        text: `Low keyword rank: the text index (${formatBytes(scanStats.bytes_scanned)}) ` +
+          `found ${scanStats.items_examined} keyword match${scanStats.items_examined === 1 ? '' : 'es'}, ` +
+          `but they rank below the semantic results. ` +
+          `To promote keyword matches: enrich product titles and descriptions with the query term, then reindex.`,
+      });
+    }
+  }
+
   if (!issues.length) {
     if (genericQuery) {
       issues.push({
@@ -474,7 +520,10 @@ function renderQueryQuality(hits, mode) {
 
   const stats = document.createElement('span');
   stats.className = 'qqa-stats';
-  stats.textContent = `score gap ${pct(scoreGap)} · BM25 coverage ${pct(bm25Rate)} · ${multiSourceCount}/${explained.length} multi-source`;
+  const indexNote = scanStats
+    ? ` · index ${formatBytes(scanStats.bytes_scanned)} · ${scanStats.items_examined} kw hits`
+    : '';
+  stats.textContent = `score gap ${pct(scoreGap)} · BM25 coverage ${pct(bm25Rate)} · ${multiSourceCount}/${explained.length} multi-source${indexNote}`;
 
   const toggle = document.createElement('button');
   toggle.className = 'qqa-toggle';
@@ -512,6 +561,12 @@ function renderQueryQuality(hits, mode) {
 }
 
 function pct(v) { return (v * 100).toFixed(0) + '%'; }
+function formatBytes(b) {
+  if (b === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log2(b) / 10);
+  return (b / Math.pow(1024, i)).toFixed(1) + ' ' + units[i];
+}
 
 function renderSuppressedStrip(suppressions) {
   const strip = document.getElementById('suppressed-strip');

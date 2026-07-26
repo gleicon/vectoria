@@ -212,8 +212,14 @@ impl SearchEngine {
         let mut spell_corrected = false;
         let mut query_expanded = false;
         let mut llm_rewritten = false;
+        let mut bm25_scan_stats: Option<crate::model::BM25ScanStats> = None;
         if matches!(req.mode, SearchMode::Hybrid | SearchMode::Bm25) {
-            let bm25_results = self.storage.search_text(&req.q, candidate_k, req.filters.as_ref()).await.unwrap_or_default();
+            let (bm25_results_tmp, stats) = self.storage
+                .search_text_with_stats(&req.q, candidate_k, req.filters.as_ref())
+                .await
+                .unwrap_or_else(|_| (vec![], None));
+            bm25_scan_stats = stats;
+            let bm25_results = bm25_results_tmp;
 
             let base_q = if bm25_results.is_empty() {
                 let corrected = self.spell.correct(&req.q);
@@ -373,6 +379,7 @@ impl SearchEngine {
             hits: page_hits,
             aggregations,
             clusters,
+            scan_stats: bm25_scan_stats,
         };
 
         if let (Some(key), Some(cache)) = (cache_key, &self.query_cache) {

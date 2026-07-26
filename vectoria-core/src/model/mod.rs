@@ -199,6 +199,19 @@ pub enum SearchMode {
     Bm25,
 }
 
+/// Storage-layer I/O accounting for a single BM25 query.
+/// Only populated by the EdgeStore backend; `None` for memory-backed indexes or
+/// when facet filters are active (which requires `search_text_with_options`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BM25ScanStats {
+    /// 1 if the text index exists and was consulted; 0 if no index has been built yet.
+    pub segments_scanned: u32,
+    /// Serialized text-index size in bytes. Zero means no index → run reindex.
+    pub bytes_scanned: u64,
+    /// BM25 results returned (same as the number of keyword matches found).
+    pub items_examined: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResponse {
     pub hits: Vec<Hit>,
@@ -211,6 +224,10 @@ pub struct SearchResponse {
     /// Semantic clusters of the result set. Only present when `cluster: true` in the request.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clusters: Option<Vec<crate::search::clustering::Cluster>>,
+    /// BM25 I/O stats from the EdgeStore text index. Absent for memory backends
+    /// and when facet filters are active.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scan_stats: Option<BM25ScanStats>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

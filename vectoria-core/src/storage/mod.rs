@@ -44,6 +44,20 @@ pub trait StorageEngine: Send + Sync {
         Ok(vec![])
     }
 
+    /// Like `search_text` but also returns I/O accounting from the storage layer.
+    /// The default implementation delegates to `search_text` and returns `None` stats.
+    /// `EdgeStoreStorage` overrides this to use edgestore's `search_text_with_stats`
+    /// when no facet filters are active, providing `bytes_scanned` / `segments_scanned`.
+    async fn search_text_with_stats(
+        &self,
+        query: &str,
+        limit: usize,
+        filters: Option<&HashMap<String, serde_json::Value>>,
+    ) -> Result<(Vec<(String, f32)>, Option<crate::model::BM25ScanStats>)> {
+        let results = self.search_text(query, limit, filters).await?;
+        Ok((results, None))
+    }
+
     /// Remove a product from the persistent text index.
     async fn delete_text(&self, _id: &str) -> Result<()> {
         Ok(())

@@ -294,6 +294,40 @@ impl StorageEngine for EdgeStoreStorage {
             .collect())
     }
 
+    async fn search_text_with_stats(
+        &self,
+        query: &str,
+        limit: usize,
+        filters: Option<&HashMap<String, serde_json::Value>>,
+    ) -> Result<(Vec<(String, f32)>, Option<crate::model::BM25ScanStats>)> {
+        let has_filters = filters.map_or(false, |f| !f.is_empty());
+        if has_filters {
+            // Facet filters require search_text_with_options; no stats available.
+            let results = self.search_text(query, limit, filters).await?;
+            return Ok((results, None));
+        }
+        let query = query.to_string();
+        let engine = Arc::clone(&self.engine);
+        let (results, stats) = tokio::task::spawn_blocking(move || {
+            engine
+                .lock()
+                .unwrap()
+                .search_text_with_stats(NS_TEXT, &query, limit)
+                .context("search_text_with_stats failed")
+        })
+        .await??;
+        let pairs = results
+            .into_iter()
+            .map(|r| (String::from_utf8_lossy(&r.doc_id).into_owned(), r.score))
+            .collect();
+        let scan = crate::model::BM25ScanStats {
+            segments_scanned: stats.segments_scanned,
+            bytes_scanned: stats.bytes_scanned,
+            items_examined: stats.items_examined,
+        };
+        Ok((pairs, Some(scan)))
+    }
+
     async fn delete_text(&self, id: &str) -> Result<()> {
         let key = id.as_bytes().to_vec();
         let engine = Arc::clone(&self.engine);

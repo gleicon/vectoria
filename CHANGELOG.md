@@ -4,6 +4,20 @@ All notable changes to Vectoria. Follows [Keep a Changelog](https://keepachangel
 
 ---
 
+## [0.1.17] — 2026-07-25
+
+### Added
+- **EdgeStore 1.5 upgrade**: bumped `edgestore` and `edgestore-repl` from `1.0` to `1.5`. Leverages the new O(n) text indexing path (100K docs: 134s → 1.5s; 1M docs: never completes → ~18.5s).
+- **`BM25ScanStats` in `SearchResponse`**: new `scan_stats` field (omitted when `None`) carries `bytes_scanned`, `items_examined`, and `segments_scanned` directly from the EdgeStore text index. Only populated by `EdgeStoreStorage`; `None` for the memory backend and when facet filters are active.
+- **`StorageEngine::search_text_with_stats` trait method**: default implementation delegates to `search_text` and returns `None` stats. `EdgeStoreStorage` overrides it with edgestore's native `search_text_with_stats` API when no facet filters are present; falls back to `search_text_with_options` (returns `None` stats) when filters require the options path.
+- **Quality panel catalog-change diagnostics** (`examples/saas-console/tenant.html`): three new `scan_stats`-driven issue types replace approximate per-hit heuristics with ground-truth index accounting:
+  - `bytes_scanned = 0` → "Text index not built — run reindex from admin panel."
+  - `bytes_scanned > 0 && items_examined = 0` → confirmed vocabulary gap: the query term is absent from every product; shows actual index size.
+  - `bytes_scanned > 0 && items_examined > 0 && low bm25Rate` → keyword matches exist but rank low; suggests description enrichment.
+  - Stats line now includes `index <size> · <N> kw hits` when `scan_stats` is present.
+
+---
+
 ## [0.1.16] — 2026-07-25
 
 ### Added
