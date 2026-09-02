@@ -38,7 +38,7 @@ vectoria-server/
 
 ---
 
-## Active features (v0.1.12)
+## Active features (v0.1.18)
 
 - Hybrid search: BM25 + HNSW vector + CTR boost + ranking weights
 - Spell correction (SymSpell, catalog-seeded, zero-result fallback only)

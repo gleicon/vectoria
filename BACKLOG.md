@@ -9,10 +9,8 @@ Priority: P0 (blocker) → P1 (v1 required) → P2 (v1 nice-to-have) → P3 (Pha
 - [x] Rust workspace init (`vectoria-core`, `vectoria-server`, `vectoria-cli`)
 - [x] `StorageEngine` trait (put/get/delete/range/prefix/tx)
 - [x] EdgeStore `StorageEngine` implementation
-- [ ] SQLite `StorageEngine` fallback implementation
 - [x] `VectorIndex` trait (insert/delete/search/persist)
 - [x] EdgeStore HNSW `VectorIndex` implementation
-- [ ] TurboVec `VectorIndex` implementation (stub, swap-in later)
 - [x] `EmbeddingProvider` trait (embed_text, embed_batch, model_id, dimensions)
 - [x] Local ONNX `EmbeddingProvider` (fastembed-rs, multilingual-e5-small default)
 - [x] OpenAI-compatible `EmbeddingProvider` (Ollama, llama.cpp, vLLM)
@@ -101,7 +99,7 @@ Priority: P0 (blocker) → P1 (v1 required) → P2 (v1 nice-to-have) → P3 (Pha
 
 ## P2 — Benchmark (pre-launch blocker)
 
-- [ ] Amazon ESCI dataset loader
+- [x] Amazon ESCI dataset loader (via `make esci-import`, built into CLI)
 - [x] BM25 baseline runner
 - [x] Vectoria benchmark runner (semantic, hybrid, hybrid+rerank)
 - [x] Results: Recall@10, NDCG@10, MRR, Coverage, zero-result rate
