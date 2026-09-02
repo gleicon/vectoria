@@ -4,6 +4,20 @@ All notable changes to Vectoria. Follows [Keep a Changelog](https://keepachangel
 
 ---
 
+## [0.1.18] — 2026-09-01
+
+### Added
+- **EdgeStore 1.7 upgrade**: bumped `edgestore` and `edgestore-repl` from `1.5` to `1.7`.
+- **BM25 snippet extraction** (`"snippets": true` in `SearchRequest`): each `Hit` gains an optional `snippets: Vec<String>` field containing context windows around matched query terms. Uses edgestore's `search_text_with_snippets` (ENG-11). Requires re-indexing after upgrade to populate position data (v3 index format); documents indexed under v1/v2 still appear in results with empty snippets. Mutually exclusive with `scan_stats` — enabling snippets disables I/O accounting for that request.
+- **`StorageEngine::search_text_with_snippets` trait method**: default implementation delegates to `search_text` with empty snippet lists. `EdgeStoreStorage` overrides to call edgestore's native snippet API.
+- **Product count cache in `EdgeStoreStorage`**: `total_indexed` in `BM25ScanStats` was previously computed by scanning all product keys on every search query (O(n) I/O). Now cached with a 5-second TTL, recomputed at most once per 5 seconds regardless of query volume.
+
+### Changed
+- **`SearchRequest`**: new `snippets: bool` field (default `false`). Requests with `snippets: true` are excluded from the query result cache.
+- **`Hit`**: new `snippets: Option<Vec<String>>` field, omitted from JSON when `None`. Present on BM25 hits when `snippets: true`; `None` on vector-only hits and when `snippets: false`.
+
+---
+
 ## [0.1.17] — 2026-07-25
 
 ### Added

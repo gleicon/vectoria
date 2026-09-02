@@ -42,6 +42,9 @@
           <option value="bm25">bm25</option>
           <option value="semantic">semantic</option>
         </select>
+        <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.8rem;color:var(--muted);cursor:pointer;white-space:nowrap">
+          <input type="checkbox" id="snippets-toggle"> snippets
+        </label>
         <button class="btn btn-primary" id="search-btn">Search</button>
       </div>
 
@@ -279,8 +282,9 @@ async function runSearch() {
   resultsList.replaceChildren();
 
   try {
+    const snippets = document.getElementById('snippets-toggle')?.checked ?? false;
     const [searchData, overrideData] = await Promise.all([
-      client.search(q, { limit: 15, mode, explain: true }, activeIndex),
+      client.search(q, { limit: 15, mode, explain: true, snippets }, activeIndex),
       client.getOverrides(activeIndex, q).catch(() => ({})),
     ]);
 
@@ -469,8 +473,8 @@ function renderQueryQuality(hits, mode, scanStats) {
       const genericIdx = issues.findIndex(i => i.text.startsWith('No clear match'));
       const catalogIssue = {
         icon: '△',
-        text: `Catalog vocabulary gap: the text index (${formatBytes(scanStats.bytes_scanned)}) ` +
-          `was searched and found zero keyword matches for this query. ` +
+        text: `Catalog vocabulary gap: the text index (${formatBytes(scanStats.bytes_scanned)}, ` +
+          `${scanStats.total_indexed} products) was searched and found zero keyword matches. ` +
           `The term does not appear in any product title or description. ` +
           `To fix: add or update products so their text contains the query term, then reindex.`,
       };
@@ -480,11 +484,13 @@ function renderQueryQuality(hits, mode, scanStats) {
       // Index has keyword matches but they're ranked below the top results.
       // Semantic similarity is dominating. Enriching descriptions improves keyword ranking.
       if (level === 'good') level = 'warn';
+      const kwPct = scanStats.total_indexed > 0
+        ? ` (${pct(scanStats.items_examined / scanStats.total_indexed)} of catalog)`
+        : '';
       issues.push({
         icon: '⤷',
-        text: `Low keyword rank: the text index (${formatBytes(scanStats.bytes_scanned)}) ` +
-          `found ${scanStats.items_examined} keyword match${scanStats.items_examined === 1 ? '' : 'es'}, ` +
-          `but they rank below the semantic results. ` +
+        text: `Low keyword rank: ${scanStats.items_examined}/${scanStats.total_indexed} products${kwPct} ` +
+          `contain the query term, but they rank below the semantic results. ` +
           `To promote keyword matches: enrich product titles and descriptions with the query term, then reindex.`,
       });
     }
@@ -520,9 +526,13 @@ function renderQueryQuality(hits, mode, scanStats) {
 
   const stats = document.createElement('span');
   stats.className = 'qqa-stats';
-  const indexNote = scanStats
-    ? ` · index ${formatBytes(scanStats.bytes_scanned)} · ${scanStats.items_examined} kw hits`
-    : '';
+  let indexNote = '';
+  if (scanStats) {
+    const kwRatio = scanStats.total_indexed > 0
+      ? ` (${pct(scanStats.items_examined / scanStats.total_indexed)})`
+      : '';
+    indexNote = ` · index ${formatBytes(scanStats.bytes_scanned)} · ${scanStats.items_examined}/${scanStats.total_indexed} kw hits${kwRatio}`;
+  }
   stats.textContent = `score gap ${pct(scoreGap)} · BM25 coverage ${pct(bm25Rate)} · ${multiSourceCount}/${explained.length} multi-source${indexNote}`;
 
   const toggle = document.createElement('button');
@@ -734,6 +744,19 @@ function renderResults(hits, q) {
 
     actions.append(pinBtn, sponsorBtn, suppressBtn, explainBtn);
     li.append(dragHandle, rank, main, actions);
+
+    if (hit.snippets?.length) {
+      const snipDiv = document.createElement('div');
+      snipDiv.className = 'snippet-block';
+      hit.snippets.forEach(text => {
+        const s = document.createElement('span');
+        s.className = 'snippet-text';
+        s.textContent = `…${text}…`;
+        snipDiv.appendChild(s);
+      });
+      li.appendChild(snipDiv);
+    }
+
     list.appendChild(li);
   });
 }

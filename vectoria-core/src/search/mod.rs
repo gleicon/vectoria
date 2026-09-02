@@ -167,7 +167,7 @@ impl SearchEngine {
     }
 
     pub async fn search(&self, req: SearchRequest) -> Result<SearchResponse> {
-        let cacheable = !req.explain && !req.rerank && req.aggregate.is_none() && req.ranking_weights.is_none();
+        let cacheable = !req.explain && !req.rerank && !req.snippets && req.aggregate.is_none() && req.ranking_weights.is_none();
 
         let cache_key = if cacheable {
             if let Some(cache) = &self.query_cache {
@@ -196,6 +196,7 @@ impl SearchEngine {
         };
 
         let mut candidate_scores: HashMap<String, CandidateScore> = HashMap::new();
+        let mut snippet_map: HashMap<String, Vec<String>> = HashMap::new();
 
         if let Some(ref qv) = query_vector {
             for (id, semantic_score) in self.vector_index.search(qv, candidate_k).await? {
@@ -214,12 +215,31 @@ impl SearchEngine {
         let mut llm_rewritten = false;
         let mut bm25_scan_stats: Option<crate::model::BM25ScanStats> = None;
         if matches!(req.mode, SearchMode::Hybrid | SearchMode::Bm25) {
-            let (bm25_results_tmp, stats) = self.storage
-                .search_text_with_stats(&req.q, candidate_k, req.filters.as_ref())
-                .await
-                .unwrap_or_else(|_| (vec![], None));
-            bm25_scan_stats = stats;
-            let bm25_results = bm25_results_tmp;
+            // snippets path: call search_text_with_snippets; no scan_stats returned.
+            // stats path: call search_text_with_stats; snippets field stays None.
+            let bm25_results = if req.snippets {
+                let snippet_results = self.storage
+                    .search_text_with_snippets(&req.q, candidate_k, 80)
+                    .await
+                    .unwrap_or_default();
+                let pairs = snippet_results
+                    .into_iter()
+                    .map(|(id, score, snips)| {
+                        if !snips.is_empty() {
+                            snippet_map.insert(id.clone(), snips);
+                        }
+                        (id, score)
+                    })
+                    .collect::<Vec<_>>();
+                pairs
+            } else {
+                let (bm25_results_tmp, stats) = self.storage
+                    .search_text_with_stats(&req.q, candidate_k, req.filters.as_ref())
+                    .await
+                    .unwrap_or_else(|_| (vec![], None));
+                bm25_scan_stats = stats;
+                bm25_results_tmp
+            };
 
             let base_q = if bm25_results.is_empty() {
                 let corrected = self.spell.correct(&req.q);
@@ -315,12 +335,14 @@ impl SearchEngine {
                 &weights, req.explain, &query_context,
             );
 
+            let snips = if req.snippets { snippet_map.get(&product.id).cloned() } else { None };
             hit_vectors.push(product.vector.clone());
             hits.push(Hit {
                 id: product.id,
                 score: scored.score,
                 metadata: product.metadata.clone(),
                 explain: scored.explain,
+                snippets: snips,
             });
         }
 
@@ -423,7 +445,7 @@ impl SearchEngine {
             if let Some(filters) = &req.filters {
                 if !matches_filters(&product.metadata, filters) { continue; }
             }
-            hits.push(Hit { id: product.id, score, metadata: product.metadata, explain: None });
+            hits.push(Hit { id: product.id, score, metadata: product.metadata, explain: None, snippets: None });
             if hits.len() >= sim_limit { break; }
         }
         Ok(hits)
@@ -495,7 +517,7 @@ impl SearchEngine {
         let mut hits = Vec::new();
         for (id, score) in candidates {
             let Some(product) = self.storage.get_product(&id).await? else { continue };
-            hits.push(Hit { id: product.id, score, metadata: product.metadata, explain: None });
+            hits.push(Hit { id: product.id, score, metadata: product.metadata, explain: None, snippets: None });
             if hits.len() >= limit { break; }
         }
         Ok(hits)
@@ -883,7 +905,7 @@ async fn apply_overrides(
                 if !slot.label.is_empty() {
                     meta["sponsored_label"] = serde_json::json!(slot.label);
                 }
-                hits.insert(target, Hit { id: product.id, score: 0.0, metadata: meta, explain: None });
+                hits.insert(target, Hit { id: product.id, score: 0.0, metadata: meta, explain: None, snippets: None });
             }
         }
     }

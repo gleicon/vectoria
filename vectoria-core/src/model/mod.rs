@@ -113,6 +113,11 @@ pub struct Hit {
     pub score: f32,
     pub metadata: serde_json::Value,
     pub explain: Option<ScoreBreakdown>,
+    /// BM25 match context windows. Present when `snippets: true` in the request
+    /// and the text index was built under EdgeStore v3 format. Re-index required
+    /// after upgrading from edgestore < 1.6 to populate position data.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snippets: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -167,6 +172,11 @@ pub struct SearchRequest {
     /// If `true`, group results into semantic clusters and return `clusters` in the response.
     #[serde(default)]
     pub cluster: bool,
+    /// If `true`, each hit includes BM25 context snippets showing where query terms matched.
+    /// Mutually exclusive with `scan_stats` — enabling snippets disables I/O accounting.
+    /// Requires re-indexing after upgrading from edgestore < 1.6 for non-empty results.
+    #[serde(default)]
+    pub snippets: bool,
 }
 
 pub const DEFAULT_LIMIT: usize = 20;
@@ -186,6 +196,7 @@ impl Default for SearchRequest {
             explain: false,
             rerank: false,
             cluster: false,
+            snippets: false,
         }
     }
 }
@@ -210,6 +221,8 @@ pub struct BM25ScanStats {
     pub bytes_scanned: u64,
     /// BM25 results returned (same as the number of keyword matches found).
     pub items_examined: u64,
+    /// Total number of documents in the text index (denominator for coverage %).
+    pub total_indexed: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

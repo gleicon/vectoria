@@ -2,7 +2,7 @@ use super::{ProductSignals, StorageEngine, StorageStats};
 use crate::model::{Event, EventType, Product};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use edgestore::{EdgestoreConfig, Engine, FacetFilter, FacetValue, SearchOptions, TextEngine};
+use edgestore::{EdgestoreConfig, Engine, FacetFilter, FacetValue, SearchOptions, SnippetResult, TextEngine};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -30,6 +30,9 @@ const MAX_USER_ID_BYTES: usize = 256;
 
 pub struct EdgeStoreStorage {
     engine: Arc<Mutex<Engine>>,
+    // Caches product count for `total_indexed` to avoid O(n) prefix scan on every search.
+    // Invalidated after 5 seconds; accurate enough for coverage ratios in the quality panel.
+    count_cache: Arc<std::sync::Mutex<Option<(u64, std::time::Instant)>>>,
 }
 
 impl EdgeStoreStorage {
@@ -38,7 +41,7 @@ impl EdgeStoreStorage {
     /// Both storage and vector index should share the same engine instance so they
     /// share one WAL, one lock file, and one replication target.
     pub fn from_engine(engine: Arc<Mutex<Engine>>) -> Self {
-        Self { engine }
+        Self { engine, count_cache: Arc::new(std::sync::Mutex::new(None)) }
     }
 
     /// Convenience: open a new engine at `path` and wrap it.
@@ -47,7 +50,32 @@ impl EdgeStoreStorage {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let config = EdgestoreConfig::new(path.as_ref());
         let engine = Engine::open(config).context("failed to open EdgeStore")?;
-        Ok(Self { engine: Arc::new(Mutex::new(engine)) })
+        Ok(Self {
+            engine: Arc::new(Mutex::new(engine)),
+            count_cache: Arc::new(std::sync::Mutex::new(None)),
+        })
+    }
+
+    /// Returns cached product count. Recomputes at most once per 5 seconds
+    /// to avoid an O(products) prefix scan on every search.
+    async fn cached_product_count(&self) -> u64 {
+        const TTL: std::time::Duration = std::time::Duration::from_secs(5);
+        {
+            let guard = self.count_cache.lock().unwrap();
+            if let Some((count, at)) = *guard {
+                if at.elapsed() < TTL {
+                    return count;
+                }
+            }
+        }
+        let engine = Arc::clone(&self.engine);
+        let count = tokio::task::spawn_blocking(move || {
+            engine.lock().unwrap().prefix(NS_PRODUCTS, b"").map(|p| p.len() as u64).unwrap_or(0)
+        })
+        .await
+        .unwrap_or(0);
+        *self.count_cache.lock().unwrap() = Some((count, std::time::Instant::now()));
+        count
     }
 }
 
@@ -320,12 +348,40 @@ impl StorageEngine for EdgeStoreStorage {
             .into_iter()
             .map(|r| (String::from_utf8_lossy(&r.doc_id).into_owned(), r.score))
             .collect();
+        let total_indexed = self.cached_product_count().await;
         let scan = crate::model::BM25ScanStats {
             segments_scanned: stats.segments_scanned,
             bytes_scanned: stats.bytes_scanned,
             items_examined: stats.items_examined,
+            total_indexed,
         };
         Ok((pairs, Some(scan)))
+    }
+
+    async fn search_text_with_snippets(
+        &self,
+        query: &str,
+        limit: usize,
+        context_chars: usize,
+    ) -> Result<Vec<(String, f32, Vec<String>)>> {
+        let query = query.to_string();
+        let engine = Arc::clone(&self.engine);
+        let results: Vec<SnippetResult> = tokio::task::spawn_blocking(move || {
+            engine
+                .lock()
+                .unwrap()
+                .search_text_with_snippets(NS_TEXT, &query, limit, context_chars)
+                .context("search_text_with_snippets failed")
+        })
+        .await??;
+        Ok(results
+            .into_iter()
+            .map(|r| {
+                let id = String::from_utf8_lossy(&r.doc_id).into_owned();
+                let snips: Vec<String> = r.snippets.into_iter().map(|s| s.text).collect();
+                (id, r.score, snips)
+            })
+            .collect())
     }
 
     async fn delete_text(&self, id: &str) -> Result<()> {

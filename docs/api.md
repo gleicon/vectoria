@@ -136,7 +136,8 @@ Body:
   "filters": {"in_stock": true},
   "aggregate": ["brand", "category"],
   "explain": false,
-  "rerank": false
+  "rerank": false,
+  "snippets": false
 }
 ```
 
@@ -150,6 +151,7 @@ Fields:
 - `aggregate` — array of metadata field names to facet-count across all matched candidates
 - `explain` — include per-result score breakdown
 - `rerank` — apply cross-encoder reranking (requires `index.enable_reranker = true`)
+- `snippets` — include BM25 context windows in each hit (`hit.snippets: string[]`). Mutually exclusive with `scan_stats`. Requires re-indexing after upgrading from edgestore < 1.6 for non-empty snippets.
 
 Response:
 ```json
@@ -159,7 +161,8 @@ Response:
       "id": "p1",
       "score": 0.82,
       "metadata": {"title": "...", "price": 99.99},
-      "explain": null
+      "explain": null,
+      "snippets": ["…running shoe lightweight…"]
     }
   ],
   "total": 42,
@@ -324,6 +327,40 @@ score = semantic × w_semantic
 ```
 
 Pass `"explain": true` in the search request to see per-factor scores in each hit.
+
+### BM25 I/O stats (`scan_stats`)
+
+When `snippets: false` (the default) and the EdgeStore backend is used without facet filters, the response includes a `scan_stats` object:
+
+```json
+{
+  "scan_stats": {
+    "segments_scanned": 1,
+    "bytes_scanned": 32799255,
+    "items_examined": 75,
+    "total_indexed": 5000
+  }
+}
+```
+
+- `bytes_scanned` — serialized text index size; zero means no index (run reindex).
+- `items_examined` — BM25 keyword matches found; zero with a non-zero `bytes_scanned` means vocabulary gap.
+- `total_indexed` — total documents in the text index; denominator for keyword coverage (`items_examined / total_indexed`).
+- `scan_stats` is absent (`null`) when `snippets: true`, facet filters are active, or the memory backend is used.
+
+### BM25 snippets
+
+When `snippets: true`, each BM25 hit gains a `snippets` field — an array of context-window strings showing where query terms matched:
+
+```json
+{
+  "id": "p1",
+  "score": 0.82,
+  "snippets": ["…running shoe lightweight carbon…", "…shoe rated for trail…"]
+}
+```
+
+Snippets require re-indexing after upgrading from edgestore < 1.6 (which stored v1/v2 index format without character positions). Documents indexed under v1/v2 still appear in results but `snippets` will be an empty array. Run `POST /indexes/{name}/admin/reindex` once after upgrading.
 
 ---
 

@@ -7,9 +7,9 @@ use vectoria_core::model::{Hit, RankingWeights, SearchMode, SearchRequest};
 #[test]
 fn verify_nan_scores_do_not_panic_sort() {
     let mut hits = vec![
-        Hit { id: "a".into(), score: 0.8, metadata: serde_json::json!({}), explain: None },
-        Hit { id: "b".into(), score: f32::NAN, metadata: serde_json::json!({}), explain: None },
-        Hit { id: "c".into(), score: 0.5, metadata: serde_json::json!({}), explain: None },
+        Hit { id: "a".into(), score: 0.8, metadata: serde_json::json!({}), explain: None, snippets: None },
+        Hit { id: "b".into(), score: f32::NAN, metadata: serde_json::json!({}), explain: None, snippets: None },
+        Hit { id: "c".into(), score: 0.5, metadata: serde_json::json!({}), explain: None, snippets: None },
     ];
     hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
     let non_nan: Vec<_> = hits.iter().filter(|h| !h.score.is_nan()).collect();
@@ -27,7 +27,7 @@ async fn verify_limit_capped_at_max() {
         q: "shoe".into(), limit: 9_999, offset: 0,
         mode: SearchMode::Hybrid,
         filters: None, ranking_weights: None, aggregate: None,
-        explain: false, rerank: false, cluster: false,
+        explain: false, rerank: false, cluster: false, snippets: false,
     }).await.unwrap();
 
     assert_eq!(resp.limit, 1_000, "limit must be capped at 1_000, got {}", resp.limit);
@@ -42,7 +42,7 @@ async fn verify_offset_capped_at_max() {
         q: "boot".into(), limit: 10, offset: 999_999,
         mode: SearchMode::Hybrid,
         filters: None, ranking_weights: None, aggregate: None,
-        explain: false, rerank: false, cluster: false,
+        explain: false, rerank: false, cluster: false, snippets: false,
     }).await.unwrap();
 
     assert_eq!(resp.offset, 10_000, "offset must be capped at 10_000, got {}", resp.offset);
@@ -59,7 +59,7 @@ async fn verify_custom_weights_bypass_cache() {
         mode: SearchMode::Hybrid,
         filters: None,
         ranking_weights: Some(RankingWeights { semantic, ..RankingWeights::default() }),
-        aggregate: None, explain: false, rerank: false, cluster: false,
+        aggregate: None, explain: false, rerank: false, cluster: false, snippets: false,
     };
 
     engine.search(req_with_weights(0.9)).await.unwrap();

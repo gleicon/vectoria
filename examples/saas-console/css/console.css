@@ -357,3 +357,17 @@ input::placeholder { color: var(--muted); }
   border-radius: 50%; animation: spin 0.7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Snippet display (snippets: true in search request) ─────────────────────── */
+.snippet-block {
+  display: flex; flex-wrap: wrap; gap: 0.35rem;
+  padding: 0.4rem 0.75rem 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.snippet-text {
+  font-size: 0.75rem; color: var(--muted);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 3px; padding: 0.15rem 0.4rem;
+  font-family: var(--font-mono, monospace);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}

@@ -18,6 +18,7 @@ fn req(q: &str) -> SearchRequest {
         explain: false,
         rerank: false,
         cluster: false,
+        snippets: false,
     }
 }
 

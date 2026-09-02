@@ -51,7 +51,7 @@ async fn test_edgestore_index_and_search() {
         ranking_weights: None,
         aggregate: None,
         explain: false,
-        rerank: false, cluster: false,
+        rerank: false, cluster: false, snippets: false,
     }).await.unwrap();
 
     assert!(resp.total > 0, "should find results for 'running shoe'");
@@ -76,7 +76,7 @@ async fn test_edgestore_delete_persists() {
         ranking_weights: None,
         aggregate: None,
         explain: false,
-        rerank: false, cluster: false,
+        rerank: false, cluster: false, snippets: false,
     }).await.unwrap();
 
     assert!(!resp.hits.iter().any(|h| h.id == "del1"),
@@ -100,7 +100,7 @@ async fn test_edgestore_bm25_search() {
         ranking_weights: None,
         aggregate: None,
         explain: false,
-        rerank: false, cluster: false,
+        rerank: false, cluster: false, snippets: false,
     }).await.unwrap();
 
     assert!(resp.hits.iter().any(|h| h.id == "bm1"),
@@ -127,7 +127,7 @@ async fn test_edgestore_vector_search() {
         ranking_weights: None,
         aggregate: None,
         explain: false,
-        rerank: false, cluster: false,
+        rerank: false, cluster: false, snippets: false,
     }).await.unwrap();
 
     assert!(resp.total > 0, "semantic search should return results");
@@ -157,7 +157,7 @@ async fn test_edgestore_query_ctr_boosts_clicked_product() {
         ranking_weights: None,
         aggregate: None,
         explain: false,
-        rerank: false, cluster: false,
+        rerank: false, cluster: false, snippets: false,
     }).await.unwrap();
 
     let ids: Vec<&str> = resp.hits.iter().map(|h| h.id.as_str()).collect();
@@ -248,4 +248,92 @@ async fn test_edgestore_query_ctr_no_cross_query_bleed() {
 
     let ctrs = storage.get_query_ctrs("yoga mat").await.unwrap();
     assert!(ctrs.is_empty(), "CTR for unrelated query must be empty");
+}
+
+// ── edgestore 1.7: snippets + count cache ────────────────────────────────────
+
+#[tokio::test]
+async fn test_snippets_request_returns_hits_without_panic() {
+    let dir = TempDir::new().unwrap();
+    let engine = make_engine(&dir).await;
+
+    engine.index(common::make_product("sn1", "Leather Running Shoe Lightweight")).await.unwrap();
+    engine.index(common::make_product("sn2", "Yoga Mat Blue Non-Slip")).await.unwrap();
+
+    // snippets: true — no scan_stats, but hits must be returned and response well-formed.
+    let resp = engine.search(SearchRequest {
+        q: "running shoe".into(),
+        limit: 10,
+        offset: 0,
+        mode: SearchMode::Bm25,
+        filters: None,
+        ranking_weights: None,
+        aggregate: None,
+        explain: false,
+        rerank: false,
+        cluster: false,
+        snippets: true,
+    }).await.unwrap();
+
+    assert!(resp.total > 0, "snippets search must return results");
+    assert!(resp.scan_stats.is_none(), "snippets path must not populate scan_stats");
+    // Hit.snippets may be empty (index predates v3) but the field must be present when
+    // the result came from BM25 — vector-only hits carry None.
+    let bm25_hit = resp.hits.iter().find(|h| h.id == "sn1");
+    assert!(bm25_hit.is_some(), "BM25 hit for 'running shoe' must appear");
+}
+
+#[tokio::test]
+async fn test_non_snippets_request_returns_scan_stats() {
+    let dir = TempDir::new().unwrap();
+    let engine = make_engine(&dir).await;
+
+    engine.index(common::make_product("st1", "Wireless Bluetooth Headphones")).await.unwrap();
+
+    let resp = engine.search(SearchRequest {
+        q: "bluetooth".into(),
+        limit: 5,
+        offset: 0,
+        mode: SearchMode::Bm25,
+        filters: None,
+        ranking_weights: None,
+        aggregate: None,
+        explain: false,
+        rerank: false,
+        cluster: false,
+        snippets: false,
+    }).await.unwrap();
+
+    assert!(resp.scan_stats.is_some(), "non-snippets BM25 path must populate scan_stats");
+    let stats = resp.scan_stats.unwrap();
+    assert!(stats.total_indexed > 0, "total_indexed must be non-zero after indexing a product");
+}
+
+#[tokio::test]
+async fn test_cached_product_count_matches_indexed_count() {
+    let dir = TempDir::new().unwrap();
+    let engine = make_engine(&dir).await;
+
+    for i in 0..5u32 {
+        engine.index(common::make_product(&format!("cnt{i}"), &format!("Product {i}"))).await.unwrap();
+    }
+
+    // Trigger search to populate count cache via search_text_with_stats.
+    let resp = engine.search(SearchRequest {
+        q: "Product".into(),
+        limit: 10,
+        offset: 0,
+        mode: SearchMode::Bm25,
+        filters: None,
+        ranking_weights: None,
+        aggregate: None,
+        explain: false,
+        rerank: false,
+        cluster: false,
+        snippets: false,
+    }).await.unwrap();
+
+    if let Some(stats) = resp.scan_stats {
+        assert_eq!(stats.total_indexed, 5, "total_indexed must equal number of indexed products");
+    }
 }

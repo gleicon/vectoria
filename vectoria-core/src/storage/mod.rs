@@ -58,6 +58,21 @@ pub trait StorageEngine: Send + Sync {
         Ok((results, None))
     }
 
+    /// Like `search_text` but returns context windows around each matched term.
+    /// Returns `(id, score, snippets)` triples; `snippets` is empty when the
+    /// backend lacks position data (non-EdgeStore, or index predates v3 format).
+    /// Does not return I/O stats — use `search_text_with_stats` when stats matter.
+    async fn search_text_with_snippets(
+        &self,
+        query: &str,
+        limit: usize,
+        context_chars: usize,
+    ) -> Result<Vec<(String, f32, Vec<String>)>> {
+        let results = self.search_text(query, limit, None).await?;
+        let _ = context_chars;
+        Ok(results.into_iter().map(|(id, score)| (id, score, vec![])).collect())
+    }
+
     /// Remove a product from the persistent text index.
     async fn delete_text(&self, _id: &str) -> Result<()> {
         Ok(())
