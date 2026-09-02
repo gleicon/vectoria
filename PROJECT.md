@@ -1,6 +1,6 @@
 # Vectoria — Project Status
 
-**Current version**: 0.1.12  
+**Current version**: 0.1.18  
 **Stack**: Rust workspace — `vectoria-core` (library), `vectoria-server` (Axum HTTP), `vectoria-cli` (bulk import / eval)
 
 ---
