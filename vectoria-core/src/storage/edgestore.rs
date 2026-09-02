@@ -5,7 +5,37 @@ use async_trait::async_trait;
 use edgestore::{EdgestoreConfig, Engine, FacetFilter, FacetValue, SearchOptions, SnippetResult, TextEngine};
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
+
+/// Unified engine handle for standalone (RwLock, concurrent reads) and
+/// replicated (Mutex, single-writer required) modes.
+#[derive(Clone)]
+enum EngineRef {
+    Rw(Arc<RwLock<Engine>>),
+    Ex(Arc<Mutex<Engine>>),
+}
+
+impl EngineRef {
+    fn with_read<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&Engine) -> R,
+    {
+        match self {
+            Self::Rw(rw) => f(&rw.read().unwrap()),
+            Self::Ex(ex) => f(&ex.lock().unwrap()),
+        }
+    }
+
+    fn with_write<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut Engine) -> R,
+    {
+        match self {
+            Self::Rw(rw) => f(&mut rw.write().unwrap()),
+            Self::Ex(ex) => f(&mut ex.lock().unwrap()),
+        }
+    }
+}
 
 const NS_PRODUCTS: &[u8] = b"products";
 const NS_EVENTS: &[u8] = b"events";
@@ -29,7 +59,7 @@ const MAX_QUERY_BYTES: usize = 512;
 const MAX_USER_ID_BYTES: usize = 256;
 
 pub struct EdgeStoreStorage {
-    engine: Arc<Mutex<Engine>>,
+    engine: EngineRef,
     // Caches product count for `total_indexed` to avoid O(n) prefix scan on every search.
     // Invalidated after 5 seconds; accurate enough for coverage ratios in the quality panel.
     count_cache: Arc<std::sync::Mutex<Option<(u64, std::time::Instant)>>>,
@@ -40,8 +70,13 @@ impl EdgeStoreStorage {
     ///
     /// Both storage and vector index should share the same engine instance so they
     /// share one WAL, one lock file, and one replication target.
-    pub fn from_engine(engine: Arc<Mutex<Engine>>) -> Self {
-        Self { engine, count_cache: Arc::new(std::sync::Mutex::new(None)) }
+    pub fn from_engine(engine: Arc<RwLock<Engine>>) -> Self {
+        Self { engine: EngineRef::Rw(engine), count_cache: Arc::new(std::sync::Mutex::new(None)) }
+    }
+
+    /// Replicated mode: engine is held by a `ReplicatedEngine` (single-writer, Mutex required).
+    pub fn from_mutex_engine(engine: Arc<Mutex<Engine>>) -> Self {
+        Self { engine: EngineRef::Ex(engine), count_cache: Arc::new(std::sync::Mutex::new(None)) }
     }
 
     /// Convenience: open a new engine at `path` and wrap it.
@@ -51,7 +86,7 @@ impl EdgeStoreStorage {
         let config = EdgestoreConfig::new(path.as_ref());
         let engine = Engine::open(config).context("failed to open EdgeStore")?;
         Ok(Self {
-            engine: Arc::new(Mutex::new(engine)),
+            engine: EngineRef::Rw(Arc::new(RwLock::new(engine))),
             count_cache: Arc::new(std::sync::Mutex::new(None)),
         })
     }
@@ -68,9 +103,9 @@ impl EdgeStoreStorage {
                 }
             }
         }
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let count = tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().prefix(NS_PRODUCTS, b"").map(|p| p.len() as u64).unwrap_or(0)
+            engine.with_read(|e| e.prefix(NS_PRODUCTS, b"").map(|p| p.len() as u64).unwrap_or(0))
         })
         .await
         .unwrap_or(0);
@@ -92,9 +127,9 @@ impl StorageEngine for EdgeStoreStorage {
     async fn put_product(&self, product: &Product) -> Result<()> {
         let key = product.id.as_bytes().to_vec();
         let value = encode(product)?;
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().put(NS_PRODUCTS, &key, &value)
+            engine.with_write(|e| e.put(NS_PRODUCTS, &key, &value))
         })
         .await?
         .context("put_product failed")?;
@@ -103,9 +138,9 @@ impl StorageEngine for EdgeStoreStorage {
 
     async fn get_product(&self, id: &str) -> Result<Option<Product>> {
         let key = id.as_bytes().to_vec();
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let bytes = tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().get(NS_PRODUCTS, &key)
+            engine.with_read(|e| e.get(NS_PRODUCTS, &key))
         })
         .await??;
         match bytes {
@@ -116,9 +151,9 @@ impl StorageEngine for EdgeStoreStorage {
 
     async fn delete_product(&self, id: &str) -> Result<()> {
         let key = id.as_bytes().to_vec();
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().delete(NS_PRODUCTS, &key)
+            engine.with_write(|e| e.delete(NS_PRODUCTS, &key))
         })
         .await?
         .context("delete_product failed")?;
@@ -126,9 +161,9 @@ impl StorageEngine for EdgeStoreStorage {
     }
 
     async fn list_products(&self, offset: usize, limit: usize) -> Result<Vec<Product>> {
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let pairs = tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().prefix(NS_PRODUCTS, b"")
+            engine.with_read(|e| e.prefix(NS_PRODUCTS, b""))
         })
         .await??;
 
@@ -165,33 +200,34 @@ impl StorageEngine for EdgeStoreStorage {
             _ => None,
         };
         let product_id_bytes = event.product_id.as_bytes().to_vec();
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         tokio::task::spawn_blocking(move || {
-            let mut eng = engine.lock().unwrap();
-            let now = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs() as i64;
-            if let Some(ck) = ctr_key {
-                // Atomic: event record + CTR increment in one transaction.
-                let count = eng.get(NS_CTRS, &ck)?
-                    .and_then(|b| <[u8; 8]>::try_from(b).ok())
-                    .map(u64::from_le_bytes)
-                    .unwrap_or(0);
-                let mut tx = eng.begin();
-                tx.put(NS_EVENTS, &key, &value, 0, now).context("tx event put failed")?;
-                tx.put(NS_CTRS, &ck, &(count + 1).to_le_bytes(), 0, now).context("tx ctr put failed")?;
-                if let Some(uek) = user_event_key {
-                    tx.put(NS_USER_EVENTS, &uek, &product_id_bytes, 0, now).context("tx user-event put failed")?;
+            engine.with_write(|eng| {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64;
+                if let Some(ck) = ctr_key {
+                    // Atomic: event record + CTR increment in one transaction.
+                    let count = eng.get(NS_CTRS, &ck)?
+                        .and_then(|b| <[u8; 8]>::try_from(b).ok())
+                        .map(u64::from_le_bytes)
+                        .unwrap_or(0);
+                    let mut tx = eng.begin();
+                    tx.put(NS_EVENTS, &key, &value, 0, now).context("tx event put failed")?;
+                    tx.put(NS_CTRS, &ck, &(count + 1).to_le_bytes(), 0, now).context("tx ctr put failed")?;
+                    if let Some(uek) = user_event_key {
+                        tx.put(NS_USER_EVENTS, &uek, &product_id_bytes, 0, now).context("tx user-event put failed")?;
+                    }
+                    eng.commit_transaction(tx).context("put_event transaction failed")?;
+                } else {
+                    eng.put(NS_EVENTS, &key, &value).context("put_event failed")?;
+                    if let Some(uek) = user_event_key {
+                        eng.put(NS_USER_EVENTS, &uek, &product_id_bytes).context("user-event put failed")?;
+                    }
                 }
-                eng.commit_transaction(tx).context("put_event transaction failed")?;
-            } else {
-                eng.put(NS_EVENTS, &key, &value).context("put_event failed")?;
-                if let Some(uek) = user_event_key {
-                    eng.put(NS_USER_EVENTS, &uek, &product_id_bytes).context("user-event put failed")?;
-                }
-            }
-            Ok::<_, anyhow::Error>(())
+                Ok::<_, anyhow::Error>(())
+            })
         })
         .await??;
         Ok(())
@@ -204,9 +240,9 @@ impl StorageEngine for EdgeStoreStorage {
         let mut prefix = query.as_bytes().to_vec();
         prefix.push(0);
         let prefix_len = prefix.len();
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let pairs = tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().prefix(NS_CTRS, &prefix)
+            engine.with_read(|e| e.prefix(NS_CTRS, &prefix))
         })
         .await??;
         let counts: HashMap<String, u64> = pairs
@@ -226,9 +262,9 @@ impl StorageEngine for EdgeStoreStorage {
 
     async fn get_product_signals(&self, product_id: &str) -> Result<ProductSignals> {
         let key = product_id.as_bytes().to_vec();
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let cached = tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().get(NS_SIGNALS, &key)
+            engine.with_read(|e| e.get(NS_SIGNALS, &key))
         })
         .await??;
         if let Some(b) = cached {
@@ -241,9 +277,9 @@ impl StorageEngine for EdgeStoreStorage {
 
     async fn recompute_product_signals(&self, product_id: &str) -> Result<ProductSignals> {
         let prefix = format!("{}/", product_id).into_bytes();
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let pairs = tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().prefix(NS_EVENTS, &prefix)
+            engine.with_read(|e| e.prefix(NS_EVENTS, &prefix))
         })
         .await??;
         let events: Vec<crate::model::Event> = pairs
@@ -256,9 +292,9 @@ impl StorageEngine for EdgeStoreStorage {
     async fn put_product_signals(&self, product_id: &str, signals: &ProductSignals) -> Result<()> {
         let key = product_id.as_bytes().to_vec();
         let value = encode(signals)?;
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().put(NS_SIGNALS, &key, &value)
+            engine.with_write(|e| e.put(NS_SIGNALS, &key, &value))
         })
         .await?
         .context("put_product_signals failed")?;
@@ -266,16 +302,17 @@ impl StorageEngine for EdgeStoreStorage {
     }
 
     async fn stats(&self) -> Result<StorageStats> {
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let result = tokio::task::spawn_blocking(move || -> Result<StorageStats> {
-            let eng = engine.lock().unwrap();
-            let product_count = eng.prefix(NS_PRODUCTS, b"").context("stats: prefix products")?.len() as u64;
-            let event_count   = eng.prefix(NS_EVENTS,   b"").context("stats: prefix events")?.len() as u64;
-            Ok(StorageStats {
-                product_count,
-                event_count,
-                storage_bytes: crate::dir_bytes(eng.db_path()),
-                text_document_count: product_count,
+            engine.with_read(|eng| {
+                let product_count = eng.prefix(NS_PRODUCTS, b"").context("stats: prefix products")?.len() as u64;
+                let event_count   = eng.prefix(NS_EVENTS,   b"").context("stats: prefix events")?.len() as u64;
+                Ok(StorageStats {
+                    product_count,
+                    event_count,
+                    storage_bytes: crate::dir_bytes(eng.db_path()),
+                    text_document_count: product_count,
+                })
             })
         })
         .await??;
@@ -286,13 +323,9 @@ impl StorageEngine for EdgeStoreStorage {
         let key = id.as_bytes().to_vec();
         let text = text.to_string();
         let facets = extract_facets(metadata);
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         tokio::task::spawn_blocking(move || {
-            engine
-                .lock()
-                .unwrap()
-                .index_text(NS_TEXT, &key, &text, facets)
-                .context("index_text failed")
+            engine.with_write(|e| e.index_text(NS_TEXT, &key, &text, facets).context("index_text failed"))
         })
         .await??;
         Ok(())
@@ -306,14 +339,16 @@ impl StorageEngine for EdgeStoreStorage {
     ) -> Result<Vec<(String, f32)>> {
         let query = query.to_string();
         let facet_filters = filters.map(to_facet_filters).unwrap_or_default();
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let results = tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().search_text_with_options(
-                NS_TEXT,
-                &query,
-                &SearchOptions { k: limit, typo_tolerance: false, facet_filters },
-            )
-            .context("search_text failed")
+            engine.with_read(|e| {
+                e.search_text_with_options(
+                    NS_TEXT,
+                    &query,
+                    &SearchOptions { k: limit, typo_tolerance: false, facet_filters },
+                )
+                .context("search_text failed")
+            })
         })
         .await??;
         Ok(results
@@ -335,13 +370,12 @@ impl StorageEngine for EdgeStoreStorage {
             return Ok((results, None));
         }
         let query = query.to_string();
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let (results, stats) = tokio::task::spawn_blocking(move || {
-            engine
-                .lock()
-                .unwrap()
-                .search_text_with_stats(NS_TEXT, &query, limit)
-                .context("search_text_with_stats failed")
+            engine.with_read(|e| {
+                e.search_text_with_stats(NS_TEXT, &query, limit)
+                    .context("search_text_with_stats failed")
+            })
         })
         .await??;
         let pairs = results
@@ -365,13 +399,12 @@ impl StorageEngine for EdgeStoreStorage {
         context_chars: usize,
     ) -> Result<Vec<(String, f32, Vec<String>)>> {
         let query = query.to_string();
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let results: Vec<SnippetResult> = tokio::task::spawn_blocking(move || {
-            engine
-                .lock()
-                .unwrap()
-                .search_text_with_snippets(NS_TEXT, &query, limit, context_chars)
-                .context("search_text_with_snippets failed")
+            engine.with_read(|e| {
+                e.search_text_with_snippets(NS_TEXT, &query, limit, context_chars)
+                    .context("search_text_with_snippets failed")
+            })
         })
         .await??;
         Ok(results
@@ -386,13 +419,9 @@ impl StorageEngine for EdgeStoreStorage {
 
     async fn delete_text(&self, id: &str) -> Result<()> {
         let key = id.as_bytes().to_vec();
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         tokio::task::spawn_blocking(move || {
-            engine
-                .lock()
-                .unwrap()
-                .delete_text(NS_TEXT, &key)
-                .context("delete_text failed")
+            engine.with_write(|e| e.delete_text(NS_TEXT, &key).context("delete_text failed"))
         })
         .await??;
         Ok(())
@@ -405,9 +434,9 @@ impl StorageEngine for EdgeStoreStorage {
         let key = user_id.as_bytes().to_vec();
         let owned: Vec<f32> = vector.to_vec();
         let value = encode(&owned)?;
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().put(NS_USERS, &key, &value)
+            engine.with_write(|e| e.put(NS_USERS, &key, &value))
         })
         .await?
         .context("put_user_vector failed")?;
@@ -419,9 +448,9 @@ impl StorageEngine for EdgeStoreStorage {
             return Ok(None);
         }
         let key = user_id.as_bytes().to_vec();
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let bytes = tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().get(NS_USERS, &key)
+            engine.with_read(|e| e.get(NS_USERS, &key))
         })
         .await??;
         match bytes {
@@ -436,9 +465,9 @@ impl StorageEngine for EdgeStoreStorage {
         }
         let mut prefix = user_id.as_bytes().to_vec();
         prefix.push(0);
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let pairs = tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().prefix(NS_USER_EVENTS, &prefix)
+            engine.with_read(|e| e.prefix(NS_USER_EVENTS, &prefix))
         })
         .await??;
         // Deduplicate while preserving recency (pairs are insertion-ordered).
@@ -454,9 +483,9 @@ impl StorageEngine for EdgeStoreStorage {
     }
 
     async fn list_user_ids(&self) -> Result<Vec<String>> {
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let pairs = tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().prefix(NS_USER_EVENTS, b"")
+            engine.with_read(|e| e.prefix(NS_USER_EVENTS, b""))
         })
         .await??;
         let mut seen = std::collections::HashSet::new();
@@ -480,17 +509,17 @@ impl StorageEngine for EdgeStoreStorage {
         key.extend_from_slice(to.as_bytes());
         let existing_score = {
             let k2 = key.clone();
-            let engine = Arc::clone(&self.engine);
-            tokio::task::spawn_blocking(move || engine.lock().unwrap().get(NS_RELATIONS, &k2))
+            let engine = self.engine.clone();
+            tokio::task::spawn_blocking(move || engine.with_read(|e| e.get(NS_RELATIONS, &k2)))
                 .await??
                 .and_then(|b| <[u8; 8]>::try_from(b).ok())
                 .map(u64::from_le_bytes)
                 .unwrap_or(0)
         };
         let new_score = existing_score.saturating_add(score);
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().put(NS_RELATIONS, &key, &new_score.to_le_bytes())
+            engine.with_write(|e| e.put(NS_RELATIONS, &key, &new_score.to_le_bytes()))
         })
         .await??;
         Ok(())
@@ -504,9 +533,9 @@ impl StorageEngine for EdgeStoreStorage {
     ) -> Result<Vec<(String, String, u64)>> {
         let mut prefix = product_id.as_bytes().to_vec();
         prefix.push(0);
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let pairs = tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().prefix(NS_RELATIONS, &prefix)
+            engine.with_read(|e| e.prefix(NS_RELATIONS, &prefix))
         })
         .await??;
 
@@ -533,9 +562,9 @@ impl StorageEngine for EdgeStoreStorage {
     async fn delete_product_relations(&self, product_id: &str) -> Result<()> {
         let mut prefix = product_id.as_bytes().to_vec();
         prefix.push(0);
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let keys: Vec<Vec<u8>> = tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().prefix(NS_RELATIONS, &prefix)
+            engine.with_read(|e| e.prefix(NS_RELATIONS, &prefix))
         })
         .await??
         .into_iter()
@@ -545,13 +574,14 @@ impl StorageEngine for EdgeStoreStorage {
         if keys.is_empty() {
             return Ok(());
         }
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         tokio::task::spawn_blocking(move || {
-            let mut eng = engine.lock().unwrap();
-            for k in keys {
-                eng.delete(NS_RELATIONS, &k)?;
-            }
-            Ok::<_, anyhow::Error>(())
+            engine.with_write(|eng| {
+                for k in keys {
+                    eng.delete(NS_RELATIONS, &k)?;
+                }
+                Ok::<_, anyhow::Error>(())
+            })
         })
         .await??;
         Ok(())
@@ -562,8 +592,8 @@ impl StorageEngine for EdgeStoreStorage {
     async fn put_pin(&self, pin: &crate::model::Pin) -> Result<()> {
         let key = pin.id.as_bytes().to_vec();
         let value = encode(pin)?;
-        let engine = Arc::clone(&self.engine);
-        tokio::task::spawn_blocking(move || engine.lock().unwrap().put(NS_PINS, &key, &value))
+        let engine = self.engine.clone();
+        tokio::task::spawn_blocking(move || engine.with_write(|e| e.put(NS_PINS, &key, &value)))
             .await?
             .context("put_pin failed")?;
         Ok(())
@@ -571,16 +601,16 @@ impl StorageEngine for EdgeStoreStorage {
 
     async fn delete_pin(&self, id: &str) -> Result<()> {
         let key = id.as_bytes().to_vec();
-        let engine = Arc::clone(&self.engine);
-        tokio::task::spawn_blocking(move || engine.lock().unwrap().delete(NS_PINS, &key))
+        let engine = self.engine.clone();
+        tokio::task::spawn_blocking(move || engine.with_write(|e| e.delete(NS_PINS, &key)))
             .await?
             .context("delete_pin failed")?;
         Ok(())
     }
 
     async fn list_pins(&self) -> Result<Vec<crate::model::Pin>> {
-        let engine = Arc::clone(&self.engine);
-        let pairs = tokio::task::spawn_blocking(move || engine.lock().unwrap().prefix(NS_PINS, b""))
+        let engine = self.engine.clone();
+        let pairs = tokio::task::spawn_blocking(move || engine.with_read(|e| e.prefix(NS_PINS, b"")))
             .await??;
         pairs.into_iter().map(|(_, v)| decode(&v)).collect()
     }
@@ -590,8 +620,8 @@ impl StorageEngine for EdgeStoreStorage {
     async fn put_sponsored(&self, slot: &crate::model::SponsoredSlot) -> Result<()> {
         let key = slot.id.as_bytes().to_vec();
         let value = encode(slot)?;
-        let engine = Arc::clone(&self.engine);
-        tokio::task::spawn_blocking(move || engine.lock().unwrap().put(NS_SPONSORED, &key, &value))
+        let engine = self.engine.clone();
+        tokio::task::spawn_blocking(move || engine.with_write(|e| e.put(NS_SPONSORED, &key, &value)))
             .await?
             .context("put_sponsored failed")?;
         Ok(())
@@ -599,17 +629,17 @@ impl StorageEngine for EdgeStoreStorage {
 
     async fn delete_sponsored(&self, id: &str) -> Result<()> {
         let key = id.as_bytes().to_vec();
-        let engine = Arc::clone(&self.engine);
-        tokio::task::spawn_blocking(move || engine.lock().unwrap().delete(NS_SPONSORED, &key))
+        let engine = self.engine.clone();
+        tokio::task::spawn_blocking(move || engine.with_write(|e| e.delete(NS_SPONSORED, &key)))
             .await?
             .context("delete_sponsored failed")?;
         Ok(())
     }
 
     async fn list_sponsored(&self) -> Result<Vec<crate::model::SponsoredSlot>> {
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let pairs =
-            tokio::task::spawn_blocking(move || engine.lock().unwrap().prefix(NS_SPONSORED, b""))
+            tokio::task::spawn_blocking(move || engine.with_read(|e| e.prefix(NS_SPONSORED, b"")))
                 .await??;
         pairs.into_iter().map(|(_, v)| decode(&v)).collect()
     }
@@ -619,9 +649,9 @@ impl StorageEngine for EdgeStoreStorage {
     async fn put_suppression(&self, sup: &crate::model::Suppression) -> Result<()> {
         let key = sup.id.as_bytes().to_vec();
         let value = encode(sup)?;
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().put(NS_SUPPRESSIONS, &key, &value)
+            engine.with_write(|e| e.put(NS_SUPPRESSIONS, &key, &value))
         })
         .await?
         .context("put_suppression failed")?;
@@ -630,17 +660,17 @@ impl StorageEngine for EdgeStoreStorage {
 
     async fn delete_suppression(&self, id: &str) -> Result<()> {
         let key = id.as_bytes().to_vec();
-        let engine = Arc::clone(&self.engine);
-        tokio::task::spawn_blocking(move || engine.lock().unwrap().delete(NS_SUPPRESSIONS, &key))
+        let engine = self.engine.clone();
+        tokio::task::spawn_blocking(move || engine.with_write(|e| e.delete(NS_SUPPRESSIONS, &key)))
             .await?
             .context("delete_suppression failed")?;
         Ok(())
     }
 
     async fn list_suppressions(&self) -> Result<Vec<crate::model::Suppression>> {
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let pairs = tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().prefix(NS_SUPPRESSIONS, b"")
+            engine.with_read(|e| e.prefix(NS_SUPPRESSIONS, b""))
         })
         .await??;
         pairs.into_iter().map(|(_, v)| decode(&v)).collect()

@@ -3,29 +3,67 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use edgestore::{Dtype, EdgestoreConfig, Engine, Metric, VectorEngine, VectorRecord};
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 const NS_VECTORS: &[u8] = b"vectors";
 
+#[derive(Clone)]
+enum EngineRef {
+    Rw(Arc<RwLock<Engine>>),
+    Ex(Arc<Mutex<Engine>>),
+}
+
+impl EngineRef {
+    fn with_read<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&Engine) -> R,
+    {
+        match self {
+            Self::Rw(rw) => f(&rw.read().unwrap()),
+            Self::Ex(ex) => f(&ex.lock().unwrap()),
+        }
+    }
+
+    fn with_write<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut Engine) -> R,
+    {
+        match self {
+            Self::Rw(rw) => f(&mut rw.write().unwrap()),
+            Self::Ex(ex) => f(&mut ex.lock().unwrap()),
+        }
+    }
+}
+
 pub struct EdgeStoreVectorIndex {
-    engine: Arc<Mutex<Engine>>,
+    engine: EngineRef,
     model_id: Option<String>,
     dims: Option<usize>,
 }
 
 impl EdgeStoreVectorIndex {
-    /// Create from a pre-opened shared engine.
+    /// Create from a pre-opened shared engine (standalone, RwLock).
     ///
     /// Preferred over `open` when storage and vector index share one engine.
     pub fn from_engine(
-        engine: Arc<Mutex<Engine>>,
+        engine: Arc<RwLock<Engine>>,
         model_id: Option<String>,
         dims: Option<usize>,
     ) -> Result<Self> {
         // Warm HNSW index into RAM so first search after startup isn't cold.
         // Ignore error — a missing or empty index is fine (first run, no vectors yet).
+        let _ = engine.read().unwrap().preload_vector_index(NS_VECTORS);
+        Ok(Self { engine: EngineRef::Rw(engine), model_id, dims })
+    }
+
+    /// Create from a replicated engine (Mutex, single-writer required).
+    pub fn from_mutex_engine(
+        engine: Arc<Mutex<Engine>>,
+        model_id: Option<String>,
+        dims: Option<usize>,
+    ) -> Result<Self> {
         let _ = engine.lock().unwrap().preload_vector_index(NS_VECTORS);
-        Ok(Self { engine, model_id, dims })
+        Ok(Self { engine: EngineRef::Ex(engine), model_id, dims })
     }
 
     /// Convenience: open a new engine at `path` and wrap it.
@@ -33,9 +71,10 @@ impl EdgeStoreVectorIndex {
     /// Prefer `from_engine` when a storage backend shares the same engine.
     pub fn open(path: impl AsRef<Path>, model_id: Option<String>, dims: Option<usize>) -> Result<Self> {
         let config = EdgestoreConfig::new(path.as_ref());
-        let mut engine = Engine::open(config).context("failed to open EdgeStore vector index")?;
-        let _ = engine.preload_vector_index(NS_VECTORS);
-        Self::from_engine(Arc::new(Mutex::new(engine)), model_id, dims)
+        let engine = Engine::open(config).context("failed to open EdgeStore vector index")?;
+        let arc = Arc::new(RwLock::new(engine));
+        let _ = arc.read().unwrap().preload_vector_index(NS_VECTORS);
+        Ok(Self { engine: EngineRef::Rw(arc), model_id, dims })
     }
 }
 
@@ -49,9 +88,9 @@ impl VectorIndex for EdgeStoreVectorIndex {
         let key = id.as_bytes().to_vec();
         let dims = vector.len() as u16;
         let data = f32_to_bytes(vector);
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().vector_put(NS_VECTORS, &key, dims, Dtype::F32, &data)
+            engine.with_write(|e| e.vector_put(NS_VECTORS, &key, dims, Dtype::F32, &data))
         })
         .await?
         .context("vector_put failed")?;
@@ -60,9 +99,9 @@ impl VectorIndex for EdgeStoreVectorIndex {
 
     async fn delete(&self, id: &str) -> Result<()> {
         let key = id.as_bytes().to_vec();
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().vector_delete(NS_VECTORS, &key)
+            engine.with_write(|e| e.vector_delete(NS_VECTORS, &key))
         })
         .await?
         .context("vector_delete failed")?;
@@ -73,9 +112,10 @@ impl VectorIndex for EdgeStoreVectorIndex {
         let dims = query.len() as u16;
         let data = f32_to_bytes(query);
         let query_record = VectorRecord { dims, dtype: Dtype::F32, data };
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         let results = tokio::task::spawn_blocking(move || {
-            engine.lock().unwrap().vector_search(NS_VECTORS, &query_record, top_k, Metric::Cosine)
+            // vector_search is &self in edgestore 1.8 — read lock is sufficient.
+            engine.with_read(|e| e.vector_search(NS_VECTORS, &query_record, top_k, Metric::Cosine))
         })
         .await?
         .context("vector_search failed")?;
@@ -91,11 +131,12 @@ impl VectorIndex for EdgeStoreVectorIndex {
     }
 
     async fn flush(&self) -> Result<()> {
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         tokio::task::spawn_blocking(move || -> Result<()> {
-            let mut eng = engine.lock().unwrap();
-            eng.flush().context("flush failed")?;
-            eng.build_vector_index(NS_VECTORS).context("build_vector_index failed")
+            engine.with_write(|eng| {
+                eng.flush().context("flush failed")?;
+                eng.build_vector_index(NS_VECTORS).context("build_vector_index failed")
+            })
         })
         .await??;
         Ok(())
@@ -110,15 +151,14 @@ impl VectorIndex for EdgeStoreVectorIndex {
     }
 
     async fn stats(&self) -> Result<VectorIndexStats> {
-        let engine = Arc::clone(&self.engine);
+        let engine = self.engine.clone();
         tokio::task::spawn_blocking(move || -> Result<VectorIndexStats> {
-            let eng = engine.lock().unwrap();
-            // vector_count returns Some(n) if HNSW index is loaded in memory
-            // (preload_vector_index ran at open time). None means no vectors yet.
-            let vector_count = eng.vector_count(NS_VECTORS).unwrap_or(0);
-            Ok(VectorIndexStats {
-                vector_count,
-                index_bytes: crate::dir_bytes(eng.db_path()),
+            engine.with_read(|eng| {
+                let vector_count = eng.vector_count(NS_VECTORS).unwrap_or(0);
+                Ok(VectorIndexStats {
+                    vector_count,
+                    index_bytes: crate::dir_bytes(eng.db_path()),
+                })
             })
         })
         .await?

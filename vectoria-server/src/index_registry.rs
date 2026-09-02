@@ -148,7 +148,7 @@ impl IndexRegistry {
             };
             let raw = Engine::open(EdgestoreConfig::new(&index_dir))
                 .map_err(|_| CreateIndexError::BuildFailed)?;
-            let engine_arc = Arc::new(std::sync::Mutex::new(raw));
+            let engine_arc = Arc::new(std::sync::RwLock::new(raw));
             let store = Arc::new(EdgeStoreStorage::from_engine(Arc::clone(&engine_arc)));
             let vidx = Arc::new(
                 EdgeStoreVectorIndex::from_engine(
