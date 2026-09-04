@@ -187,7 +187,9 @@ impl SearchEngine {
         let weights = req.ranking_weights.clone().unwrap_or_else(|| self.default_weights.clone());
         let limit = req.limit.min(MAX_LIMIT);
         let offset = req.offset.min(MAX_OFFSET);
-        let candidate_k = (limit + offset) * 5;
+        let candidate_k = req.candidate_pool
+            .unwrap_or((limit + offset) * 5)
+            .clamp(limit + offset, crate::model::MAX_CANDIDATE_POOL);
 
         let query_embedder = self.query_embedder.as_deref().unwrap_or(self.embedding.as_ref());
         let query_vector = match req.mode {

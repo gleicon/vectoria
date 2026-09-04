@@ -191,10 +191,23 @@ impl SearchEngineBuilder {
 /// use vectoria_core::model::{SearchRequest, SearchMode};
 ///
 /// let engine = SearchEngineSync::new().unwrap();
+///
+/// // Standard search — candidate pool defaults to (limit + offset) * 5.
 /// let results = engine.search(SearchRequest {
 ///     q: "running shoes".into(),
 ///     mode: SearchMode::Hybrid,
 ///     limit: 10,
+///     ..Default::default()
+/// }).unwrap();
+///
+/// // Wide-pool search: retrieve 400 candidates before reranking, then return top 20.
+/// // Improves recall on large catalogs at the cost of slightly more work.
+/// let results_wide = engine.search(SearchRequest {
+///     q: "running shoes".into(),
+///     mode: SearchMode::Hybrid,
+///     limit: 20,
+///     rerank: true,
+///     candidate_pool: Some(400),
 ///     ..Default::default()
 /// }).unwrap();
 /// ```

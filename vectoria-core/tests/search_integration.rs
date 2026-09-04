@@ -51,6 +51,7 @@ async fn test_index_and_search_basic() {
         aggregate: None,
         explain: false,
         rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     assert!(resp.total > 0, "should return results for 'running shoe'");
@@ -67,6 +68,7 @@ async fn test_index_and_delete() {
         q: "Temporary Product".into(), limit: 5, offset: 0,
         mode: SearchMode::Hybrid, filters: None, ranking_weights: None,
         aggregate: None, explain: false, rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
     assert!(resp.hits.iter().any(|h| h.id == "del1"));
 
@@ -75,6 +77,7 @@ async fn test_index_and_delete() {
         q: "Temporary Product".into(), limit: 5, offset: 0,
         mode: SearchMode::Bm25, filters: None, ranking_weights: None,
         aggregate: None, explain: false, rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
     assert!(!resp2.hits.iter().any(|h| h.id == "del1"), "deleted product must not appear");
 }
@@ -95,6 +98,7 @@ async fn test_metadata_filters() {
         aggregate: None,
         explain: false,
         rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     assert!(resp.hits.iter().all(|h| h.id != "f2"), "out-of-stock product must be filtered");
@@ -113,6 +117,7 @@ async fn test_aggregations() {
         mode: SearchMode::Hybrid, filters: None, ranking_weights: None,
         aggregate: Some(vec!["brand".to_string()]),
         explain: false, rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     let aggs = resp.aggregations.expect("aggregations should be present");
@@ -130,6 +135,7 @@ async fn test_explainability() {
         q: "Explainable".into(), limit: 5, offset: 0,
         mode: SearchMode::Hybrid, filters: None, ranking_weights: None,
         aggregate: None, explain: true, rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     for hit in &resp.hits {
@@ -206,6 +212,7 @@ async fn test_event_recording_and_signals() {
         q: "shoe".into(), limit: 5, offset: 0,
         mode: SearchMode::Hybrid, filters: None, ranking_weights: None,
         aggregate: None, explain: false, rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     assert!(resp.hits.iter().any(|h| h.id == "ev1"), "ev1 should appear in results");
@@ -234,6 +241,7 @@ async fn test_query_ctr_boosts_clicked_product() {
         q: "running shoe".into(), limit: 10, offset: 0,
         mode: SearchMode::Hybrid, filters: None, ranking_weights: None,
         aggregate: None, explain: true, rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     let ctr1 = resp.hits.iter().find(|h| h.id == "ctr1").expect("ctr1 must be in results");
@@ -262,6 +270,7 @@ async fn test_bm25_mode_only() {
         q: "Bluetooth".into(), limit: 5, offset: 0,
         mode: SearchMode::Bm25, filters: None, ranking_weights: None,
         aggregate: None, explain: false, rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     assert!(resp.hits.iter().any(|h| h.id == "b1"),
@@ -290,6 +299,7 @@ async fn test_pre_computed_vector_ingestion() {
         q: "Pre-vectorized".into(), limit: 5, offset: 0,
         mode: SearchMode::Hybrid, filters: None, ranking_weights: None,
         aggregate: None, explain: false, rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     assert!(resp.hits.iter().any(|h| h.id == "pv1"),
@@ -313,12 +323,14 @@ async fn test_pagination() {
         q: "shoe".into(), limit: 5, offset: 0,
         mode: SearchMode::Hybrid, filters: None, ranking_weights: None,
         aggregate: None, explain: false, rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     let page2 = engine.search(SearchRequest {
         q: "shoe".into(), limit: 5, offset: 5,
         mode: SearchMode::Hybrid, filters: None, ranking_weights: None,
         aggregate: None, explain: false, rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     assert_eq!(page1.hits.len(), 5, "page 1 should have 5 hits");
@@ -341,6 +353,7 @@ async fn test_stats_query_count_and_latency_p95() {
             q: "shoe".into(), limit: 5, offset: 0,
             mode: SearchMode::Hybrid, filters: None, ranking_weights: None,
             aggregate: None, explain: false, rerank: false, cluster: false, snippets: false,
+            candidate_pool: None,
         }).await.unwrap();
     }
 
@@ -359,12 +372,14 @@ async fn test_stats_query_count_ignores_cache_hits() {
         q: "Cached".into(), limit: 5, offset: 0,
         mode: SearchMode::Hybrid, filters: None, ranking_weights: None,
         aggregate: None, explain: false, rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     engine.search(SearchRequest {
         q: "Cached".into(), limit: 5, offset: 0,
         mode: SearchMode::Hybrid, filters: None, ranking_weights: None,
         aggregate: None, explain: false, rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     let stats = engine.stats().await.unwrap();
@@ -410,6 +425,7 @@ async fn test_explain_score_breakdown_anatomy() {
         aggregate: None,
         explain: true,
         rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     println!("\n=== Explain output for 'running shoe' ===");

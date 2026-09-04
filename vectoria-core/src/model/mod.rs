@@ -177,9 +177,20 @@ pub struct SearchRequest {
     /// Requires re-indexing after upgrading from edgestore < 1.6 for non-empty results.
     #[serde(default)]
     pub snippets: bool,
+    /// Number of candidates retrieved from BM25 and ANN before hybrid scoring and truncation
+    /// to `limit`. Controls the retrieve-wide-then-rerank window.
+    ///
+    /// Default: `(limit + offset) * 5` (e.g. 100 for limit=20).
+    /// Set higher (e.g. 400) for large catalogs or when using `rerank: true` to give the
+    /// scorer a wider pool — matching the pattern used by production search engines
+    /// (Labrador retrieves 400 candidates before reranking to the final result set).
+    /// Clamped to `[limit + offset, 1000]`.
+    #[serde(default)]
+    pub candidate_pool: Option<usize>,
 }
 
 pub const DEFAULT_LIMIT: usize = 20;
+pub const MAX_CANDIDATE_POOL: usize = 1000;
 fn default_limit() -> usize { DEFAULT_LIMIT }
 fn default_mode() -> SearchMode { SearchMode::Hybrid }
 
@@ -197,6 +208,7 @@ impl Default for SearchRequest {
             rerank: false,
             cluster: false,
             snippets: false,
+            candidate_pool: None,
         }
     }
 }

@@ -52,6 +52,7 @@ async fn test_edgestore_index_and_search() {
         aggregate: None,
         explain: false,
         rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     assert!(resp.total > 0, "should find results for 'running shoe'");
@@ -77,6 +78,7 @@ async fn test_edgestore_delete_persists() {
         aggregate: None,
         explain: false,
         rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     assert!(!resp.hits.iter().any(|h| h.id == "del1"),
@@ -101,6 +103,7 @@ async fn test_edgestore_bm25_search() {
         aggregate: None,
         explain: false,
         rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     assert!(resp.hits.iter().any(|h| h.id == "bm1"),
@@ -128,6 +131,7 @@ async fn test_edgestore_vector_search() {
         aggregate: None,
         explain: false,
         rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     assert!(resp.total > 0, "semantic search should return results");
@@ -158,6 +162,7 @@ async fn test_edgestore_query_ctr_boosts_clicked_product() {
         aggregate: None,
         explain: false,
         rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     let ids: Vec<&str> = resp.hits.iter().map(|h| h.id.as_str()).collect();
@@ -273,6 +278,7 @@ async fn test_snippets_request_returns_hits_without_panic() {
         rerank: false,
         cluster: false,
         snippets: true,
+        candidate_pool: None,
     }).await.unwrap();
 
     assert!(resp.total > 0, "snippets search must return results");
@@ -302,6 +308,7 @@ async fn test_non_snippets_request_returns_scan_stats() {
         rerank: false,
         cluster: false,
         snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     assert!(resp.scan_stats.is_some(), "non-snippets BM25 path must populate scan_stats");
@@ -331,6 +338,7 @@ async fn test_cached_product_count_matches_indexed_count() {
         rerank: false,
         cluster: false,
         snippets: false,
+        candidate_pool: None,
     }).await.unwrap();
 
     if let Some(stats) = resp.scan_stats {

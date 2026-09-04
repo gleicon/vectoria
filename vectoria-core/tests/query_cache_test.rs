@@ -20,6 +20,7 @@ async fn test_query_cache_second_call_skips_embedding() {
         aggregate: None,
         explain: false,
         rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     };
 
     engine.search(req()).await.unwrap();
@@ -47,6 +48,7 @@ async fn test_query_cache_different_queries_not_shared() {
         aggregate: None,
         explain: false,
         rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     };
 
     engine.search(search("yoga")).await.unwrap();
@@ -70,6 +72,7 @@ async fn test_explain_not_cached() {
         aggregate: None,
         explain: true,
         rerank: false, cluster: false, snippets: false,
+        candidate_pool: None,
     };
 
     engine.search(req()).await.unwrap();
