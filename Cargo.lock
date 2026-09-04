@@ -1227,9 +1227,9 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "edgestore"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc79920a9cc548d405fee8535e63f9564e779ad9aaa4a058f2c7849d9302ff9c"
+checksum = "1b1214e7d0b8b5a5490f0449ad08b45e8a3b87665db532e48b0ac770cd922332"
 dependencies = [
  "blake3",
  "byteorder",
@@ -1249,9 +1249,9 @@ dependencies = [
 
 [[package]]
 name = "edgestore-repl"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d66bfb4e97bd3b1f94d0e8ee2717edec6fa0edb4dcada8475bf3c03bd40046c6"
+checksum = "c9cf45c702e662f042c5cf20df7778ad69646e6ecad20253affe8114b893637c"
 dependencies = [
  "blake3",
  "edgestore",
@@ -3312,7 +3312,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
