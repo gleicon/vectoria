@@ -27,6 +27,7 @@ edgestore = { workspace = true }
 bm25 = { workspace = true }
 symspell = { workspace = true }
 foyer = { workspace = true }
+flate2 = "1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "rt-multi-thread", "macros"] }

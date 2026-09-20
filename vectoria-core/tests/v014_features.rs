@@ -19,8 +19,8 @@ fn req(q: &str) -> SearchRequest {
         rerank: false,
         cluster: false,
         snippets: false,
+        candidate_pool: None,
     }
-    candidate_pool: None,
 }
 
 async fn make_engine() -> vectoria_core::search::SearchEngine {

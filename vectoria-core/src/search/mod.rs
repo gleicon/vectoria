@@ -23,8 +23,8 @@ use llm_rewriter::LlmRewriter;
 use query_cache::QueryResultCache;
 use reranker::CrossEncoderReranker;
 use scoring::{
-    compute_aggregations, make_cache_key, matches_filters, percentile_p95, score_candidate,
-    CandidateScore,
+    compute_aggregations, make_cache_key, matches_filters, ncd_similarity, percentile_p95,
+    score_candidate, CandidateScore,
 };
 use spell::SpellCorrector;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -187,9 +187,10 @@ impl SearchEngine {
         let weights = req.ranking_weights.clone().unwrap_or_else(|| self.default_weights.clone());
         let limit = req.limit.min(MAX_LIMIT);
         let offset = req.offset.min(MAX_OFFSET);
+        let lo = (limit + offset).min(crate::model::MAX_CANDIDATE_POOL);
         let candidate_k = req.candidate_pool
             .unwrap_or((limit + offset) * 5)
-            .clamp(limit + offset, crate::model::MAX_CANDIDATE_POOL);
+            .clamp(lo, crate::model::MAX_CANDIDATE_POOL);
 
         let query_embedder = self.query_embedder.as_deref().unwrap_or(self.embedding.as_ref());
         let query_vector = match req.mode {
@@ -201,11 +202,10 @@ impl SearchEngine {
         let mut snippet_map: HashMap<String, Vec<String>> = HashMap::new();
 
         if let Some(ref qv) = query_vector {
-            for (id, semantic_score) in self.vector_index.search(qv, candidate_k).await? {
-                candidate_scores
-                    .entry(id)
-                    .or_default()
-                    .semantic = semantic_score;
+            for (rank, (id, semantic_score)) in self.vector_index.search(qv, candidate_k).await?.into_iter().enumerate() {
+                let c = candidate_scores.entry(id).or_default();
+                c.semantic = semantic_score;
+                c.semantic_rank = rank + 1;
             }
         }
 
@@ -270,11 +270,13 @@ impl SearchEngine {
             };
 
             // In BM25-only mode, no semantic search has populated candidate_scores yet.
-            // Pre-seed from BM25 hits and record their BM25 score so expand_query_terms
-            // can distinguish BM25-proven candidates from low-confidence vector candidates.
+            // Pre-seed from BM25 hits so expand_query_terms can distinguish BM25-proven
+            // candidates from low-confidence vector candidates.
             if candidate_scores.is_empty() {
-                for (id, score) in &bm25_results {
-                    candidate_scores.entry(id.clone()).or_default().bm25 = *score;
+                for (rank, (id, score)) in bm25_results.iter().enumerate() {
+                    let c = candidate_scores.entry(id.clone()).or_default();
+                    c.bm25 = *score;
+                    c.bm25_rank = rank + 1;
                 }
             }
 
@@ -291,16 +293,23 @@ impl SearchEngine {
             } else {
                 base_q.clone()
             };
-            let final_bm25 = if expanded_q != req.q {
+            let mut final_bm25 = if expanded_q != req.q {
                 self.storage.search_text(&expanded_q, candidate_k, req.filters.as_ref()).await.unwrap_or_default()
             } else {
                 bm25_results
             };
+            // Sort by (score DESC, id ASC) before rank assignment so that identically-scored
+            // documents always get the same rank across calls — required for deterministic
+            // RRF scores and stable pagination.
+            final_bm25.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal).then_with(|| a.0.cmp(&b.0)));
 
-            let max_bm25 = final_bm25.iter().map(|(_, s)| *s).fold(0.0f32, f32::max);
-            for (id, raw_score) in final_bm25 {
-                let normalized = if max_bm25 > 0.0 { raw_score / max_bm25 } else { 0.0 };
-                candidate_scores.entry(id).or_default().bm25 = normalized;
+            // Populate BM25 rank for RRF. Raw scores are kept for expand_query_terms
+            // filtering (bm25 > 0 identifies text-relevant candidates) but rank is what
+            // feeds the fusion formula — no normalization needed.
+            for (rank, (id, raw_score)) in final_bm25.into_iter().enumerate() {
+                let c = candidate_scores.entry(id).or_default();
+                c.bm25 = raw_score;
+                c.bm25_rank = rank + 1;
             }
             effective_q = expanded_q;
         } else {
@@ -319,11 +328,18 @@ impl SearchEngine {
 
         let mut hits: Vec<Hit> = Vec::new();
         let mut hit_vectors: Vec<Option<Vec<f32>>> = Vec::new();
-        for (id, candidate) in candidate_scores {
+        for (id, mut candidate) in candidate_scores {
             let Some(product) = self.storage.get_product(&id).await? else { continue };
             if let Some(filters) = &req.filters {
                 if !matches_filters(&product.metadata, filters) { continue; }
             }
+
+            // NCD: language-agnostic compression similarity between query and product text.
+            // Computed here after product fetch since we need the actual document text.
+            let product_text = product.text.as_deref()
+                .map(|t| t.to_string())
+                .unwrap_or_else(|| build_product_text(&product.metadata, self.field_weights.as_ref()));
+            candidate.ncd = ncd_similarity(&effective_q, &product_text);
 
             let signals = self.storage.get_product_signals(&id).await?;
             let availability = product.metadata.get("in_stock")
@@ -348,7 +364,7 @@ impl SearchEngine {
             });
         }
 
-        hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal).then_with(|| a.id.cmp(&b.id)));
 
         if req.rerank {
             if self.reranker.is_none() {
