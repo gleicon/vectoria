@@ -1,5 +1,6 @@
 pub mod bm25_index;
 pub mod clustering;
+pub mod gazetteer;
 pub mod llm_rewriter;
 pub mod query_cache;
 pub mod query_parser;
@@ -58,6 +59,7 @@ pub struct SearchEngine {
     query_count: Arc<AtomicU64>,
     latency_window: Arc<Mutex<VecDeque<u32>>>,
     field_weights: Option<HashMap<String, usize>>,
+    gazetteer: gazetteer::Gazetteer,
 }
 
 impl SearchEngine {
@@ -81,7 +83,15 @@ impl SearchEngine {
             query_count: Arc::new(AtomicU64::new(0)),
             latency_window: Arc::new(Mutex::new(VecDeque::with_capacity(LATENCY_WINDOW))),
             field_weights: None,
+            gazetteer: gazetteer::Gazetteer::with_default_fields(),
         }
+    }
+
+    /// Configure which metadata fields the gazetteer extracts attribute values from.
+    /// Defaults to `["brand", "color", "category"]`. Call before any `index()` calls.
+    pub fn with_gazetteer_fields(mut self, fields: Vec<String>) -> Self {
+        self.gazetteer = self.gazetteer.with_fields(fields);
+        self
     }
 
     /// Set a separate query-side embedding provider (two-tower retrieval).
@@ -153,6 +163,7 @@ impl SearchEngine {
         self.storage.index_text(&product.id, &product_text, &product.metadata).await?;
         self.autocomplete_bm25.upsert(&product.id, &product_text);
         self.spell.add_text(&product_text);
+        self.gazetteer.add_product(&product);
         Ok(())
     }
 
@@ -197,9 +208,14 @@ impl SearchEngine {
         // and remove CEP noise from the query before retrieval.
         let parsed = query_parser::parse(&req.q);
         let search_q = parsed.q;
-        // User-provided filters override auto-detected ones on key collision.
+        // Build effective filters: gazetteer attribute signals (lowest priority),
+        // then query_parser structural signals, then user-provided filters (highest).
         let effective_filters: Option<HashMap<String, serde_json::Value>> = {
-            let mut merged = parsed.filters;
+            let mut merged: HashMap<String, serde_json::Value> = HashMap::new();
+            for (field, value) in self.gazetteer.extract_filters(&search_q) {
+                merged.insert(field, value);
+            }
+            merged.extend(parsed.filters);
             if let Some(user_filters) = &req.filters {
                 merged.extend(user_filters.iter().map(|(k, v)| (k.clone(), v.clone())));
             }
