@@ -2,6 +2,7 @@ pub mod bm25_index;
 pub mod clustering;
 pub mod llm_rewriter;
 pub mod query_cache;
+pub mod query_parser;
 pub mod reranker;
 pub mod scoring;
 pub mod spell;
@@ -184,7 +185,7 @@ impl SearchEngine {
         };
 
         let start = Instant::now();
-        let weights = req.ranking_weights.clone().unwrap_or_else(|| self.default_weights.clone());
+        let mut weights = req.ranking_weights.clone().unwrap_or_else(|| self.default_weights.clone());
         let limit = req.limit.min(MAX_LIMIT);
         let offset = req.offset.min(MAX_OFFSET);
         let lo = (limit + offset).min(crate::model::MAX_CANDIDATE_POOL);
@@ -192,10 +193,28 @@ impl SearchEngine {
             .unwrap_or((limit + offset) * 5)
             .clamp(lo, crate::model::MAX_CANDIDATE_POOL);
 
+        // Structural query understanding: extract price ceilings, delivery urgency,
+        // and remove CEP noise from the query before retrieval.
+        let parsed = query_parser::parse(&req.q);
+        let search_q = parsed.q;
+        // User-provided filters override auto-detected ones on key collision.
+        let effective_filters: Option<HashMap<String, serde_json::Value>> = {
+            let mut merged = parsed.filters;
+            if let Some(user_filters) = &req.filters {
+                merged.extend(user_filters.iter().map(|(k, v)| (k.clone(), v.clone())));
+            }
+            if merged.is_empty() { None } else { Some(merged) }
+        };
+        // Boost availability weight for urgency queries only when user has not provided
+        // explicit ranking weights (to avoid overriding deliberate configurations).
+        if parsed.availability_boost != 1.0 && req.ranking_weights.is_none() {
+            weights.availability = (weights.availability * parsed.availability_boost).min(1.0);
+        }
+
         let query_embedder = self.query_embedder.as_deref().unwrap_or(self.embedding.as_ref());
         let query_vector = match req.mode {
             SearchMode::Bm25 => None,
-            _ => Some(query_embedder.embed(&req.q).await?),
+            _ => Some(query_embedder.embed(&search_q).await?),
         };
 
         let mut candidate_scores: HashMap<String, CandidateScore> = HashMap::new();
@@ -221,7 +240,7 @@ impl SearchEngine {
             // stats path: call search_text_with_stats; snippets field stays None.
             let bm25_results = if req.snippets {
                 let snippet_results = self.storage
-                    .search_text_with_snippets(&req.q, candidate_k, 80)
+                    .search_text_with_snippets(&search_q, candidate_k, 80)
                     .await
                     .unwrap_or_default();
                 let pairs = snippet_results
@@ -236,7 +255,7 @@ impl SearchEngine {
                 pairs
             } else {
                 let (bm25_results_tmp, stats) = self.storage
-                    .search_text_with_stats(&req.q, candidate_k, req.filters.as_ref())
+                    .search_text_with_stats(&search_q, candidate_k, effective_filters.as_ref())
                     .await
                     .unwrap_or_else(|_| (vec![], None));
                 bm25_scan_stats = stats;
@@ -244,15 +263,15 @@ impl SearchEngine {
             };
 
             let base_q = if bm25_results.is_empty() {
-                let corrected = self.spell.correct(&req.q);
-                if corrected != req.q {
+                let corrected = self.spell.correct(&search_q);
+                if corrected != search_q {
                     spell_corrected = true;
                     corrected
                 } else {
-                    req.q.clone()
+                    search_q.clone()
                 }
             } else {
-                req.q.clone()
+                search_q.clone()
             };
 
             // LLM rewriting: fires when BM25 recall is low (< half the desired limit).
@@ -293,8 +312,8 @@ impl SearchEngine {
             } else {
                 base_q.clone()
             };
-            let mut final_bm25 = if expanded_q != req.q {
-                self.storage.search_text(&expanded_q, candidate_k, req.filters.as_ref()).await.unwrap_or_default()
+            let mut final_bm25 = if expanded_q != search_q {
+                self.storage.search_text(&expanded_q, candidate_k, effective_filters.as_ref()).await.unwrap_or_default()
             } else {
                 bm25_results
             };
@@ -313,7 +332,7 @@ impl SearchEngine {
             }
             effective_q = expanded_q;
         } else {
-            effective_q = req.q.clone();
+            effective_q = search_q.clone();
         }
 
         let query_ctrs = self.storage.get_query_ctrs(&req.q).await.unwrap_or_default();
@@ -330,7 +349,7 @@ impl SearchEngine {
         let mut hit_vectors: Vec<Option<Vec<f32>>> = Vec::new();
         for (id, mut candidate) in candidate_scores {
             let Some(product) = self.storage.get_product(&id).await? else { continue };
-            if let Some(filters) = &req.filters {
+            if let Some(filters) = &effective_filters {
                 if !matches_filters(&product.metadata, filters) { continue; }
             }
 
