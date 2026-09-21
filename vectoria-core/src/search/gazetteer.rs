@@ -1,3 +1,47 @@
+//! # Query Understanding Pipeline — Stage 2: Catalog Gazetteer
+//!
+//! The gazetteer is an in-memory attribute lookup built incrementally from indexed
+//! product metadata. It connects the query understanding pipeline to the actual
+//! catalog — instead of pattern-matching against hardcoded keyword lists, Stage 2
+//! matches against values that genuinely exist in the index.
+//!
+//! ## How it works
+//!
+//! **At index time** (`index()` → `add_product()`): for each configured field
+//! (default: `brand`, `color`, `category`), the raw metadata value is stored in a
+//! case-insensitive lookup table. First-seen casing wins; the stored original-case
+//! value is what gets applied as a filter so it matches the metadata exactly.
+//!
+//! **At search time** (`search()` → `extract_filters()`): the cleaned query from
+//! Stage 1 is checked against all tracked values, using word-boundary matching to
+//! avoid partial matches ("Nikon" should not match inside "Nikonfuel").
+//!
+//! **Ambiguity rule**: if more than one value for a given field matches the query
+//! (e.g. both "Nike" and "Adidas" appear in "Nike vs Adidas"), no filter is applied
+//! for that field. Applying both would require an OR filter that is not yet
+//! supported; applying either one would be wrong.
+//!
+//! ## Lifecycle and staleness
+//!
+//! The gazetteer is **append-only**: deleted products do not remove their values.
+//! A stale value (brand deleted from catalog) produces a filter that matches zero
+//! products — no results for that query token, which is arguably correct (the brand
+//! really is gone). To fully clear stale entries, call `reindex_all()` on a fresh
+//! `SearchEngine` instance; `index()` repopulates the gazetteer from scratch.
+//!
+//! ## Tunable points
+//!
+//! | Constant / API                  | Effect                                          |
+//! |---------------------------------|-------------------------------------------------|
+//! | `MIN_LEN`                       | Minimum value length stored (default 2)         |
+//! | `Gazetteer::new(fields)`        | Fields to track (default brand/color/category)  |
+//! | `with_gazetteer_fields()`       | Builder API to override tracked fields          |
+//!
+//! ## Filter priority (reminder)
+//!
+//! Gazetteer signals have the **lowest** priority. `query_parser` signals (price,
+//! urgency) override them, and user-provided `req.filters` override everything.
+
 use std::collections::HashMap;
 use std::sync::RwLock;
 use crate::model::Product;

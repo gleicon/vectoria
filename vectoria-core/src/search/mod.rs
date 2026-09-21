@@ -205,17 +205,21 @@ impl SearchEngine {
             .clamp(lo, crate::model::MAX_CANDIDATE_POOL);
 
         // Structural query understanding: extract price ceilings, delivery urgency,
-        // and remove CEP noise from the query before retrieval.
+        // and remove CEP/CPF/CNPJ/phone noise from the query before retrieval.
         let parsed = query_parser::parse(&req.q);
         let search_q = parsed.q;
-        // Build effective filters: gazetteer attribute signals (lowest priority),
-        // then query_parser structural signals, then user-provided filters (highest).
+        // Build effective filters — priority: gazetteer < parser < user-provided.
+        let mut auto_signals: Vec<String> = parsed.applied;
         let effective_filters: Option<HashMap<String, serde_json::Value>> = {
             let mut merged: HashMap<String, serde_json::Value> = HashMap::new();
             for (field, value) in self.gazetteer.extract_filters(&search_q) {
+                auto_signals.push(format!("{}={}", field,
+                    value.as_str().unwrap_or_default()));
                 merged.insert(field, value);
             }
+            // parser signals override gazetteer on collision
             merged.extend(parsed.filters);
+            // user-provided filters always win
             if let Some(user_filters) = &req.filters {
                 merged.extend(user_filters.iter().map(|(k, v)| (k.clone(), v.clone())));
             }
@@ -359,6 +363,7 @@ impl SearchEngine {
             spell_corrected,
             query_expanded,
             llm_rewritten,
+            auto_signals,
         };
 
         let mut hits: Vec<Hit> = Vec::new();

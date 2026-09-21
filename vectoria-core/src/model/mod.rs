@@ -151,6 +151,11 @@ pub struct QueryContext {
     /// `true` if an LLM rewrote the query to improve low-recall results.
     #[serde(default)]
     pub llm_rewritten: bool,
+    /// Signals applied by the query parser and gazetteer before retrieval.
+    /// Examples: `["price_max=200.00", "in_stock=true", "removed:cpf", "brand=Nike"]`.
+    /// Empty when the query required no structural pre-processing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub auto_signals: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
