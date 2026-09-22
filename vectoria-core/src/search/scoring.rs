@@ -10,26 +10,20 @@ use crate::model::{
 const RRF_K: f32 = 60.0;
 
 /// Compute the gzip-compressed byte length of `text`.
-fn gzip_len(text: &str) -> usize {
+pub(super) fn gzip_len(text: &str) -> usize {
     let mut enc = GzEncoder::new(Vec::new(), Compression::fast());
     let _ = enc.write_all(text.as_bytes());
     enc.finish().map(|b| b.len()).unwrap_or(text.len())
 }
 
-/// Normalized Compression Distance (NCD) between query and document text.
-///
-/// NCD(a, b) = (C(a+b) - min(C(a), C(b))) / max(C(a), C(b))
-///
-/// Returns a value in [0, 1] where 0 = identical and 1 = maximally dissimilar.
-/// Converted to a similarity score (1 - NCD) before use.
-pub(super) fn ncd_similarity(query: &str, doc_text: &str) -> f32 {
+/// NCD similarity using a pre-computed query gzip length.
+/// Callers in a scoring loop should compute `gzip_len(query)` once and pass it here.
+pub(super) fn ncd_similarity(query_gz: f32, query: &str, doc_text: &str) -> f32 {
     if query.is_empty() || doc_text.is_empty() { return 0.0; }
-    let ca = gzip_len(query) as f32;
     let cb = gzip_len(doc_text) as f32;
     let combined = format!("{} {}", query, doc_text);
     let cab = gzip_len(&combined) as f32;
-    let ncd = (cab - ca.min(cb)) / ca.max(cb);
-    // Clamp to [0,1] — gzip overhead on very short strings can push NCD slightly above 1.
+    let ncd = (cab - query_gz.min(cb)) / query_gz.max(cb);
     1.0 - ncd.clamp(0.0, 1.0)
 }
 
@@ -60,10 +54,7 @@ pub(super) fn score_candidate(
     explain: bool,
     query_context: &QueryContext,
 ) -> ScoredCandidate {
-    // Retrieval signals fused via RRF: 1/(k + rank) for each signal the document
-    // was retrieved by. Documents not retrieved by a signal contribute 0 from that signal.
-    // RRF is scale-agnostic — BM25 and cosine scores live on incompatible scales;
-    // rank position is comparable across any retrieval method.
+    // RRF: rank position is scale-agnostic; BM25 and cosine scores are not comparable.
     let rrf_semantic = if candidate.semantic_rank > 0 {
         1.0 / (RRF_K + candidate.semantic_rank as f32)
     } else {
@@ -74,18 +65,10 @@ pub(super) fn score_candidate(
     } else {
         0.0
     };
-    // RRF score: weighted combination of per-signal rank contributions.
-    // weights.semantic and weights.bm25 tune relative emphasis between signals
-    // (default 0.7/0.3) without needing score normalization.
-    // NCD (gzip-based compression similarity) is a language-agnostic third sparse signal
-    // that adds to the BM25 channel — it captures repetitive/structural patterns that
-    // both BM25 and embeddings can miss. Weighted at half the BM25 weight to avoid
-    // over-indexing on very short queries.
+    // NCD: gzip-based sparse signal; catches structural patterns embeddings and BM25 miss.
     let ncd_contribution = candidate.ncd * weights.bm25 * 0.5;
     let rrf_score = rrf_semantic * weights.semantic + rrf_bm25 * weights.bm25 + ncd_contribution;
 
-    // Behavioral signals add on top of the RRF base. They are product-level signals
-    // (not query-dependent) and don't participate in RRF — they stay as weighted additive bonuses.
     let score = rrf_score
         + popularity * weights.popularity
         + availability * weights.availability
@@ -157,6 +140,49 @@ pub(super) fn compute_aggregations(
         }
     }
     aggs
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ncd_similarity_identical_strings() {
+        let q = "tênis nike running";
+        let qgz = gzip_len(q) as f32;
+        let score = ncd_similarity(qgz, q, q);
+        // Identical strings compress maximally together — score should be high.
+        assert!(score > 0.5, "identical strings should score > 0.5, got {score}");
+    }
+
+    #[test]
+    fn test_ncd_similarity_unrelated_strings() {
+        let q = "tênis nike running";
+        let doc = "refrigerador inox 400 litros frost free";
+        let qgz = gzip_len(q) as f32;
+        let score = ncd_similarity(qgz, q, doc);
+        // Unrelated strings should compress poorly together.
+        assert!(score < 0.5, "unrelated strings should score < 0.5, got {score}");
+    }
+
+    #[test]
+    fn test_ncd_similarity_empty_inputs_return_zero() {
+        let qgz = gzip_len("query") as f32;
+        assert_eq!(ncd_similarity(qgz, "query", ""), 0.0);
+        assert_eq!(ncd_similarity(0.0, "", "doc"), 0.0);
+    }
+
+    #[test]
+    fn test_ncd_precomputed_matches_inline() {
+        let q = "cadeira escritório ergonômica";
+        let doc = "cadeira de escritório ergonômica couro";
+        let qgz = gzip_len(q) as f32;
+        let s1 = ncd_similarity(qgz, q, doc);
+        // Calling twice with same inputs must be deterministic.
+        let s2 = ncd_similarity(qgz, q, doc);
+        assert_eq!(s1, s2);
+        assert!(s1 > 0.0, "similar strings should have positive score");
+    }
 }
 
 pub(super) fn percentile_p95(window: &VecDeque<u32>) -> u32 {

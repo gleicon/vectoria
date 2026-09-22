@@ -156,7 +156,7 @@ fn word_boundary_match(haystack: &str, needle: &str) -> bool {
             if before_ok && after_ok {
                 return true;
             }
-            start = abs + 1;
+            start = abs + haystack[abs..].chars().next().map_or(1, |c| c.len_utf8());
         } else {
             break;
         }
@@ -241,5 +241,15 @@ mod tests {
         let gaz = Gazetteer::with_default_fields();
         gaz.add_product(&product("p1", json!({"brand": "Nike"})));
         assert!(gaz.extract_filters("tênis running calçado").is_empty());
+    }
+
+    // Regression: start = abs + 1 panics when the found position is the first byte of a
+    // multi-byte char. "Ên" (ê = 2 bytes) found inside "bênigno" fails the before-boundary
+    // check (preceded by 'b'), then the old code sliced at the continuation byte.
+    #[test]
+    fn test_word_boundary_utf8_no_panic() {
+        assert!(!word_boundary_match("bênigno produto", "ên"));
+        // Confirm a true word-boundary match still works with multi-byte chars.
+        assert!(word_boundary_match("produto ên final", "ên"));
     }
 }
