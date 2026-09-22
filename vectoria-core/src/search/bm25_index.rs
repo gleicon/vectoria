@@ -58,7 +58,7 @@ impl Bm25Index {
             (inner.corpus.clone(), inner.generation)
         };
         let texts: Vec<&str> = snapshot.iter().map(|(_, t)| t.as_str()).collect();
-        let new_engine = SearchEngineBuilder::<u32>::with_corpus(Language::English, texts).build();
+        let new_engine = SearchEngineBuilder::<u32>::with_corpus(Language::Portuguese, texts).build();
 
         let mut inner = self.inner.lock().unwrap();
         if inner.generation == snap_gen {
@@ -67,7 +67,7 @@ impl Bm25Index {
         } else {
             // Corpus mutated during our build — rebuild under lock (rare concurrent-write path).
             let texts: Vec<&str> = inner.corpus.iter().map(|(_, t)| t.as_str()).collect();
-            inner.engine = Some(SearchEngineBuilder::<u32>::with_corpus(Language::English, texts).build());
+            inner.engine = Some(SearchEngineBuilder::<u32>::with_corpus(Language::Portuguese, texts).build());
             Self::run_search(inner.engine.as_ref().unwrap(), &inner.corpus, &normalized_query, limit)
         }
     }

@@ -29,10 +29,8 @@
 //! |                        | purely-alphabetic token; mixed tokens pass through|
 
 /// Normalize a text string for pt-BR phonetic equivalence.
-///
-/// Applies the rule table in module docs to every word-token in `text`.
-/// Non-alphabetic tokens (product codes, numbers, punctuation) pass through
-/// unchanged so codes like "Y-cable" are not mangled.
+/// Applies the rule table in module docs to every whitespace-delimited token.
+/// Purely-alphabetic tokens are normalized; mixed tokens (product codes, numbers) pass through.
 pub fn normalize(text: &str) -> String {
     text.split_whitespace()
         .map(|token| {
