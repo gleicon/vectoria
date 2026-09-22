@@ -2,6 +2,7 @@ pub mod bm25_index;
 pub mod clustering;
 pub mod gazetteer;
 pub mod llm_rewriter;
+pub mod phonetics;
 pub mod query_cache;
 pub mod query_parser;
 pub mod reranker;

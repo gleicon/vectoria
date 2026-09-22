@@ -1,5 +1,6 @@
 use bm25::{Language, SearchEngine, SearchEngineBuilder};
 use std::sync::Mutex;
+use super::phonetics;
 
 #[derive(Default)]
 struct BM25Inner {
@@ -19,11 +20,12 @@ impl Bm25Index {
     }
 
     pub fn upsert(&self, id: &str, text: &str) {
+        let normalized = phonetics::normalize(text);
         let mut inner = self.inner.lock().unwrap();
         if let Some(pos) = inner.corpus.iter().position(|(k, _)| k == id) {
-            inner.corpus[pos].1 = text.to_string();
+            inner.corpus[pos].1 = normalized;
         } else {
-            inner.corpus.push((id.to_string(), text.to_string()));
+            inner.corpus.push((id.to_string(), normalized));
         }
         inner.engine = None;
         inner.generation += 1;
@@ -37,6 +39,7 @@ impl Bm25Index {
     }
 
     pub fn search(&self, query: &str, limit: usize) -> Vec<(String, f32)> {
+        let normalized_query = phonetics::normalize(query);
         // Fast path: engine already cached — search under lock and return.
         {
             let inner = self.inner.lock().unwrap();
@@ -44,7 +47,7 @@ impl Bm25Index {
                 return Vec::new();
             }
             if let Some(engine) = &inner.engine {
-                return Self::run_search(engine, &inner.corpus, query, limit);
+                return Self::run_search(engine, &inner.corpus, &normalized_query, limit);
             }
         }
 
@@ -60,12 +63,12 @@ impl Bm25Index {
         let mut inner = self.inner.lock().unwrap();
         if inner.generation == snap_gen {
             inner.engine = Some(new_engine);
-            Self::run_search(inner.engine.as_ref().unwrap(), &inner.corpus, query, limit)
+            Self::run_search(inner.engine.as_ref().unwrap(), &inner.corpus, &normalized_query, limit)
         } else {
             // Corpus mutated during our build — rebuild under lock (rare concurrent-write path).
             let texts: Vec<&str> = inner.corpus.iter().map(|(_, t)| t.as_str()).collect();
             inner.engine = Some(SearchEngineBuilder::<u32>::with_corpus(Language::English, texts).build());
-            Self::run_search(inner.engine.as_ref().unwrap(), &inner.corpus, query, limit)
+            Self::run_search(inner.engine.as_ref().unwrap(), &inner.corpus, &normalized_query, limit)
         }
     }
 
@@ -79,7 +82,7 @@ impl Bm25Index {
 
     pub fn suggest(&self, prefix: &str, limit: usize) -> Vec<String> {
         let inner = self.inner.lock().unwrap();
-        let prefix_lower = prefix.to_lowercase();
+        let prefix_lower = phonetics::normalize(prefix);
         let mut seen = std::collections::HashSet::new();
         let mut suggestions = Vec::new();
         for (_, text) in &inner.corpus {
