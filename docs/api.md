@@ -18,7 +18,7 @@ No authentication required.
 
 Response:
 ```json
-{"status": "ok", "version": "0.1.16"}
+{"status": "ok", "version": "0.1.23"}
 ```
 
 ---
@@ -794,7 +794,7 @@ curl -sX POST http://localhost:7700/indexes/acme-corp/admin/pins \
 
 ```toml
 # Cargo.toml
-vectoria-core = "0.1.16"
+vectoria-core = "0.1.23"
 ```
 
 ### Async API
@@ -843,7 +843,7 @@ Point the engine at an existing database directory and call `reindex_all()` afte
 Add `edgestore` as a direct dependency alongside `vectoria-core`:
 
 ```toml
-vectoria-core = "0.1.16"
+vectoria-core = "0.1.23"
 edgestore = "1.0"
 ```
 
