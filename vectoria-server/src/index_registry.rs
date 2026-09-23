@@ -107,14 +107,18 @@ impl IndexRegistry {
             }
         }
 
-        // Rebuild BM25 in-memory index for every loaded engine.
-        // `build()` doesn't call reindex_all — the BM25 corpus is empty until this runs.
-        for name in &loaded {
-            if let Some(engine) = self.get(name) {
-                tracing::info!("reindexing '{}' BM25 from persisted store…", name);
-                if let Err(e) = engine.reindex_all().await {
-                    tracing::warn!("reindex_all failed for '{}': {}", name, e);
-                }
+        // Rebuild BM25 in-memory index for every loaded engine in background tasks so the
+        // HTTP listener can start immediately rather than waiting for all reindexes to finish.
+        for name in loaded {
+            if let Some(engine) = self.get(&name) {
+                tracing::info!("scheduling background BM25 reindex for '{}'…", name);
+                tokio::spawn(async move {
+                    if let Err(e) = engine.reindex_all().await {
+                        tracing::warn!("reindex_all failed for '{}': {}", name, e);
+                    } else {
+                        tracing::info!("BM25 reindex complete for '{}'", name);
+                    }
+                });
             }
         }
     }
