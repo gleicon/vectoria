@@ -161,7 +161,8 @@ impl SearchEngine {
         product.status = ProductStatus::Indexed;
         self.storage.put_product(&product).await?;
 
-        self.storage.index_text(&product.id, &product_text, &product.metadata).await?;
+        let normalized_text = phonetics::normalize(&product_text);
+        self.storage.index_text(&product.id, &normalized_text, &product.metadata).await?;
         self.autocomplete_bm25.upsert(&product.id, &product_text);
         self.spell.add_text(&product_text);
         self.gazetteer.add_product(&product);
@@ -250,11 +251,13 @@ impl SearchEngine {
         let mut llm_rewritten = false;
         let mut bm25_scan_stats: Option<crate::model::BM25ScanStats> = None;
         if matches!(req.mode, SearchMode::Hybrid | SearchMode::Bm25) {
+            // Normalize the query so diacritics match the normalized text stored at index time.
+            let normalized_search_q = phonetics::normalize(&search_q);
             // snippets path: call search_text_with_snippets; no scan_stats returned.
             // stats path: call search_text_with_stats; snippets field stays None.
             let bm25_results = if req.snippets {
                 let snippet_results = self.storage
-                    .search_text_with_snippets(&search_q, candidate_k, 80)
+                    .search_text_with_snippets(&normalized_search_q, candidate_k, 80)
                     .await
                     .unwrap_or_default();
                 let pairs = snippet_results
@@ -269,7 +272,7 @@ impl SearchEngine {
                 pairs
             } else {
                 let (bm25_results_tmp, stats) = self.storage
-                    .search_text_with_stats(&search_q, candidate_k, effective_filters.as_ref())
+                    .search_text_with_stats(&normalized_search_q, candidate_k, effective_filters.as_ref())
                     .await
                     .unwrap_or_else(|_| (vec![], None));
                 bm25_scan_stats = stats;
