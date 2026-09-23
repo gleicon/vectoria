@@ -62,11 +62,14 @@ impl IndexRegistry {
         }
     }
 
-    /// Load all previously-persisted indexes from `data_dir`.
+    /// Load all previously-persisted indexes from `data_dir` and rebuild their
+    /// in-memory BM25 indexes from stored products.
+    ///
     /// System indexes: `{data_dir}/{name}/`
     /// Tenant indexes: `{data_dir}/t/{tenant}/{index}/`
     pub async fn load_persisted(&self) {
         let Some(ref dir) = self.data_dir else { return };
+        let mut loaded: Vec<String> = Vec::new();
 
         // System indexes: flat entries in data_dir (skip "t/" tenant dir)
         if let Ok(entries) = std::fs::read_dir(dir) {
@@ -76,6 +79,8 @@ impl IndexRegistry {
                 if self.engines.read().unwrap().contains_key(&name) { continue; }
                 if let Err(e) = self.create(&name).await {
                     tracing::warn!("failed to reload system index '{}': {}", name, e);
+                } else {
+                    loaded.push(name);
                 }
             }
         }
@@ -94,8 +99,21 @@ impl IndexRegistry {
                         if self.engines.read().unwrap().contains_key(&key) { continue; }
                         if let Err(e) = self.create(&key).await {
                             tracing::warn!("failed to reload tenant index '{}': {}", key, e);
+                        } else {
+                            loaded.push(key);
                         }
                     }
+                }
+            }
+        }
+
+        // Rebuild BM25 in-memory index for every loaded engine.
+        // `build()` doesn't call reindex_all — the BM25 corpus is empty until this runs.
+        for name in &loaded {
+            if let Some(engine) = self.get(name) {
+                tracing::info!("reindexing '{}' BM25 from persisted store…", name);
+                if let Err(e) = engine.reindex_all().await {
+                    tracing::warn!("reindex_all failed for '{}': {}", name, e);
                 }
             }
         }
