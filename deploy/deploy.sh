@@ -77,24 +77,13 @@ if [[ "$MODE" == "full" || "$MODE" == "site" || "$MODE" == "platform" ]]; then
   "
 fi
 
-# ── Sync Rust source (needed for docker build) ─────────────────────────────
+# ── Sync Dockerfile (binary build — no Rust source needed on VPS) ─────────────
 if [[ "$MODE" == "full" ]]; then
-  echo "[sync] rust source..."
-  rsync -az --checksum --delete \
-    --exclude='.git/' \
-    --exclude='target/' \
-    --exclude='.claude/' \
-    --exclude='deploy/.env' \
-    --exclude='*.env' \
-    --exclude='webstore/' \
-    --exclude='website/' \
-    --exclude='platform/' \
-    --exclude='data/' \
-    --exclude='logs/' \
-    --exclude='vectoria-algolia/' \
+  echo "[sync] Dockerfile..."
+  rsync -az --checksum \
     -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=no" \
-    "$REPO_ROOT/" \
-    "$REMOTE_USER@$REMOTE_HOST:$APP_DIR/"
+    "$REPO_ROOT/Dockerfile" \
+    "$REMOTE_USER@$REMOTE_HOST:$APP_DIR/Dockerfile"
 fi
 
 # ── Update nginx config if changed ────────────────────────────────────────
@@ -116,11 +105,11 @@ fi
 # ── Rebuild + restart vectoria-server ─────────────────────────────────────
 if [[ "$MODE" == "full" ]]; then
   echo "[docker] rebuilding vectoria-server..."
-  CARGO_VERSION=$(grep '^version' "$REPO_ROOT/Cargo.toml" | head -1 | sed 's/.*"\(.*\)"/\1/')
+  VERSION=$(grep '^version' "$REPO_ROOT/Cargo.toml" | head -1 | sed 's/.*"\(.*\)"/\1/')
   $SSH "
     cd $APP_DIR
     sudo docker build \
-      --build-arg CARGO_VERSION=${CARGO_VERSION} \
+      --build-arg VERSION=${VERSION} \
       --target vectoria-full \
       -t vectoria:full . \
       -f Dockerfile
