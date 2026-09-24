@@ -18,7 +18,7 @@ No authentication required.
 
 Response:
 ```json
-{"status": "ok", "version": "0.1.23"}
+{"status": "ok", "version": "0.1.24"}
 ```
 
 ---
@@ -150,7 +150,7 @@ Fields:
 - `filters` — key/value pairs matched against product metadata. Special keys: `price_min`, `price_max`
 - `aggregate` — array of metadata field names to facet-count across all matched candidates
 - `explain` — include per-result score breakdown
-- `rerank` — apply cross-encoder reranking (requires `index.enable_reranker = true`)
+- `rerank` — apply cross-encoder reranking (requires `index.enable_reranker = true` in `vectoria.toml` or `VECTORIA_ENABLE_RERANKER=1`). Uses BAAI/bge-reranker-base (~80MB quantized, English-focused). See [docs/oneshot-reranker.md](oneshot-reranker.md) for a full model comparison including multilingual options.
 - `snippets` — include BM25 context windows in each hit (`hit.snippets: string[]`). Mutually exclusive with `scan_stats`. Requires re-indexing after upgrading from edgestore < 1.6 for non-empty snippets.
 
 Response:
@@ -794,7 +794,7 @@ curl -sX POST http://localhost:7700/indexes/acme-corp/admin/pins \
 
 ```toml
 # Cargo.toml
-vectoria-core = "0.1.23"
+vectoria-core = "0.1.24"
 ```
 
 ### Async API
@@ -843,8 +843,8 @@ Point the engine at an existing database directory and call `reindex_all()` afte
 Add `edgestore` as a direct dependency alongside `vectoria-core`:
 
 ```toml
-vectoria-core = "0.1.23"
-edgestore = "1.0"
+vectoria-core = "0.1.24"
+edgestore = "1.9"
 ```
 
 ```rust
@@ -857,7 +857,7 @@ use vectoria_core::{
 };
 
 // Single engine shared between storage and vector index
-let engine_handle = Arc::new(Mutex::new(
+let engine_handle = Arc::new(std::sync::RwLock::new(
     Engine::open(EdgestoreConfig::new("./vectoria"))?
 ));
 
