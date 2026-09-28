@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
-ARG VERSION=0.1.24
+ARG VERSION=0.1.25
 RUN curl -fsSL https://github.com/gleicon/vectoria/releases/download/v${VERSION}/vectoria-linux-amd64.tar.gz \
     | tar -xz -C /usr/local/bin ./vectoria-server \
     && chmod +x /usr/local/bin/vectoria-server
