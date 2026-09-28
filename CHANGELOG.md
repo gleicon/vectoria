@@ -4,6 +4,71 @@ All notable changes to Vectoria. Follows [Keep a Changelog](https://keepachangel
 
 ---
 
+## [0.1.25] — 2026-09-27
+
+### Added
+- **EdgeStore 2.0.2 upgrade**: `edgestore`, `edgestore-text`, and `edgestore-repl` bumped to 2.0.2. The text engine is now a separate `edgestore-text` crate; `TextIndex` replaces the old `TextEngine` trait inside the core.
+- **Real `TextSearchStats`**: `BM25ScanStats.bytes_scanned`, `docs_examined`, and `total_indexed` now come directly from `TextIndex::search_with_stats` — no more approximated or cached counters.
+- **`StorageEngine::flush_text_index`**: new trait method (no-op default) that persists the text index sidecar in one batch call at the end of `reindex_all`. Removes the O(n²) `persist` that was called per document during bulk indexing.
+
+### Changed
+- **`count_cache` / `cached_product_count` removed**: `total_indexed` is now authoritative from `TextSearchStats.total_docs_indexed`, eliminating the 5-second TTL cache and its associated mutex.
+- **`Arc<RwLock<TextIndex>>` → `Arc<Mutex<TextIndex>>`**: all `TextIndex` methods take `&mut self` since edgestore-text 2.0.2; the `RwLock` downgraded to `Mutex` to match.
+- **`search_text_with_stats` trait doc**: documents that stats are `None` when filters are non-empty (filtered path delegates to `search_text`; `search_with_stats` does not support facet pre-filtering).
+
+---
+
+## [0.1.24] — 2026-09-24
+
+### Fixed
+- **BM25 phonetics at index time**: phonetics normalization now applied to EdgeStore `index_text` path, fixing zero results for Portuguese queries with diacritics (e.g. `tênis` vs `tenis`).
+- **Background BM25 reindex on startup**: reindex tasks spawn in the background so the HTTP listener binds immediately rather than blocking for the full reindex duration.
+- **Auto-reindex BM25 after `load_persisted`**: named indexes restored from disk now trigger a BM25 reindex automatically on startup.
+
+---
+
+## [0.1.23] — 2026-09-22
+
+### Added
+- **pt-BR phonetic normalization for BM25**: Portuguese diacritic stripping and phonetic folding applied at both index and query time.
+- **Portuguese stop words**: common function words filtered from BM25 queries to reduce noise.
+
+---
+
+## [0.1.22] — 2026-09-21
+
+### Added
+- **Query understanding pipeline**: BR structured-type detection (CEP, price ceiling, delivery urgency), catalog gazetteer for attribute filter extraction, and `auto_signals` for automatic behavioral weight adjustment.
+- **Catalog gazetteer**: query-time attribute filter extraction maps product-attribute vocabulary to structured filters before search.
+
+---
+
+## [0.1.21] — 2026-09-20
+
+### Added
+- **RRF fusion**: Reciprocal Rank Fusion combines BM25 and vector rankings for hybrid search results.
+- **gzip/NCD similarity signal**: Normalized Compression Distance over product descriptions used as an unsupervised similarity signal.
+
+---
+
+## [0.1.20] — 2026-09-04
+
+### Added
+- **`candidate_pool` in `SearchRequest`**: controls wide-pool retrieve-then-rerank — fetch up to `candidate_pool` candidates from both BM25 and ANN, rerank the union, return `limit`. Enables deeper recall for reranking pipelines without increasing response payload size.
+
+---
+
+## [0.1.19] — 2026-09-02
+
+### Added
+- **EdgeStore 1.8 upgrade**: `Arc<Mutex<Engine>>` → `Arc<RwLock<Engine>>` for concurrent BM25 and ANN searches without blocking each other.
+- **EdgeStore 1.9 upgrade**: write-token fencing prevents stale writers after replication failover.
+
+### Fixed
+- **reqwest TLS backend**: switched from native-tls to rustls-tls for cross-compilation compatibility in release CI.
+
+---
+
 ## [0.1.18] — 2026-09-01
 
 ### Added

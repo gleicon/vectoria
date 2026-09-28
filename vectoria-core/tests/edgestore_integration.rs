@@ -317,7 +317,7 @@ async fn test_non_snippets_request_returns_scan_stats() {
 }
 
 #[tokio::test]
-async fn test_cached_product_count_matches_indexed_count() {
+async fn test_bm25_scan_stats_total_indexed_matches_corpus_size() {
     let dir = TempDir::new().unwrap();
     let engine = make_engine(&dir).await;
 
@@ -325,7 +325,6 @@ async fn test_cached_product_count_matches_indexed_count() {
         engine.index(common::make_product(&format!("cnt{i}"), &format!("Product {i}"))).await.unwrap();
     }
 
-    // Trigger search to populate count cache via search_text_with_stats.
     let resp = engine.search(SearchRequest {
         q: "Product".into(),
         limit: 10,
@@ -341,7 +340,6 @@ async fn test_cached_product_count_matches_indexed_count() {
         candidate_pool: None,
     }).await.unwrap();
 
-    if let Some(stats) = resp.scan_stats {
-        assert_eq!(stats.total_indexed, 5, "total_indexed must equal number of indexed products");
-    }
+    let stats = resp.scan_stats.expect("BM25 scan_stats must be Some for unfiltered search");
+    assert_eq!(stats.total_indexed, 5, "total_indexed must equal number of indexed products");
 }

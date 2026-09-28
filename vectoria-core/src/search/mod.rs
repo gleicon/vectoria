@@ -726,6 +726,7 @@ impl SearchEngine {
             if count < BATCH { break; }
         }
         self.vector_index.flush().await?;
+        self.storage.flush_text_index().await?;
         Ok(ReindexReport { reindexed, errors })
     }
 

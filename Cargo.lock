@@ -614,7 +614,7 @@ dependencies = [
  "deunicode",
  "fxhash",
  "rust-stemmers",
- "stop-words",
+ "stop-words 0.9.0",
  "unicode-segmentation",
 ]
 
@@ -1227,16 +1227,14 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "edgestore"
-version = "1.9.0"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b1214e7d0b8b5a5490f0449ad08b45e8a3b87665db532e48b0ac770cd922332"
+checksum = "57d8e24eb34dafdbc1550d2cb9b5ee307a3df4e65c11753e23d333a87650a58c"
 dependencies = [
  "blake3",
- "byteorder",
  "crc32c",
  "fs2",
  "hex",
- "lazy_static",
  "log",
  "lz4_flex 0.13.1",
  "serde",
@@ -1249,9 +1247,9 @@ dependencies = [
 
 [[package]]
 name = "edgestore-repl"
-version = "1.9.0"
+version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9cf45c702e662f042c5cf20df7778ad69646e6ecad20253affe8114b893637c"
+checksum = "e313f8e23164416102b53d3c58386dd6343c4ad788ddb2c3b32a116dcca40a74"
 dependencies = [
  "blake3",
  "edgestore",
@@ -1260,6 +1258,21 @@ dependencies = [
  "serde_json",
  "tiny_http",
  "ureq",
+]
+
+[[package]]
+name = "edgestore-text"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6302c77079e4c4d9888278a764eb77f6bc14dbc6cc2350a1b2dd766697318390"
+dependencies = [
+ "edgestore",
+ "log",
+ "rust-stemmers",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "stop-words 0.8.1",
 ]
 
 [[package]]
@@ -4072,6 +4085,15 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stop-words"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c6a86be9f7fa4559b7339669e72026eb437f5e9c5a85c207fe1033079033a17"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
+name = "stop-words"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "645a3d441ccf4bf47f2e4b7681461986681a6eeea9937d4c3bc9febd61d17c71"
@@ -4713,7 +4735,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "vectoria-cli"
-version = "0.1.23"
+version = "0.1.24"
 dependencies = [
  "anyhow",
  "arrow",
@@ -4733,13 +4755,14 @@ dependencies = [
 
 [[package]]
 name = "vectoria-core"
-version = "0.1.23"
+version = "0.1.24"
 dependencies = [
  "anyhow",
  "async-trait",
  "bm25",
  "chrono",
  "edgestore",
+ "edgestore-text",
  "fastembed",
  "flate2",
  "foyer",
@@ -4756,7 +4779,7 @@ dependencies = [
 
 [[package]]
 name = "vectoria-server"
-version = "0.1.23"
+version = "0.1.24"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4784,7 +4807,7 @@ dependencies = [
 
 [[package]]
 name = "vectoria-wasm"
-version = "0.1.23"
+version = "0.1.24"
 dependencies = [
  "bm25",
  "js-sys",

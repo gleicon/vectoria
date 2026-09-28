@@ -24,6 +24,7 @@ async-trait = { workspace = true }
 reqwest = { workspace = true }
 fastembed = { workspace = true }
 edgestore = { workspace = true }
+edgestore-text = { workspace = true }
 bm25 = { workspace = true }
 symspell = { workspace = true }
 foyer = { workspace = true }

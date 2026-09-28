@@ -2,7 +2,8 @@ use super::{ProductSignals, StorageEngine, StorageStats};
 use crate::model::{Event, EventType, Product};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use edgestore::{EdgestoreConfig, Engine, FacetFilter, FacetValue, SearchOptions, SnippetResult, TextEngine};
+use edgestore::{EdgestoreConfig, Engine};
+use edgestore_text::{FacetFilter, FacetValue, Language, SearchOptions, SnippetResult, TextIndex, TextSearchStats};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
@@ -60,23 +61,26 @@ const MAX_USER_ID_BYTES: usize = 256;
 
 pub struct EdgeStoreStorage {
     engine: EngineRef,
-    // Caches product count for `total_indexed` to avoid O(n) prefix scan on every search.
-    // Invalidated after 5 seconds; accurate enough for coverage ratios in the quality panel.
-    count_cache: Arc<std::sync::Mutex<Option<(u64, std::time::Instant)>>>,
+    // Mutex (not RwLock) because all TextIndex methods take &mut self since 2.0.2.
+    text_idx: Arc<Mutex<TextIndex>>,
 }
 
 impl EdgeStoreStorage {
+    fn new_text_idx() -> Arc<Mutex<TextIndex>> {
+        Arc::new(Mutex::new(TextIndex::with_language(Language::PortugueseBrazilian)))
+    }
+
     /// Create from a pre-opened shared engine.
     ///
     /// Both storage and vector index should share the same engine instance so they
     /// share one WAL, one lock file, and one replication target.
     pub fn from_engine(engine: Arc<RwLock<Engine>>) -> Self {
-        Self { engine: EngineRef::Rw(engine), count_cache: Arc::new(std::sync::Mutex::new(None)) }
+        Self { engine: EngineRef::Rw(engine), text_idx: Self::new_text_idx() }
     }
 
     /// Replicated mode: engine is held by a `ReplicatedEngine` (single-writer, Mutex required).
     pub fn from_mutex_engine(engine: Arc<Mutex<Engine>>) -> Self {
-        Self { engine: EngineRef::Ex(engine), count_cache: Arc::new(std::sync::Mutex::new(None)) }
+        Self { engine: EngineRef::Ex(engine), text_idx: Self::new_text_idx() }
     }
 
     /// Convenience: open a new engine at `path` and wrap it.
@@ -87,30 +91,8 @@ impl EdgeStoreStorage {
         let engine = Engine::open(config).context("failed to open EdgeStore")?;
         Ok(Self {
             engine: EngineRef::Rw(Arc::new(RwLock::new(engine))),
-            count_cache: Arc::new(std::sync::Mutex::new(None)),
+            text_idx: Self::new_text_idx(),
         })
-    }
-
-    /// Returns cached product count. Recomputes at most once per 5 seconds
-    /// to avoid an O(products) prefix scan on every search.
-    async fn cached_product_count(&self) -> u64 {
-        const TTL: std::time::Duration = std::time::Duration::from_secs(5);
-        {
-            let guard = self.count_cache.lock().unwrap();
-            if let Some((count, at)) = *guard {
-                if at.elapsed() < TTL {
-                    return count;
-                }
-            }
-        }
-        let engine = self.engine.clone();
-        let count = tokio::task::spawn_blocking(move || {
-            engine.with_read(|e| e.prefix(NS_PRODUCTS, b"").map(|p| p.len() as u64).unwrap_or(0))
-        })
-        .await
-        .unwrap_or(0);
-        *self.count_cache.lock().unwrap() = Some((count, std::time::Instant::now()));
-        count
     }
 }
 
@@ -321,11 +303,13 @@ impl StorageEngine for EdgeStoreStorage {
 
     async fn index_text(&self, id: &str, text: &str, metadata: &serde_json::Value) -> Result<()> {
         let key = id.as_bytes().to_vec();
-        let text = text.to_string();
+        let txt = text.to_string();
         let facets = extract_facets(metadata);
         let engine = self.engine.clone();
+        let ti = self.text_idx.clone();
         tokio::task::spawn_blocking(move || {
-            engine.with_write(|e| e.index_text(NS_TEXT, &key, &text, facets).context("index_text failed"))
+            let mut idx = ti.lock().unwrap();
+            engine.with_write(|e| idx.index_document(e, NS_TEXT, &key, &txt, facets).context("index_document failed"))
         })
         .await??;
         Ok(())
@@ -340,9 +324,12 @@ impl StorageEngine for EdgeStoreStorage {
         let query = query.to_string();
         let facet_filters = filters.map(to_facet_filters).unwrap_or_default();
         let engine = self.engine.clone();
+        let ti = self.text_idx.clone();
         let results = tokio::task::spawn_blocking(move || {
+            let mut idx = ti.lock().unwrap();
             engine.with_read(|e| {
-                e.search_text_with_options(
+                idx.search_with_options(
+                    e,
                     NS_TEXT,
                     &query,
                     &SearchOptions { k: limit, typo_tolerance: false, facet_filters },
@@ -365,29 +352,32 @@ impl StorageEngine for EdgeStoreStorage {
     ) -> Result<(Vec<(String, f32)>, Option<crate::model::BM25ScanStats>)> {
         let has_filters = filters.map_or(false, |f| !f.is_empty());
         if has_filters {
-            // Facet filters require search_text_with_options; no stats available.
             let results = self.search_text(query, limit, filters).await?;
             return Ok((results, None));
         }
         let query = query.to_string();
         let engine = self.engine.clone();
-        let (results, stats) = tokio::task::spawn_blocking(move || {
-            engine.with_read(|e| {
-                e.search_text_with_stats(NS_TEXT, &query, limit)
-                    .context("search_text_with_stats failed")
+        let ti = self.text_idx.clone();
+        let (pairs, stats): (Vec<(String, f32)>, TextSearchStats) =
+            tokio::task::spawn_blocking(move || {
+                let mut idx = ti.lock().unwrap();
+                engine.with_read(|e| {
+                    let (results, stats) = idx
+                        .search_with_stats(e, NS_TEXT, &query, limit)
+                        .context("search_with_stats failed")?;
+                    let pairs = results
+                        .into_iter()
+                        .map(|r| (String::from_utf8_lossy(&r.doc_id).into_owned(), r.score))
+                        .collect();
+                    Ok::<_, anyhow::Error>((pairs, stats))
+                })
             })
-        })
-        .await??;
-        let pairs = results
-            .into_iter()
-            .map(|r| (String::from_utf8_lossy(&r.doc_id).into_owned(), r.score))
-            .collect();
-        let total_indexed = self.cached_product_count().await;
+            .await??;
         let scan = crate::model::BM25ScanStats {
-            segments_scanned: stats.segments_scanned,
+            segments_scanned: if stats.total_docs_indexed > 0 { 1 } else { 0 },
             bytes_scanned: stats.bytes_scanned,
-            items_examined: stats.items_examined,
-            total_indexed,
+            items_examined: stats.docs_examined,
+            total_indexed: stats.total_docs_indexed,
         };
         Ok((pairs, Some(scan)))
     }
@@ -400,9 +390,11 @@ impl StorageEngine for EdgeStoreStorage {
     ) -> Result<Vec<(String, f32, Vec<String>)>> {
         let query = query.to_string();
         let engine = self.engine.clone();
+        let ti = self.text_idx.clone();
         let results: Vec<SnippetResult> = tokio::task::spawn_blocking(move || {
+            let mut idx = ti.lock().unwrap();
             engine.with_read(|e| {
-                e.search_text_with_snippets(NS_TEXT, &query, limit, context_chars)
+                idx.search_with_snippets(e, NS_TEXT, &query, limit, context_chars)
                     .context("search_text_with_snippets failed")
             })
         })
@@ -420,8 +412,21 @@ impl StorageEngine for EdgeStoreStorage {
     async fn delete_text(&self, id: &str) -> Result<()> {
         let key = id.as_bytes().to_vec();
         let engine = self.engine.clone();
+        let ti = self.text_idx.clone();
         tokio::task::spawn_blocking(move || {
-            engine.with_write(|e| e.delete_text(NS_TEXT, &key).context("delete_text failed"))
+            let mut idx = ti.lock().unwrap();
+            engine.with_write(|e| idx.delete_document(e, NS_TEXT, &key).context("delete_document failed"))
+        })
+        .await??;
+        Ok(())
+    }
+
+    async fn flush_text_index(&self) -> Result<()> {
+        let ti = self.text_idx.clone();
+        let engine = self.engine.clone();
+        tokio::task::spawn_blocking(move || {
+            let mut idx = ti.lock().unwrap();
+            engine.with_write(|e| idx.persist(e).context("text persist failed"))
         })
         .await??;
         Ok(())

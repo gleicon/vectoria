@@ -44,10 +44,13 @@ pub trait StorageEngine: Send + Sync {
         Ok(vec![])
     }
 
-    /// Like `search_text` but also returns I/O accounting from the storage layer.
+    /// Like `search_text` but also returns scan accounting from the storage layer.
     /// The default implementation delegates to `search_text` and returns `None` stats.
-    /// `EdgeStoreStorage` overrides this to use edgestore's `search_text_with_stats`
-    /// when no facet filters are active, providing `bytes_scanned` / `segments_scanned`.
+    /// `EdgeStoreStorage` overrides this using `TextIndex::search_with_stats` (2.0.2+),
+    /// which provides real `bytes_scanned`, `docs_examined`, and `total_docs_indexed`.
+    /// When `filters` is non-empty, the EdgeStore implementation falls back to
+    /// `search_text` and returns `None` stats; `search_with_stats` does not support
+    /// facet pre-filtering.
     async fn search_text_with_stats(
         &self,
         query: &str,
@@ -75,6 +78,13 @@ pub trait StorageEngine: Send + Sync {
 
     /// Remove a product from the persistent text index.
     async fn delete_text(&self, _id: &str) -> Result<()> {
+        Ok(())
+    }
+
+    /// Persist the in-memory text index sidecar. Call once after a bulk indexing
+    /// batch to speed up future cold-start WAL reconstruction. No-op on backends
+    /// that don't maintain a separate sidecar (default: no-op).
+    async fn flush_text_index(&self) -> Result<()> {
         Ok(())
     }
 
