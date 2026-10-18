@@ -28,25 +28,22 @@ async fn aggregate_once(storage: Arc<dyn StorageEngine>) -> anyhow::Result<()> {
 }
 
 async fn aggregate_product_signals(storage: Arc<dyn StorageEngine>) -> anyhow::Result<()> {
-    let mut offset = 0usize;
+    let mut cursor: Option<String> = None;
     const BATCH: usize = 500;
     let mut total = 0usize;
 
     loop {
-        let products = storage.list_products(offset, BATCH).await?;
-        if products.is_empty() {
-            break;
-        }
+        let (products, next) = storage.list_products_page(cursor.as_deref(), BATCH).await?;
+        if products.is_empty() { break; }
+        let done = next.is_none();
         let count = products.len();
         for product in products {
             let signals = storage.recompute_product_signals(&product.id).await?;
             storage.put_product_signals(&product.id, &signals).await?;
         }
         total += count;
-        offset += count;
-        if count < BATCH {
-            break;
-        }
+        cursor = next;
+        if done { break; }
     }
 
     if total > 0 {
@@ -113,18 +110,18 @@ async fn aggregate_product_relations(storage: Arc<dyn StorageEngine>) -> anyhow:
 
     // ── Brand relations ───────────────────────────────────────────────────────
     let mut brand_map: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
-    let mut offset = 0usize;
+    let mut cursor: Option<String> = None;
     loop {
-        let products = storage.list_products(offset, BATCH).await?;
+        let (products, next) = storage.list_products_page(cursor.as_deref(), BATCH).await?;
         if products.is_empty() { break; }
-        let count = products.len();
+        let done = next.is_none();
         for p in products {
             if let Some(brand) = p.metadata.get("brand").and_then(|v| v.as_str()) {
                 brand_map.entry(brand.to_string()).or_default().push(p.id);
             }
         }
-        offset += count;
-        if count < BATCH { break; }
+        cursor = next;
+        if done { break; }
     }
 
     let mut brand_relations = 0usize;

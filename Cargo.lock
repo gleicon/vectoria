@@ -1227,9 +1227,9 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "edgestore"
-version = "2.0.2"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57d8e24eb34dafdbc1550d2cb9b5ee307a3df4e65c11753e23d333a87650a58c"
+checksum = "e31a1e7cee251f6cb614cdd9d1db3b579cf018b5ec122ba2dd0be570c288bd04"
 dependencies = [
  "blake3",
  "crc32c",
@@ -1247,9 +1247,9 @@ dependencies = [
 
 [[package]]
 name = "edgestore-repl"
-version = "2.0.2"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e313f8e23164416102b53d3c58386dd6343c4ad788ddb2c3b32a116dcca40a74"
+checksum = "9b4669701122c0957b52c7802e179c1289b4f0abb108d170ab3b0cbf11ce0a43"
 dependencies = [
  "blake3",
  "edgestore",
@@ -1262,9 +1262,9 @@ dependencies = [
 
 [[package]]
 name = "edgestore-text"
-version = "2.0.2"
+version = "2.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6302c77079e4c4d9888278a764eb77f6bc14dbc6cc2350a1b2dd766697318390"
+checksum = "a271f8735a940ed3e3d1b59ce7167039c4453d68cbd5d98883d1f81045786a24"
 dependencies = [
  "edgestore",
  "log",
@@ -4735,7 +4735,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "vectoria-cli"
-version = "0.1.24"
+version = "0.1.25"
 dependencies = [
  "anyhow",
  "arrow",
@@ -4755,7 +4755,7 @@ dependencies = [
 
 [[package]]
 name = "vectoria-core"
-version = "0.1.24"
+version = "0.1.25"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4779,7 +4779,7 @@ dependencies = [
 
 [[package]]
 name = "vectoria-server"
-version = "0.1.24"
+version = "0.1.25"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4807,7 +4807,7 @@ dependencies = [
 
 [[package]]
 name = "vectoria-wasm"
-version = "0.1.24"
+version = "0.1.25"
 dependencies = [
  "bm25",
  "js-sys",

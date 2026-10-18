@@ -49,9 +49,9 @@ serde_json = "1"
 toml = "0.8"
 
 # Storage — EdgeStore: local-first embedded KV + vector + BM25
-edgestore = "2.0.2"
-edgestore-text = "2.0.2"
-edgestore-repl = "2.0.2"
+edgestore = "2.0.3"
+edgestore-text = "2.0.3"
+edgestore-repl = "2.0.3"
 
 # Embeddings (fastembed 4.x for stable ONNX; 5.x API differs)
 fastembed = "4"

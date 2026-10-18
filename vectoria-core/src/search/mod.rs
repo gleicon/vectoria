@@ -678,15 +678,15 @@ impl SearchEngine {
     }
 
     pub async fn reindex_all(&self) -> Result<ReindexReport> {
-        let mut offset = 0usize;
+        let mut cursor: Option<String> = None;
         const BATCH: usize = 100;
         let mut reindexed = 0usize;
         let mut errors = 0usize;
 
         loop {
-            let products = self.storage.list_products(offset, BATCH).await?;
+            let (products, next) = self.storage.list_products_page(cursor.as_deref(), BATCH).await?;
             if products.is_empty() { break; }
-            let count = products.len();
+            let done = next.is_none();
             for mut product in products {
                 // Pre-embed on the blocking thread pool so search queries aren't starved.
                 // Embedding is CPU-bound; running it in the async executor blocks all
@@ -722,11 +722,12 @@ impl SearchEngine {
                     }
                 }
             }
-            offset += count;
-            if count < BATCH { break; }
+            cursor = next;
+            if done { break; }
         }
         self.vector_index.flush().await?;
         self.storage.flush_text_index().await?;
+        self.storage.compact().await?;
         Ok(ReindexReport { reindexed, errors })
     }
 

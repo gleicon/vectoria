@@ -45,9 +45,14 @@ impl StorageEngine for MemoryStorage {
         Ok(())
     }
 
-    async fn list_products(&self, offset: usize, limit: usize) -> Result<Vec<Product>> {
+    async fn list_products_page(&self, cursor: Option<&str>, limit: usize) -> Result<(Vec<Product>, Option<String>)> {
         let products = self.products.read().unwrap();
-        Ok(products.values().skip(offset).take(limit).cloned().collect())
+        let mut ids: Vec<&str> = products.keys().map(String::as_str).collect();
+        ids.sort_unstable();
+        let start = cursor.map_or(0, |c| ids.partition_point(|&id| id <= c));
+        let page: Vec<Product> = ids[start..].iter().take(limit).filter_map(|id| products.get(*id).cloned()).collect();
+        let next_cursor = if page.len() == limit { page.last().map(|p| p.id.clone()) } else { None };
+        Ok((page, next_cursor))
     }
 
     async fn put_event(&self, event: &Event) -> Result<()> {

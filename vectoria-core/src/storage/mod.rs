@@ -8,7 +8,7 @@ pub trait StorageEngine: Send + Sync {
     async fn put_product(&self, product: &Product) -> Result<()>;
     async fn get_product(&self, id: &str) -> Result<Option<Product>>;
     async fn delete_product(&self, id: &str) -> Result<()>;
-    async fn list_products(&self, offset: usize, limit: usize) -> Result<Vec<Product>>;
+    async fn list_products_page(&self, cursor: Option<&str>, limit: usize) -> Result<(Vec<Product>, Option<String>)>;
     async fn put_event(&self, event: &Event) -> Result<()>;
     async fn get_product_signals(&self, product_id: &str) -> Result<ProductSignals>;
     async fn recompute_product_signals(&self, product_id: &str) -> Result<ProductSignals> {
@@ -85,6 +85,12 @@ pub trait StorageEngine: Send + Sync {
     /// batch to speed up future cold-start WAL reconstruction. No-op on backends
     /// that don't maintain a separate sidecar (default: no-op).
     async fn flush_text_index(&self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Run one compaction pass. Removes TTL-expired cohorts and reclaims space.
+    /// No-op on backends that don't support compaction.
+    async fn compact(&self) -> Result<()> {
         Ok(())
     }
 

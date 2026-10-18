@@ -56,6 +56,7 @@ const NS_SPONSORED: &[u8] = b"sponsored";
 const NS_SUPPRESSIONS: &[u8] = b"suppressions";
 
 const MAX_QUERY_BYTES: usize = 512;
+const EVENT_TTL_SECS: u32 = 90 * 24 * 3600;
 // user_id is caller-supplied; cap it to prevent storage key amplification.
 const MAX_USER_ID_BYTES: usize = 256;
 
@@ -142,19 +143,16 @@ impl StorageEngine for EdgeStoreStorage {
         Ok(())
     }
 
-    async fn list_products(&self, offset: usize, limit: usize) -> Result<Vec<Product>> {
+    async fn list_products_page(&self, cursor: Option<&str>, limit: usize) -> Result<(Vec<Product>, Option<String>)> {
+        let cursor_bytes: Option<Vec<u8>> = cursor.map(|s| s.as_bytes().to_vec());
         let engine = self.engine.clone();
-        let pairs = tokio::task::spawn_blocking(move || {
-            engine.with_read(|e| e.prefix(NS_PRODUCTS, b""))
+        let page = tokio::task::spawn_blocking(move || {
+            engine.with_read(|e| e.range_page(NS_PRODUCTS, b"", &[0xff], cursor_bytes.as_deref(), limit))
         })
         .await??;
-
-        pairs
-            .into_iter()
-            .skip(offset)
-            .take(limit)
-            .map(|(_, v)| decode(&v))
-            .collect()
+        let next_cursor = page.next_key.and_then(|k| String::from_utf8(k).ok());
+        let products = page.items.into_iter().map(|(_, v)| decode(&v)).collect::<Result<Vec<_>>>()?;
+        Ok((products, next_cursor))
     }
 
     async fn put_event(&self, event: &Event) -> Result<()> {
@@ -196,16 +194,16 @@ impl StorageEngine for EdgeStoreStorage {
                         .map(u64::from_le_bytes)
                         .unwrap_or(0);
                     let mut tx = eng.begin();
-                    tx.put(NS_EVENTS, &key, &value, 0, now).context("tx event put failed")?;
+                    tx.put_with_ttl(NS_EVENTS, &key, &value, EVENT_TTL_SECS, 0, now).context("tx event put failed")?;
                     tx.put(NS_CTRS, &ck, &(count + 1).to_le_bytes(), 0, now).context("tx ctr put failed")?;
                     if let Some(uek) = user_event_key {
-                        tx.put(NS_USER_EVENTS, &uek, &product_id_bytes, 0, now).context("tx user-event put failed")?;
+                        tx.put_with_ttl(NS_USER_EVENTS, &uek, &product_id_bytes, EVENT_TTL_SECS, 0, now).context("tx user-event put failed")?;
                     }
                     eng.commit_transaction(tx).context("put_event transaction failed")?;
                 } else {
-                    eng.put(NS_EVENTS, &key, &value).context("put_event failed")?;
+                    eng.put_with_ttl(NS_EVENTS, &key, &value, EVENT_TTL_SECS).context("put_event failed")?;
                     if let Some(uek) = user_event_key {
-                        eng.put(NS_USER_EVENTS, &uek, &product_id_bytes).context("user-event put failed")?;
+                        eng.put_with_ttl(NS_USER_EVENTS, &uek, &product_id_bytes, EVENT_TTL_SECS).context("user-event put failed")?;
                     }
                 }
                 Ok::<_, anyhow::Error>(())
@@ -427,6 +425,23 @@ impl StorageEngine for EdgeStoreStorage {
         tokio::task::spawn_blocking(move || {
             let mut idx = ti.lock().unwrap();
             engine.with_write(|e| idx.persist(e).context("text persist failed"))
+        })
+        .await??;
+        Ok(())
+    }
+
+    async fn compact(&self) -> Result<()> {
+        let engine = self.engine.clone();
+        tokio::task::spawn_blocking(move || {
+            engine.with_write(|e| {
+                let stats = e.compact_once().context("compact_once failed")?;
+                tracing::debug!(
+                    segments_removed = stats.segments_removed,
+                    bytes_written = stats.bytes_written,
+                    "compact_once finished"
+                );
+                Ok::<_, anyhow::Error>(())
+            })
         })
         .await??;
         Ok(())
