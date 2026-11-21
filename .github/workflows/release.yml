@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
+          - target: x86_64-unknown-linux-musl
             runner: ubuntu-latest
             artifact: vectoria-linux-amd64
           - target: aarch64-unknown-linux-gnu
@@ -49,7 +49,7 @@ jobs:
 
       - name: Install Linux build deps
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev cmake
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev cmake musl-tools
 
       - name: Install cross (for cross-compilation)
         if: matrix.cross == true
