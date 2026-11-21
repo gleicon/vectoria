@@ -186,6 +186,10 @@ pub struct StorageStats {
     /// Number of documents in the text index. Equals product_count for EdgeStore;
     /// tracks the in-process BM25 corpus size for the memory backend.
     pub text_document_count: u64,
+    /// Number of unflushed WAL segment files. High values indicate compaction lag.
+    pub wal_segment_count: usize,
+    /// Bytes written to the active WAL since last flush.
+    pub wal_pending_bytes: u64,
 }
 
 pub mod edgestore;

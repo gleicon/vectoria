@@ -115,6 +115,8 @@ impl StorageEngine for MemoryStorage {
             event_count: self.events.read().unwrap().len() as u64,
             storage_bytes: 0,
             text_document_count: self.bm25.len() as u64,
+            wal_segment_count: 0,
+            wal_pending_bytes: 0,
         })
     }
 

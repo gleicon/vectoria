@@ -292,6 +292,8 @@ impl StorageEngine for EdgeStoreStorage {
                     event_count,
                     storage_bytes: crate::dir_bytes(eng.db_path()),
                     text_document_count: product_count,
+                    wal_segment_count: eng.wal_segment_count(),
+                    wal_pending_bytes: eng.pending_wal_bytes(),
                 })
             })
         })
@@ -330,7 +332,7 @@ impl StorageEngine for EdgeStoreStorage {
                     e,
                     NS_TEXT,
                     &query,
-                    &SearchOptions { k: limit, typo_tolerance: false, facet_filters },
+                    &SearchOptions { limit, typo_tolerance: false, facet_filters },
                 )
                 .context("search_text failed")
             })

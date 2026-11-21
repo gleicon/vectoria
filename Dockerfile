@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 
-ARG VERSION=0.1.26
+ARG VERSION=0.1.27
 RUN curl -fsSL https://github.com/gleicon/vectoria/releases/download/v${VERSION}/vectoria-linux-amd64.tar.gz \
     | tar -xz -C /usr/local/bin ./vectoria-server \
     && chmod +x /usr/local/bin/vectoria-server
@@ -30,8 +30,8 @@ ENV VECTORIA_SKIP_CONSENT=1
 
 VOLUME ["/data", "/root/.cache/fastembed"]
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
-  CMD curl -fsS http://localhost:7700/health || exit 1
+HEALTHCHECK --interval=10s --timeout=3s --start-period=600s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:7700/health || exit 1
 
 ENTRYPOINT ["/usr/local/bin/vectoria-server"]
 
@@ -56,6 +56,6 @@ ENV VECTORIA_SKIP_CONSENT=1
 VOLUME ["/data"]
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
-  CMD curl -fsS http://localhost:7700/health || exit 1
+  CMD curl -fsS http://127.0.0.1:7700/health || exit 1
 
 ENTRYPOINT ["/usr/local/bin/vectoria-server"]

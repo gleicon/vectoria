@@ -552,6 +552,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "bbtree"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00fb36d1cd69152b5f7ba6f9e014b834e233d89618086f8287aac28488cc7cf8"
+dependencies = [
+ "vstd",
+]
+
+[[package]]
 name = "bit_field"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -858,7 +867,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68578f196d2a33ff61b27fae256c3164f65e36382648e30666dde05b8cc9dfdf"
 dependencies = [
  "async-trait",
- "convert_case",
+ "convert_case 0.6.0",
  "json5",
  "nom 7.1.3",
  "pathdiff",
@@ -908,6 +917,12 @@ name = "constant_time_eq"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
+
+[[package]]
+name = "convert_case"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
 name = "convert_case"
@@ -1227,10 +1242,11 @@ checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "edgestore"
-version = "2.0.3"
+version = "2.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e31a1e7cee251f6cb614cdd9d1db3b579cf018b5ec122ba2dd0be570c288bd04"
+checksum = "110020464f11d7997d644e07dcf89c9a28d077b0d2303d8ab6b8ad695c2588c0"
 dependencies = [
+ "bbtree",
  "blake3",
  "crc32c",
  "fs2",
@@ -1247,9 +1263,9 @@ dependencies = [
 
 [[package]]
 name = "edgestore-repl"
-version = "2.0.3"
+version = "2.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b4669701122c0957b52c7802e179c1289b4f0abb108d170ab3b0cbf11ce0a43"
+checksum = "c9fe6c7076781262e2dc13406ffb005a93da6c34034f9f41a854a4b54e845e38"
 dependencies = [
  "blake3",
  "edgestore",
@@ -1262,9 +1278,9 @@ dependencies = [
 
 [[package]]
 name = "edgestore-text"
-version = "2.0.3"
+version = "2.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a271f8735a940ed3e3d1b59ce7167039c4453d68cbd5d98883d1f81045786a24"
+checksum = "77bb2356a8f3fc5c04e4f25af0a61dcc1ea368c36a6f4f8afa8049d68cae618c"
 dependencies = [
  "edgestore",
  "log",
@@ -4735,7 +4751,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "vectoria-cli"
-version = "0.1.25"
+version = "0.1.27"
 dependencies = [
  "anyhow",
  "arrow",
@@ -4755,7 +4771,7 @@ dependencies = [
 
 [[package]]
 name = "vectoria-core"
-version = "0.1.25"
+version = "0.1.27"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4779,7 +4795,7 @@ dependencies = [
 
 [[package]]
 name = "vectoria-server"
-version = "0.1.25"
+version = "0.1.27"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4807,7 +4823,7 @@ dependencies = [
 
 [[package]]
 name = "vectoria-wasm"
-version = "0.1.25"
+version = "0.1.27"
 dependencies = [
  "bm25",
  "js-sys",
@@ -4825,6 +4841,71 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "verus_builtin"
+version = "0.0.0-2026-08-30-0159"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "300d269a2e06dbe54cb53084464065912ad7accbb52ae8d6c8aa7a6c521974c5"
+
+[[package]]
+name = "verus_builtin_macros"
+version = "0.0.0-2026-08-30-0159"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc040bfded82e79a708c1819c52b386ee23c0c823239334f39ced152bbdf3624"
+dependencies = [
+ "convert_case 0.4.0",
+ "proc-macro2",
+ "quote",
+ "syn",
+ "synstructure",
+ "verus_prettyplease",
+ "verus_syn",
+]
+
+[[package]]
+name = "verus_prettyplease"
+version = "0.0.0-2026-08-09-0044"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51fc115de5fb3806bc362060bb683024660ed2bc13c1183d1f01d464e4537139"
+dependencies = [
+ "proc-macro2",
+ "verus_syn",
+]
+
+[[package]]
+name = "verus_state_machines_macros"
+version = "0.0.0-2026-08-02-0125"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93f77ff8d121edb1bf2651335769a80a2f611da8573c3b498434a66b3162805f"
+dependencies = [
+ "indexmap",
+ "proc-macro2",
+ "quote",
+ "verus_syn",
+]
+
+[[package]]
+name = "verus_syn"
+version = "0.0.0-2026-08-02-0125"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f17237ea6d267e457d53ce36f55b315fc9edd26eb88c765dd95e035c0b415869"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
+name = "vstd"
+version = "0.0.0-2026-08-30-0159"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7169790c92857fa9441c8ba7e0c469f4fc62104caf1dfc632c318577a1a08d7a"
+dependencies = [
+ "verus_builtin",
+ "verus_builtin_macros",
+ "verus_state_machines_macros",
+]
 
 [[package]]
 name = "walkdir"

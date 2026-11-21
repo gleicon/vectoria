@@ -17,10 +17,10 @@ services:
       VECTORIA_SKIP_CONSENT: "1"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:7700/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:7700/health"]
       interval: 10s
       timeout: 3s
-      start_period: 30s
+      start_period: 600s
       retries: 3
 
 volumes:
