@@ -26,9 +26,11 @@ jobs:
           - target: x86_64-apple-darwin
             runner: macos-latest
             artifact: vectoria-macos-amd64
+            brew_ort: false
           - target: aarch64-apple-darwin
             runner: macos-latest
             artifact: vectoria-macos-arm64
+            brew_ort: true
 
     steps:
       - uses: actions/checkout@v4
@@ -52,7 +54,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev cmake
 
       - name: Install macOS build deps
-        if: runner.os == 'macOS'
+        if: matrix.brew_ort == true
         run: |
           brew install onnxruntime
           echo "ORT_LIB_LOCATION=$(brew --prefix onnxruntime)/lib" >> "$GITHUB_ENV"
