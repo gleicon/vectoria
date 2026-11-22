@@ -102,6 +102,7 @@ jobs:
 
   docker-push:
     name: Push Docker images
+    needs: github-release
     runs-on: ubuntu-latest
     permissions:
       packages: write
