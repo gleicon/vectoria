@@ -4,6 +4,13 @@ All notable changes to Vectoria. Follows [Keep a Changelog](https://keepachangel
 
 ---
 
+## [0.1.31] — 2026-11-22
+
+### Added
+- **`EdgeStoreStorage` now public**: re-exported from `vectoria-core` root so external crates (e.g. `vectoria-algolia`) can open EdgeStore storage directly without reaching into internal modules.
+
+---
+
 ## [0.1.30] — 2026-11-22
 
 ### Fixed
