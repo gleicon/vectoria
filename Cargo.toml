@@ -3,7 +3,6 @@ members = [
     "vectoria-core",
     "vectoria-server",
     "vectoria-cli",
-    "vectoria-wasm",
 ]
 resolver = "2"
 
@@ -33,7 +32,7 @@ tap = "gleicon/homebrew-tap"
 
 [workspace.dependencies]
 # Internal crates
-vectoria-core = { path = "vectoria-core", version = "0.1.26" }
+vectoria-core = { path = "vectoria-core", version = "0.1.30" }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }

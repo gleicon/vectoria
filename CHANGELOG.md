@@ -4,6 +4,34 @@ All notable changes to Vectoria. Follows [Keep a Changelog](https://keepachangel
 
 ---
 
+## [0.1.30] — 2026-11-22
+
+### Fixed
+- Pin Linux CI builds to `ubuntu-22.04` (glibc 2.35) so the binary runs on Debian Bookworm (glibc 2.36). `ubuntu-latest` was silently upgraded to a distro with glibc 2.43, breaking the VPS deploy.
+
+---
+
+## [0.1.27] — 2026-11-21
+
+### Added
+- **WAL observability**: `StorageStats` gains `wal_segment_count` and `wal_pending_bytes`, populated via new EdgeStore 2.2.2 APIs (`Engine::wal_segment_count`, `Engine::pending_wal_bytes`). Both fields appear in `GET /stats`. High `wal_segment_count` (>100) is an early warning for WAL explosion.
+
+### Changed
+- **EdgeStore 2.0.3 → 2.2.2**: `SearchOptions.k` renamed to `SearchOptions.limit`; all three crates (`edgestore`, `edgestore-text`, `edgestore-repl`) bumped.
+
+### Fixed
+- Docker healthcheck URL changed from `http://localhost:7700` to `http://127.0.0.1:7700` in both `Dockerfile` and `docker-compose.yml` — `localhost` resolves to `::1` (IPv6) but the server listens on IPv4 only, causing all health checks to fail.
+- `start_period` on the `vectoria-full` healthcheck raised from `30s` to `600s` to cover the full HNSW reindex window on startup.
+
+---
+
+## [0.1.26] — 2026-10-18
+
+### Added
+- **EdgeStore 2.0.3**: cursor pagination (`range_page`, `range_rev_page`), event TTL, and improved compaction.
+
+---
+
 ## [0.1.25] — 2026-09-27
 
 ### Added
