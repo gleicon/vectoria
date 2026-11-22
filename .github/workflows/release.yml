@@ -57,6 +57,8 @@ jobs:
 
       - name: Build (native)
         if: matrix.cross != true
+        env:
+          OPENSSL_VENDORED: "1"
         run: cargo build --release -p vectoria-server -p vectoria-cli --target ${{ matrix.target }}
 
       - name: Build (cross)
