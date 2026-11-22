@@ -61,6 +61,8 @@ jobs:
 
       - name: Build (cross)
         if: matrix.cross == true
+        env:
+          OPENSSL_VENDORED: "1"
         run: cross build --release -p vectoria-server -p vectoria-cli --target ${{ matrix.target }}
 
       - name: Package binaries
@@ -103,6 +105,7 @@ jobs:
   docker-push:
     name: Push Docker images
     needs: github-release
+    if: needs.github-release.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       packages: write
