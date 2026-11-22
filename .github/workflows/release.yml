@@ -51,6 +51,12 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev cmake
 
+      - name: Install macOS build deps
+        if: runner.os == 'macOS'
+        run: |
+          brew install onnxruntime
+          echo "ORT_LIB_LOCATION=$(brew --prefix onnxruntime)/lib" >> "$GITHUB_ENV"
+
       - name: Install cross (for cross-compilation)
         if: matrix.cross == true
         run: cargo install cross --git https://github.com/cross-rs/cross
@@ -103,7 +109,7 @@ jobs:
   docker-push:
     name: Push Docker images
     needs: github-release
-    if: needs.github-release.result == 'success'
+    if: always() && needs.github-release.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       packages: write
