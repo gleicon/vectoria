@@ -8,6 +8,7 @@ pub mod vector;
 
 pub use engine::{SearchEngineBuilder, SearchEngineSync};
 pub use search::SearchEngine;
+pub use storage::edgestore::EdgeStoreStorage;
 
 pub(crate) fn dir_bytes(path: &std::path::Path) -> u64 {
     std::fs::read_dir(path)
