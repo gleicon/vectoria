@@ -7,12 +7,18 @@ use crate::{
     model::{
         Hit, RankingWeights, SearchRequest, SearchResponse, SimilarRequest,
     },
-    search::{llm_rewriter::LlmRewriter, reranker::CrossEncoderReranker, SearchEngine},
+    search::{
+        llm_rewriter::LlmRewriter,
+        reranker::{CrossEncoderReranker, LayaReranker, Reranker},
+        trace::TraceStore,
+        SearchEngine,
+    },
     storage::{memory::MemoryStorage, StorageEngine},
     vector::{memory::MemoryVectorIndex, VectorIndex},
 };
 use anyhow::Result;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Builder for [`SearchEngine`]. All fields are optional; defaults use
@@ -41,6 +47,9 @@ pub struct SearchEngineBuilder {
     query_cache_max: Option<usize>,
     reranker: bool,
     reranker_instance: Option<CrossEncoderReranker>,
+    reranker_backend: Option<Arc<dyn Reranker>>,
+    laya_model_path: Option<PathBuf>,
+    trace_store: Option<Arc<TraceStore>>,
     llm_rewriter: Option<LlmRewriter>,
     field_weights: Option<HashMap<String, usize>>,
 }
@@ -63,6 +72,9 @@ impl SearchEngineBuilder {
             query_cache_max: None,
             reranker: false,
             reranker_instance: None,
+            reranker_backend: None,
+            laya_model_path: None,
+            trace_store: None,
             llm_rewriter: None,
             field_weights: None,
         }
@@ -108,10 +120,29 @@ impl SearchEngineBuilder {
         self
     }
 
-    /// Supply a pre-built reranker. Avoids creating the model twice when the caller
-    /// needs to check for init errors before building the engine.
+    /// Supply a pre-built cross-encoder reranker.
     pub fn with_reranker_instance(mut self, r: CrossEncoderReranker) -> Self {
         self.reranker_instance = Some(r);
+        self
+    }
+
+    /// Supply any reranker backend (cross-encoder or System One/laya).
+    pub fn with_reranker_backend(mut self, r: Arc<dyn Reranker>) -> Self {
+        self.reranker_backend = Some(r);
+        self
+    }
+
+    /// Enable LayaReranker from a pre-downloaded model directory.
+    /// The directory must contain `model.onnx` (or `model_quantized.onnx`) and `tokenizer.json`.
+    /// Requires the `laya` cargo feature.
+    pub fn with_laya_reranker(mut self, model_dir: impl Into<PathBuf>) -> Self {
+        self.laya_model_path = Some(model_dir.into());
+        self
+    }
+
+    /// Enable query trace persistence (stores last 1000 traces in memory).
+    pub fn with_trace_store(mut self, store: Arc<TraceStore>) -> Self {
+        self.trace_store = Some(store);
         self
     }
 
@@ -157,12 +188,23 @@ impl SearchEngineBuilder {
             engine = engine.with_query_cache(ttl, max);
         }
 
-        if let Some(r) = self.reranker_instance {
+        if let Some(backend) = self.reranker_backend {
+            engine = engine.with_reranker_backend(backend);
+        } else if let Some(path) = self.laya_model_path {
+            match LayaReranker::from_model_dir(&path) {
+                Ok(r) => engine = engine.with_reranker_backend(Arc::new(r)),
+                Err(e) => tracing::warn!("laya reranker init failed, falling back to none: {e}"),
+            }
+        } else if let Some(r) = self.reranker_instance {
             engine = engine.with_reranker(r);
         } else if self.reranker {
             if let Ok(r) = CrossEncoderReranker::new() {
                 engine = engine.with_reranker(r);
             }
+        }
+
+        if let Some(ts) = self.trace_store {
+            engine = engine.with_trace_store(ts);
         }
 
         if let Some(fw) = self.field_weights {

@@ -99,6 +99,15 @@ pub struct IndexConfig {
     pub query_cache_max_entries: usize,
     #[serde(default)]
     pub enable_reranker: bool,
+    /// Path to a pre-downloaded laya ONNX model directory.
+    /// Directory must contain `model.onnx` (or `model_quantized.onnx`) and `tokenizer.json`.
+    /// Download: `huggingface-cli download nvkudva/laya-onnx-q8 --local-dir ./laya-q8`
+    /// Requires vectoria-core to be built with `--features laya`.
+    pub laya_model_path: Option<PathBuf>,
+    /// Persist query pipeline traces when `explain: true` is set.
+    /// Traces are stored in memory (last 1000). Retrieve via `GET /explain/{trace_id}`.
+    #[serde(default)]
+    pub enable_trace: bool,
 }
 
 impl Default for IndexConfig {
@@ -110,6 +119,8 @@ impl Default for IndexConfig {
             query_cache_ttl_secs: default_query_cache_ttl_secs(),
             query_cache_max_entries: default_query_cache_max_entries(),
             enable_reranker: false,
+            laya_model_path: None,
+            enable_trace: false,
         }
     }
 }
@@ -195,6 +206,8 @@ impl VectoriaConfig {
         if let Ok(v) = std::env::var("VECTORIA_EMBEDDING_BASE_URL") { cfg.embedding.base_url = Some(v); }
         if let Ok(v) = std::env::var("VECTORIA_EMBEDDING_MODEL") { cfg.embedding.model = v; }
         if std::env::var("VECTORIA_ENABLE_RERANKER").as_deref() == Ok("1") { cfg.index.enable_reranker = true; }
+        if let Ok(v) = std::env::var("VECTORIA_LAYA_MODEL_PATH") { cfg.index.laya_model_path = Some(v.into()); }
+        if std::env::var("VECTORIA_ENABLE_TRACE").as_deref() == Ok("1") { cfg.index.enable_trace = true; }
 
         Ok(cfg)
     }

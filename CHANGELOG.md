@@ -4,6 +4,55 @@ All notable changes to Vectoria. Follows [Keep a Changelog](https://keepachangel
 
 ---
 
+## [Unreleased]
+
+### Added
+- **`Reranker` trait** (`vectoria-core`): abstracts over `CrossEncoderReranker` (BGE via fastembed) and the new `LayaReranker`. `SearchEngine.reranker` is now `Option<Arc<dyn Reranker>>` — existing cross-encoder path unchanged.
+- **`RerankResult` struct**: replaces `(usize, f32)` tuple; adds `grade: Option<u8>` (0–3 relevance grade from System One output) and `confidence: Option<f32>` (softmax probability). Surfaced in `Hit` as `rerank_grade` and `rerank_confidence`.
+- **`LayaReranker`** (`laya` cargo feature): ONNX-based System One reranker using `nvkudva/laya-onnx-q8` (Q8 quantized, ~524 MB). Loads from a local directory containing `model.onnx`/`model_quantized.onnx` and `tokenizer.json`. Downloads: `huggingface-cli download nvkudda/laya-onnx-q8 --local-dir ./laya-q8`. Build with `cargo build --features laya`.
+- **Query trace ID system**: every `SearchResponse` now includes a `trace_id` (UUID). When `explain: true` and `enable_trace = true` in `[index]` config, the full pipeline trace (BM25 hits, vector hits, rerank scores, spell-corrected query, elapsed time per stage) is stored in memory (last 1000 entries). Retrieve via `GET /explain/{trace_id}`.
+- **`GET /explain/{trace_id}` endpoint**: returns the stored `QueryTrace` JSON for a given trace ID. Returns 404 when the trace does not exist or has been evicted. Returns 404 with an error message when `enable_trace` is not set.
+- **`[index]` config keys**:
+  - `laya_model_path` — path to laya ONNX model directory. Env override: `VECTORIA_LAYA_MODEL_PATH`.
+  - `enable_trace` — boolean, enables `TraceStore`. Env override: `VECTORIA_ENABLE_TRACE=1`.
+
+---
+
+## [0.1.36] — 2026-11-25
+
+### Fixed
+- **CI: x86_64-apple-darwin arm64 dylib mismatch**: `brew install onnxruntime` on `macos-latest` (Apple Silicon runner) produces an arm64 dylib; linking it into an x86_64 target fails. Fix: matrix flag `brew_ort: false` for `x86_64-apple-darwin` — `ort-sys` downloads the correct x86_64 binary from `parcel.pyke.io` instead.
+
+---
+
+## [0.1.35] — 2026-11-24
+
+### Fixed
+- **CI: aarch64-apple-darwin OnnxRuntime DNS failure**: transient `parcel.pyke.io` DNS failures on macOS runners prevented `ort-sys` from downloading the OnnxRuntime dylib at build time. Fix: `brew install onnxruntime` for the `aarch64-apple-darwin` matrix entry and set `ORT_LIB_LOCATION=$(brew --prefix onnxruntime)/lib` — avoids network download entirely.
+
+---
+
+## [0.1.34] — 2026-11-24
+
+### Fixed
+- **CI: aarch64-linux OpenSSL cross-compile**: `OPENSSL_VENDORED=1` on the host is not forwarded into the `cross` Docker container. Fix: `Cross.toml` `pre-build` hook runs `dpkg --add-architecture arm64 && apt-get install libssl-dev:arm64` inside the container.
+
+---
+
+## [0.1.33] — 2026-11-23
+
+### Fixed
+- **CI: docker-push cascade skip**: `if: needs.github-release.result == 'success'` is insufficient when any upstream build job fails — GitHub skips the job via cascade before evaluating the condition. Fix: `if: always() && needs.github-release.result == 'success'`.
+
+---
+
+## [0.1.32] — 2026-11-23
+
+### Fixed
+- **CI: docker-push binary 404 race**: `docker-push` job ran in parallel with `build-release`, downloading the release binary before it was uploaded. Fix: `docker-push` now `needs: github-release`.
+
+---
+
 ## [0.1.31] — 2026-11-22
 
 ### Added

@@ -96,7 +96,7 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-feature
 prometheus = "0.13"
 
 # UUID
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v4", "serde"] }
 
 # Platform dirs (model cache detection)
 dirs-next = "2"

@@ -7,9 +7,9 @@ use vectoria_core::model::{Hit, RankingWeights, SearchMode, SearchRequest};
 #[test]
 fn verify_nan_scores_do_not_panic_sort() {
     let mut hits = vec![
-        Hit { id: "a".into(), score: 0.8, metadata: serde_json::json!({}), explain: None, snippets: None },
-        Hit { id: "b".into(), score: f32::NAN, metadata: serde_json::json!({}), explain: None, snippets: None },
-        Hit { id: "c".into(), score: 0.5, metadata: serde_json::json!({}), explain: None, snippets: None },
+        Hit { id: "a".into(), score: 0.8, metadata: serde_json::json!({}), explain: None, snippets: None, rerank_grade: None, rerank_confidence: None },
+        Hit { id: "b".into(), score: f32::NAN, metadata: serde_json::json!({}), explain: None, snippets: None, rerank_grade: None, rerank_confidence: None },
+        Hit { id: "c".into(), score: 0.5, metadata: serde_json::json!({}), explain: None, snippets: None, rerank_grade: None, rerank_confidence: None },
     ];
     hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
     let non_nan: Vec<_> = hits.iter().filter(|h| !h.score.is_nan()).collect();

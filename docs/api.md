@@ -2,7 +2,12 @@
 
 All endpoints except `/health` require `Authorization: Bearer <api_key>`.
 
-The API key is printed on server startup and can be fixed in `vectoria.toml` under `[server] api_key`.
+**Setting the API key** — three options, evaluated in this order:
+1. `vectoria.toml`: `[server] api_key = "my-secret-key"`
+2. Environment variable: `VECTORIA_API_KEY=my-secret-key`
+3. Auto-generated: if neither is set, a random key is printed to stdout on startup. Set one of the above to make it persistent.
+
+The API key is printed on server startup when it was not explicitly configured.
 
 Base URL: `http://localhost:7700` by default.
 
@@ -261,6 +266,55 @@ Reading it: `bm25=1.0` means shoe1 was the top BM25 result for "running shoe" (s
 3. Check `bm25` contribution — if low, the product doesn't contain the query terms verbatim.
 4. Check `query_context.spell_corrected` — if `true`, BM25 found no results for the original query.
 5. Check `semantic_similarity` contribution — if the only non-zero signal, the product is semantically related but not a keyword match.
+
+### Query trace replay
+
+Enable server-side pipeline tracing with `enable_trace = true` in `[index]` (or `VECTORIA_ENABLE_TRACE=1`). When enabled, any search request with `"explain": true` persists a full `QueryTrace` in memory (last 1000 entries).
+
+Retrieve a trace by its `trace_id` from the search response:
+
+```
+GET /explain/{trace_id}
+Authorization: Bearer <api_key>
+```
+
+**Response:**
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "timestamp": "2026-11-25T10:00:00Z",
+  "query": "running shoe",
+  "effective_query": "running shoe",
+  "index": "default",
+  "total_ms": 12,
+  "stages": [
+    {
+      "name": "search",
+      "duration_ms": 12,
+      "data": {
+        "total_hits": 42,
+        "reranked": false,
+        "explain": true
+      }
+    }
+  ]
+}
+```
+
+Returns `404` when the trace ID is not found (evicted after 1000 newer traces) or when `enable_trace` is not set.
+
+**`vectoria.toml` keys for tracing and laya reranker:**
+
+```toml
+[index]
+enable_trace = true              # persist pipeline traces; default false
+
+# laya (System One) reranker — requires --features laya at compile time
+# Download: huggingface-cli download nvkudda/laya-onnx-q8 --local-dir ./laya-q8
+# laya_model_path = "./laya-q8"
+```
+
+Environment overrides: `VECTORIA_ENABLE_TRACE=1`, `VECTORIA_LAYA_MODEL_PATH=./laya-q8`.
 
 ### Autocomplete
 

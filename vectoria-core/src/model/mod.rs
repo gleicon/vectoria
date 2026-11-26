@@ -118,6 +118,15 @@ pub struct Hit {
     /// after upgrading from edgestore < 1.6 to populate position data.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snippets: Option<Vec<String>>,
+    /// Relevance grade from System One reranker (LayaReranker).
+    /// 0=irrelevant, 1=marginal, 2=relevant, 3=exact.
+    /// None when reranking was not used or the cross-encoder backend was active.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rerank_grade: Option<u8>,
+    /// Calibrated confidence for `rerank_grade` (0.0–1.0).
+    /// None when `rerank_grade` is None.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rerank_confidence: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -251,6 +260,9 @@ pub struct SearchResponse {
     pub processing_time_ms: u64,
     pub query: String,
     pub aggregations: Option<HashMap<String, HashMap<String, usize>>>,
+    /// Unique trace ID for this query. Use `GET /explain/{trace_id}` to retrieve
+    /// the full pipeline trace when `explain: true` was set in the request.
+    pub trace_id: uuid::Uuid,
     /// Semantic clusters of the result set. Only present when `cluster: true` in the request.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clusters: Option<Vec<crate::search::clustering::Cluster>>,

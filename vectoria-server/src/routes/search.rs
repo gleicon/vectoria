@@ -1,10 +1,11 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
 };
 use serde::Deserialize;
+use uuid::Uuid;
 use vectoria_core::model::SearchRequest;
 use crate::state::AppState;
 
@@ -34,6 +35,28 @@ pub struct AutocompleteQuery {
 }
 
 fn default_limit() -> usize { 10 }
+
+/// Retrieve a stored query trace by its UUID.
+/// Only available when `enable_trace = true` in `[index]` config.
+/// Traces are retained for the last 1000 queries that had `explain: true`.
+pub async fn explain_trace(
+    State(state): State<AppState>,
+    Path(trace_id): Path<Uuid>,
+) -> impl IntoResponse {
+    let Some(ts) = &state.trace_store else {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "trace store not enabled; set enable_trace = true in [index]"})),
+        ).into_response();
+    };
+    match ts.get(&trace_id) {
+        Some(trace) => Json(trace).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({"error": "trace not found", "trace_id": trace_id.to_string()})),
+        ).into_response(),
+    }
+}
 
 pub async fn autocomplete(
     State(state): State<AppState>,

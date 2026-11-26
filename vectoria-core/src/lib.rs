@@ -8,6 +8,8 @@ pub mod vector;
 
 pub use engine::{SearchEngineBuilder, SearchEngineSync};
 pub use search::SearchEngine;
+pub use search::reranker::{Reranker, RerankResult, CrossEncoderReranker, LayaReranker};
+pub use search::trace::{QueryTrace, TraceStore};
 pub use storage::edgestore::EdgeStoreStorage;
 
 pub(crate) fn dir_bytes(path: &std::path::Path) -> u64 {

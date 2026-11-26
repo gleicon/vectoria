@@ -7,7 +7,7 @@ use vectoria_core::{
     embedding::EmbeddingProvider,
     model::RankingWeights,
     search::SearchEngine,
-    SearchEngineBuilder,
+    SearchEngineBuilder, TraceStore,
 };
 
 #[derive(Debug)]
@@ -37,6 +37,8 @@ pub struct IndexRegistry {
     /// When set, named indexes are persisted under `{data_dir}/{name}/` using EdgeStore.
     /// When None (tests, memory-only mode), named indexes use MemoryStorage.
     data_dir: Option<PathBuf>,
+    /// Shared query trace store. When set, all engines in this registry share it.
+    trace_store: Option<Arc<TraceStore>>,
 }
 
 impl IndexRegistry {
@@ -59,7 +61,13 @@ impl IndexRegistry {
             query_cache_max,
             field_weights,
             data_dir,
+            trace_store: None,
         }
+    }
+
+    pub fn with_trace_store(mut self, ts: Arc<TraceStore>) -> Self {
+        self.trace_store = Some(ts);
+        self
     }
 
     /// Load all previously-persisted indexes from `data_dir` and rebuild their
@@ -153,6 +161,9 @@ impl IndexRegistry {
         }
         if let Some(fw) = self.field_weights.clone() {
             builder = builder.field_weights(fw);
+        }
+        if let Some(ref ts) = self.trace_store {
+            builder = builder.with_trace_store(Arc::clone(ts));
         }
 
         if let Some(ref dir) = self.data_dir {

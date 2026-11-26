@@ -11,6 +11,11 @@ keywords = ["search", "vector", "bm25", "hybrid", "ecommerce"]
 categories = ["database", "algorithms", "data-structures"]
 readme = "../README.md"
 
+[features]
+# Enable LayaReranker (System One, requires laya-onnx model download ~524MB).
+# huggingface-cli download nvkudda/laya-onnx-q8 --local-dir ./laya-q8
+laya = ["dep:ort", "dep:tokenizers", "dep:ndarray"]
+
 [dependencies]
 tokio = { workspace = true }
 serde = { workspace = true }
@@ -29,6 +34,11 @@ bm25 = { workspace = true }
 symspell = { workspace = true }
 foyer = { workspace = true }
 flate2 = "1"
+
+# LayaReranker optional deps (ort is already a transitive dep via fastembed; versions must match).
+ort = { version = "2.0.0-rc.9", optional = true }
+tokenizers = { version = "0.21.4", optional = true, default-features = false, features = ["onig"] }
+ndarray = { version = "0.16", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "rt-multi-thread", "macros"] }

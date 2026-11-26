@@ -8,6 +8,7 @@ pub mod query_parser;
 pub mod reranker;
 pub mod scoring;
 pub mod spell;
+pub mod trace;
 
 use crate::{
     embedding::EmbeddingProvider,
@@ -24,7 +25,7 @@ use anyhow::{bail, Result};
 use bm25_index::Bm25Index;
 use llm_rewriter::LlmRewriter;
 use query_cache::QueryResultCache;
-use reranker::CrossEncoderReranker;
+use reranker::{CrossEncoderReranker, Reranker};
 use scoring::{
     compute_aggregations, make_cache_key, matches_filters, ncd_similarity, percentile_p95,
     score_candidate, CandidateScore,
@@ -34,6 +35,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
+use trace::{QueryTrace, TraceStage, TraceStore};
 
 const LATENCY_WINDOW: usize = 1000;
 const MAX_LIMIT: usize = 1_000;
@@ -54,8 +56,9 @@ pub struct SearchEngine {
     /// call so word-prefix suggestions work regardless of storage backend.
     autocomplete_bm25: Arc<Bm25Index>,
     spell: Arc<SpellCorrector>,
-    reranker: Option<Arc<CrossEncoderReranker>>,
+    reranker: Option<Arc<dyn Reranker>>,
     llm_rewriter: Option<Arc<LlmRewriter>>,
+    trace_store: Option<Arc<TraceStore>>,
     query_cache: Option<Arc<QueryResultCache>>,
     query_count: Arc<AtomicU64>,
     latency_window: Arc<Mutex<VecDeque<u32>>>,
@@ -80,6 +83,7 @@ impl SearchEngine {
             spell: Arc::new(SpellCorrector::new()),
             reranker: None,
             llm_rewriter: None,
+            trace_store: None,
             query_cache: None,
             query_count: Arc::new(AtomicU64::new(0)),
             latency_window: Arc::new(Mutex::new(VecDeque::with_capacity(LATENCY_WINDOW))),
@@ -106,13 +110,27 @@ impl SearchEngine {
         self
     }
 
+    /// Enable cross-encoder reranking (BGERerankerBase via fastembed).
     pub fn with_reranker(mut self, reranker: CrossEncoderReranker) -> Self {
         self.reranker = Some(Arc::new(reranker));
         self
     }
 
+    /// Enable any reranker backend (cross-encoder or System One/laya).
+    pub fn with_reranker_backend(mut self, reranker: Arc<dyn Reranker>) -> Self {
+        self.reranker = Some(reranker);
+        self
+    }
+
     pub fn with_llm_rewriter(mut self, rewriter: LlmRewriter) -> Self {
         self.llm_rewriter = Some(Arc::new(rewriter));
+        self
+    }
+
+    /// Enable query trace persistence. When `explain: true` is in the request,
+    /// the full pipeline trace is stored and retrievable via `GET /explain/{trace_id}`.
+    pub fn with_trace_store(mut self, store: Arc<TraceStore>) -> Self {
+        self.trace_store = Some(store);
         self
     }
 
@@ -399,6 +417,8 @@ impl SearchEngine {
                 metadata: product.metadata.clone(),
                 explain: scored.explain,
                 snippets: snips,
+                rerank_grade: None,
+                rerank_confidence: None,
             });
         }
 
@@ -413,17 +433,27 @@ impl SearchEngine {
                 let texts: Vec<String> = hits[..top_n]
                     .iter()
                     .map(|h| {
-                        h.metadata.get("title")
+                        let title = h.metadata.get("title")
                             .or_else(|| h.metadata.get("text"))
                             .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string()
+                            .unwrap_or("");
+                        let desc = h.metadata.get("description")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        // LayaReranker splits on first '\n' to separate title from description.
+                        if desc.is_empty() { title.to_string() } else { format!("{title}\n{desc}") }
                     })
                     .collect();
                 let reranked = reranker.rerank(&effective_q, &texts)?;
                 let reranked_hits: Vec<Hit> = reranked
                     .into_iter()
-                    .filter_map(|(idx, _score)| hits.get(idx).cloned())
+                    .filter_map(|r| {
+                        hits.get(r.index).cloned().map(|mut h| {
+                            h.rerank_grade = r.grade;
+                            h.rerank_confidence = r.confidence;
+                            h
+                        })
+                    })
                     .collect();
                 hits.splice(..top_n, reranked_hits);
             }
@@ -448,17 +478,47 @@ impl SearchEngine {
         let total = hits.len();
         let page_hits: Vec<Hit> = hits.into_iter().skip(offset).take(limit).collect();
 
+        let trace_id = uuid::Uuid::new_v4();
+        let elapsed = start.elapsed().as_millis() as u64;
+
         let response = SearchResponse {
             total,
             offset,
             limit,
-            processing_time_ms: start.elapsed().as_millis() as u64,
-            query: req.q,
+            processing_time_ms: elapsed,
+            query: req.q.clone(),
             hits: page_hits,
             aggregations,
             clusters,
             scan_stats: bm25_scan_stats,
+            trace_id,
         };
+
+        // Persist full pipeline trace when explain is requested and a trace store is wired.
+        if req.explain {
+            if let Some(ts) = &self.trace_store {
+                let trace = QueryTrace {
+                    id: trace_id,
+                    timestamp: Utc::now(),
+                    query: req.q.clone(),
+                    effective_query: effective_q.clone(),
+                    index: "default".to_string(),
+                    stages: vec![
+                        TraceStage {
+                            name: "search".to_string(),
+                            duration_ms: elapsed,
+                            data: serde_json::json!({
+                                "total_hits": total,
+                                "reranked": req.rerank,
+                                "explain": req.explain,
+                            }),
+                        },
+                    ],
+                    total_ms: elapsed,
+                };
+                ts.push(trace);
+            }
+        }
 
         if let (Some(key), Some(cache)) = (cache_key, &self.query_cache) {
             cache.put(key, response.clone());
@@ -501,7 +561,7 @@ impl SearchEngine {
             if let Some(filters) = &req.filters {
                 if !matches_filters(&product.metadata, filters) { continue; }
             }
-            hits.push(Hit { id: product.id, score, metadata: product.metadata, explain: None, snippets: None });
+            hits.push(Hit { id: product.id, score, metadata: product.metadata, explain: None, snippets: None, rerank_grade: None, rerank_confidence: None });
             if hits.len() >= sim_limit { break; }
         }
         Ok(hits)
@@ -573,7 +633,7 @@ impl SearchEngine {
         let mut hits = Vec::new();
         for (id, score) in candidates {
             let Some(product) = self.storage.get_product(&id).await? else { continue };
-            hits.push(Hit { id: product.id, score, metadata: product.metadata, explain: None, snippets: None });
+            hits.push(Hit { id: product.id, score, metadata: product.metadata, explain: None, snippets: None, rerank_grade: None, rerank_confidence: None });
             if hits.len() >= limit { break; }
         }
         Ok(hits)
@@ -963,7 +1023,7 @@ async fn apply_overrides(
                 if !slot.label.is_empty() {
                     meta["sponsored_label"] = serde_json::json!(slot.label);
                 }
-                hits.insert(target, Hit { id: product.id, score: 0.0, metadata: meta, explain: None, snippets: None });
+                hits.insert(target, Hit { id: product.id, score: 0.0, metadata: meta, explain: None, snippets: None, rerank_grade: None, rerank_confidence: None });
             }
         }
     }

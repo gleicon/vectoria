@@ -23,7 +23,7 @@ use vectoria_core::{
     aggregation::run_aggregation_loop,
     embedding::{cache::CachedEmbedding, EmbeddingProvider},
     search::{llm_rewriter::LlmRewriter, reranker::CrossEncoderReranker},
-    SearchEngineBuilder,
+    SearchEngineBuilder, TraceStore,
 };
 
 use config::VectoriaConfig;
@@ -85,7 +85,11 @@ async fn main() -> Result<()> {
         builder = builder.field_weights(fw);
     }
 
-    if cfg.index.enable_reranker {
+    // Laya reranker takes precedence over cross-encoder when both are configured.
+    if let Some(ref laya_path) = cfg.index.laya_model_path {
+        builder = builder.with_laya_reranker(laya_path);
+        tracing::info!("laya reranker: enabled from {:?}", laya_path);
+    } else if cfg.index.enable_reranker {
         match CrossEncoderReranker::new() {
             Ok(reranker) => {
                 builder = builder.with_reranker_instance(reranker);
@@ -94,6 +98,15 @@ async fn main() -> Result<()> {
             Err(e) => tracing::warn!("reranker init failed (continuing without): {}", e),
         }
     }
+
+    let trace_store: Option<Arc<TraceStore>> = if cfg.index.enable_trace {
+        let ts = Arc::new(TraceStore::new());
+        builder = builder.with_trace_store(Arc::clone(&ts));
+        tracing::info!("query trace store: enabled (last 1000 traces)");
+        Some(ts)
+    } else {
+        None
+    };
 
     if let Some(qe_provider) = &cfg.query_embedding.provider {
         let query_embedder: Option<Arc<dyn EmbeddingProvider>> = match qe_provider.as_str() {
@@ -158,7 +171,7 @@ async fn main() -> Result<()> {
         Err(e) => { tracing::warn!("tenant store failed to load, starting empty: {e}"); tenants::TenantStore::empty() }
     });
 
-    let registry = Arc::new(IndexRegistry::new(
+    let mut registry = IndexRegistry::new(
         Arc::clone(&engine),
         Arc::clone(&embedding),
         weights,
@@ -166,7 +179,11 @@ async fn main() -> Result<()> {
         Some(query_cache_max),
         cfg.embedding.fields.clone(),
         named_indexes_dir,
-    ));
+    );
+    if let Some(ref ts) = trace_store {
+        registry = registry.with_trace_store(Arc::clone(ts));
+    }
+    let registry = Arc::new(registry);
 
     registry.load_persisted().await;
 
@@ -185,6 +202,7 @@ async fn main() -> Result<()> {
         tenant_keys: std::sync::Arc::new(tenant_keys),
         tenant_store,
         limiter,
+        trace_store,
     };
 
     // Admin-only routes: require both a valid API key AND the admin principal.
@@ -245,7 +263,8 @@ async fn main() -> Result<()> {
         .route("/indexes/{name}/admin/aggregate", post(routes::index_admin::trigger_aggregation))
         .route("/indexes/{name}/admin/training-export", get(routes::index_admin::export_overrides))
         .route("/indexes/{name}/admin/training-import", post(routes::index_admin::import_overrides))
-        .route("/users/{id}/recommendations", get(routes::users::get_recommendations));
+        .route("/users/{id}/recommendations", get(routes::users::get_recommendations))
+        .route("/explain/{trace_id}", get(routes::search::explain_trace));
 
     let protected = Router::new()
         .merge(admin_routes)

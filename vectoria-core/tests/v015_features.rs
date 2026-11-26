@@ -1,11 +1,13 @@
 //! v0.1.15 regression tests:
 //! - BM25 single-result bug: BM25 mode must return multiple hits for a query that matches many products.
 //! TenantStore TOCTOU tests are in vectoria-server/tests/tenant_store_test.rs (TenantStore lives in vectoria-server).
+//! Also covers: query trace ID system (TraceStore, explain: true round-trip).
 
 #[allow(dead_code)]
 mod common;
 
 use vectoria_core::model::{SearchMode, SearchRequest};
+use vectoria_core::{SearchEngineBuilder, TraceStore};
 
 fn bm25_req(q: &str) -> SearchRequest {
     SearchRequest {
@@ -67,5 +69,75 @@ async fn test_bm25_expansion_fires_on_sparse_results() {
     // The leather boot should not appear — it shares no terms with "shoes"
     let has_boot = resp.hits.iter().any(|h| h.id == "p5");
     assert!(!has_boot, "irrelevant product (leather boot) should not appear in shoe query results");
+}
+
+// ── Query trace ID system ─────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn test_trace_id_present_in_every_response() {
+    let (engine, _) = common::make_engine(4).await;
+    engine.index(common::make_product("p1", "running shoe athletic")).await.unwrap();
+    let resp = engine.search(SearchRequest {
+        q: "shoe".into(),
+        mode: SearchMode::Bm25,
+        ..Default::default()
+    }).await.unwrap();
+    // trace_id must be a non-nil UUID on every response regardless of explain flag
+    assert_ne!(resp.trace_id, uuid::Uuid::nil(), "trace_id must be non-nil");
+}
+
+#[tokio::test]
+async fn test_trace_stored_on_explain_true() {
+    use std::sync::Arc as StdArc;
+    let trace_store = StdArc::new(TraceStore::new());
+    let embed: StdArc<dyn vectoria_core::embedding::EmbeddingProvider> =
+        StdArc::new(common::StubEmbedding::new(4));
+    let engine = SearchEngineBuilder::new()
+        .embedding(StdArc::clone(&embed))
+        .with_trace_store(StdArc::clone(&trace_store))
+        .build()
+        .await
+        .unwrap();
+
+    engine.index(common::make_product("p1", "running shoe")).await.unwrap();
+
+    let resp = engine.search(SearchRequest {
+        q: "shoe".into(),
+        mode: SearchMode::Bm25,
+        explain: true,
+        ..Default::default()
+    }).await.unwrap();
+
+    let trace = trace_store.get(&resp.trace_id);
+    assert!(trace.is_some(), "trace must be stored when explain: true and TraceStore is wired");
+    let trace = trace.unwrap();
+    assert_eq!(trace.id, resp.trace_id);
+    assert_eq!(trace.query, "shoe");
+}
+
+#[tokio::test]
+async fn test_trace_not_stored_without_explain() {
+    use std::sync::Arc as StdArc;
+    let trace_store = StdArc::new(TraceStore::new());
+    let embed: StdArc<dyn vectoria_core::embedding::EmbeddingProvider> =
+        StdArc::new(common::StubEmbedding::new(4));
+    let engine = SearchEngineBuilder::new()
+        .embedding(StdArc::clone(&embed))
+        .with_trace_store(StdArc::clone(&trace_store))
+        .build()
+        .await
+        .unwrap();
+
+    engine.index(common::make_product("p1", "running shoe")).await.unwrap();
+
+    let resp = engine.search(SearchRequest {
+        q: "shoe".into(),
+        mode: SearchMode::Bm25,
+        explain: false,
+        ..Default::default()
+    }).await.unwrap();
+
+    let trace = trace_store.get(&resp.trace_id);
+    assert!(trace.is_none(), "trace must NOT be stored when explain: false");
 }
 

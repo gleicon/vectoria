@@ -2973,6 +2973,7 @@ version = "2.0.0-rc.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52afb44b6b0cffa9bf45e4d37e5a4935b0334a51570658e279e9e3e6cf324aa5"
 dependencies = [
+ "half",
  "ndarray",
  "ort-sys",
  "tracing",
@@ -4692,6 +4693,7 @@ checksum = "144d6b123cef80b301b8f72a9e2ca4370ddec21950d0a103dd22c437006d2db7"
 dependencies = [
  "getrandom 0.4.2",
  "js-sys",
+ "serde_core",
  "wasm-bindgen",
 ]
 
@@ -4720,7 +4722,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "vectoria-cli"
-version = "0.1.30"
+version = "0.1.36"
 dependencies = [
  "anyhow",
  "arrow",
@@ -4740,7 +4742,7 @@ dependencies = [
 
 [[package]]
 name = "vectoria-core"
-version = "0.1.30"
+version = "0.1.36"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4751,12 +4753,15 @@ dependencies = [
  "fastembed",
  "flate2",
  "foyer",
+ "ndarray",
+ "ort",
  "reqwest",
  "serde",
  "serde_json",
  "symspell",
  "tempfile",
  "thiserror 2.0.18",
+ "tokenizers",
  "tokio",
  "tracing",
  "uuid",
@@ -4764,7 +4769,7 @@ dependencies = [
 
 [[package]]
 name = "vectoria-server"
-version = "0.1.30"
+version = "0.1.36"
 dependencies = [
  "anyhow",
  "async-trait",
