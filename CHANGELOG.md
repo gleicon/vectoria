@@ -4,7 +4,7 @@ All notable changes to Vectoria. Follows [Keep a Changelog](https://keepachangel
 
 ---
 
-## [Unreleased]
+## [0.1.37] — 2026-11-25
 
 ### Added
 - **`Reranker` trait** (`vectoria-core`): abstracts over `CrossEncoderReranker` (BGE via fastembed) and the new `LayaReranker`. `SearchEngine.reranker` is now `Option<Arc<dyn Reranker>>` — existing cross-encoder path unchanged.
